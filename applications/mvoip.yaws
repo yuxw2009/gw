@@ -1,0 +1,39 @@
+<erl>
+out(A) -> 
+	Params = yaws_api:parse_post(A),
+%	io:format("yaws ~p~n", [Params]),
+	case hd(Params) of
+		{_,"start_voip_call"} ->
+			[_,{"session",_Sess},{"ip",IP},{"port",Port},{"phone",PhNo}] = Params,
+			case avanda:processNATIVE([IP],list_to_integer(Port),PhNo) of
+				{successful,Session,{LHost,LPort}} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,successful},
+									{session,Session},
+									{localhost,LHost},
+									{localport,LPort}]})};
+				{failure,Reason} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,failure},{reason,Reason}]})}
+			end;
+		{_,"stop_voip_call"} ->
+			Session = list_to_integer(proplists:get_value("session",Params)),
+			ok = avanda:stopNATIVE(Session),
+			{content,"application/json",
+					 rfc4627:encode({obj,[{type,successful},{duration,66}]})};
+		{_,"get_voip_status"} ->
+			Session = list_to_integer(proplists:get_value("session",Params)),
+			{ok,CallStatus} = avanda:getNATIVE(Session),
+			{content,"application/json",
+					 rfc4627:encode({obj,[{type,status},{ack,CallStatus}]})}
+	end.
+	
+make_info(PhNo) ->
+[{phone,PhNo},
+ {uuid,{"1",86}},
+ {audit_info,{obj,[{"uuid",86},
+                   {"company",<<231,136,177,232,191,133,232,190,190,239,188,136,230,183,177,229,156,179,239,188,137,231,167,145,230,138,128,230,156,137,233,153,144,229,133,172,229,143,184,47,230,150,176,228,184,154,229,138,161,229,188,128,229,143,145,233,131,168>>},
+                   {"name",<<233,146,177,230,178,155>>},
+                   {"account",<<"0131000019">>},{"orgid",1}]}},
+ {cid,"0085268895100"}].
+</erl>

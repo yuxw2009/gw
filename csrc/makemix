@@ -1,0 +1,14 @@
+CFLAGS = -fPIC -shared
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include
+
+amix:
+	gcc -fPIC -c erl_amix.c $(INCLUDE)
+
+anif: 
+	gcc $(CFLAGS) erl_amix.o -o erl_amix.so
+
+umix:
+	gcc -fPIC -c u_mix.c $(INCLUDE)
+
+nif:
+	gcc $(CFLAGS) u_mix.o -o u_mix.so
