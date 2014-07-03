@@ -65,6 +65,18 @@ peek(AppId) ->
 	end. 
 	
 %% callbacks
+init([{mobile,Options1}, Options2, PhInfo, PLType, CandidateAddr]) ->
+	{value, Aid}  = app_manager:register_app(self()),
+	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{report_to, self()}|Options1]), 
+	link(RtpPid),
+	rtp:info(RtpPid,{add_stream,audio,Options2}),
+	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
+	{ok, ATef} = my_timer:send_interval(?ALIVE_TIME, alive_timer),
+	llog("app ~p started rtp ~p rpt_port ~p user_info ~p PlType ~p",
+	                               [Aid,RtpPid, RtpPort,PhInfo, PLType]),
+	{ok, #state{aid=Aid, status=idle, alive_tref=ATef,
+	            call_info=PhInfo, rtp_pid=RtpPid, rtp_port=RtpPort,pltype=PLType}};
+	
 init([Options1, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
 	{ok,RtpPid,RtpPort} = rtp:start(Aid, Options1 ++ [{report_to, self()}]), 
@@ -118,7 +130,8 @@ handle_info({callee_sdp,SDP_FROM_SS},State=#state{aid=Aid,rrp_pid=RrpPid}) ->
     {PeerIp,PeerPort} = get_port_from_sdp(SDP_FROM_SS),
     PeerAddr = [{remoteip,[PeerIp,PeerPort]}],
 	ok = rrp:set_peer_addr(RrpPid, PeerAddr),
-	{noreply,State#state{status=hook_off}};	
+%	{noreply,State#state{status=hook_off}};	
+	{noreply,State};	
 handle_info({'DOWN', _Ref, process, UA, _Reason},State=#state{aid=Aid,sip_ua=UA})->
     llog("app ~p sip hangup",[Aid]),
 	{stop, normal, State};

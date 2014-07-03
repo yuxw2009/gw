@@ -13,43 +13,47 @@
 
 processNATIVE(R_Addrs,R_Port,PhNo) when is_list(R_Addrs),is_integer(R_Port),is_list(PhNo) ->
 	R_Addr = get_waddr(R_Addrs),
-	io:format("remote ~p call ~p.~n",[{R_Addr,R_Port},PhNo]),
-	Sess = my_server:call(rtp_sup,random32),
-	processNATIVE2(Sess,{R_Addr,R_Port},PhNo).
+	processNATIVE2({R_Addr,R_Port},PhNo).
 
-processNATIVE2(R_OrigID,{R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_list(PhNo) ->
-	{PLN,Codec,Params} = {114,114,[0,4750]},
-%	{PLN,Codec,Params} = {102,102,[30]},
+processNATIVE2({R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_list(PhNo) ->
+    Sdp={_PLN,_Codec,_Params,PLType}=
+    case proplists:get_value(codec, PhNo) of
+    "12"-> {114,114,[0,4750],amr};
+    "11"->  {102,102,[30],ilbc};
+    Type-> 
+        io:format("unknown mobile webrtc type:~p~n", [Type]),
+        {103,103,[0,24000,480],isac}
+    end,
 %	{PLN,Codec,Params} = {103,103,[0,24000,480]},
 %	{PLN,Codec,Params} = {0,0,[]},
-	case my_server:call(rtp_sup,{open_rtp_pair,R_OrigID,[]}) of
-		{ok,LPort,Pid} ->
-			my_server:call(rtp_sup,{rtp_report,R_OrigID,{call_phone,PhNo,ilbc}}),
-			my_server:call(rtp_sup,{info_rtp,R_OrigID,{add_media,audio,[according,Pid,according,1002]}}),	% self pid for loopback
-			my_server:call(rtp_sup,{info_rtp,R_OrigID,{add_stream,audio,[PLN,{R_Addr,R_Port},1001,1002]}}),
-			my_server:call(rtp_sup,{info_rtp,R_OrigID,{report_to,rtp_sup}}),
-			my_server:call(rtp_sup,{info_rtp,R_OrigID,{add_codec,Codec,Params}}),
-			{successful,R_OrigID,{avscfg:get(mhost_ip),LPort}};
-		{failure,Reason} when is_atom(Reason) ->
-			{failure,Reason}
-	end.
+	{L_SSRC,L_CName} = makessrc(),
+	Media = whereis(rbt),
+	R_Options= [{media,Media}],
+	L_Options= [{media,Media},
+	           {key_strategy, undefined},
+	           {ssrc,[L_SSRC,L_CName]},
+	           {sdp,Sdp}],
+			   
+	{value, Aid, LPort} = w2p:start({mobile,R_Options}, L_Options, PhNo,PLType, {R_Addr,R_Port}),
+	{successful,Aid,{avscfg:get(mhost_ip),LPort}}.
 
 stopNATIVE(Orig) ->
-	io:format("kill ~p~n",[Orig]),
-	my_server:call(rtp_sup,{close_rtp,Orig,now}),
+	io:format("58.37 kill ~p~n",[Orig]),
+	w2p:stop(Orig),
 	ok.
 
 getNATIVE(Orig) when is_integer(Orig) ->
-	rtp_sup ! {get_session,Orig,self()},
-	receive
-		{session_status,Status} -> {ok, Status}
-	after 2000 -> {ok,released}
-	end.
+	{value, Status,_Stats} = w2p:get_call_status(Orig),
+	{ok,Status}.
 
 get_waddr(Addrs) ->
 	io:format("mobile addrs ~p~n",[Addrs]),
 	Ads = [{inet_parse:address(X),X}||X<-Addrs],
-	hd([Ad||{{ok,{A,_,_,_}},Ad}<-Ads,A=/=192]).
+%	hd([Ad||{{ok,{A,_,_,_}},Ad}<-Ads,A=/=192]).
+	case [Ad||{{ok,{A,_,_,_}},Ad}<-Ads,A=/=192] of
+	[]-> "192.0.0.1";
+	L-> hd(L)
+	end.
 
 get_192(["192."++_=A1|T]) -> A1;
 get_192([_|T]) -> get_192(T).
@@ -64,83 +68,6 @@ make_info(PhNo) ->
                    {"account",<<"0131000019">>},{"orgid",1}]}},
  {cid,"0085268895100"}].
 
-
-%% ---------------------------------
-
-processVOIP(SDP,PhInfo) when is_binary(SDP),is_list(PhInfo) ->
-	processVOIP(SDP,getrandom(),PhInfo).
-
-processVOIP(SDP,PartySess,PhInfo) ->
-	try sdp:decode(SDP) of
-		{Session,Streams} ->
-			{HasAudio,Streama} =
-				case [Strm||Strm<-Streams,Strm#media_desc.type==audio] of
-					[Strm1] -> {true,Strm1};
-					[] -> {false,undefined}
-				end,
-			if HasAudio -> doVOIP({Session,[Streama]},PartySess,PhInfo);
-			true -> {failure,sdp_need_audio}
-			end
-	catch
-		error:_X ->
-			{failure,sdp_error}
-	end.
-
-doVOIP({Session,[Streama]},L_OrigID,PhInfo) ->
-	{OSVer, R_OrigID} = fetchorig(Session),
-	{RUfrag,RPwd,RK_S} = fetchkey(Streama),
-	{R_SSRC,R_CName} = fetchssrc(Streama),
-	{R_Addr,R_Port} = fetchpeer(Streama),
-	
-	{ICEUfrag,ICEpwd,K_S} = makey(),	
-	{L_SSRC,L_CName} = makessrc(),
-	
-	L_rtp = #srtp_desc{origid = integer_to_list(L_OrigID),
-					   ssrc = L_SSRC,
-					   ckey = K_S,
-					   cname= L_CName,
-					   ice = {ice,ICEUfrag,ICEpwd}},
-	R_rtp = #srtp_desc{origid = integer_to_list(R_OrigID),
-					   ssrc = R_SSRC,
-					   ckey = RK_S,
-					   cname = R_CName,
-					   ice = {ice,RUfrag,RPwd}},
-	
-	Media = loop,
-	Options1 = [{outmedia,Media},{report_to,rtp_sup},
-			   {crypto,["AES_CM_128_HMAC_SHA1_80",R_rtp#srtp_desc.ckey]},
-			   {ssrc,[R_rtp#srtp_desc.ssrc,R_rtp#srtp_desc.cname]},
-			   {vssrc,[R_rtp#srtp_desc.vssrc,R_rtp#srtp_desc.cname]},
-			   {stun,{controlled,?STUNV2,L_rtp#srtp_desc.ice,R_rtp#srtp_desc.ice}}],
-	Options2 = [{media,Media},
-			   {crypto,["AES_CM_128_HMAC_SHA1_80",L_rtp#srtp_desc.ckey]},
-			   {ssrc,[L_rtp#srtp_desc.ssrc,L_rtp#srtp_desc.cname]}],
-
-	case my_server:call(rtp_sup,{open_rtp,R_OrigID,Options1}) of
-		{ok,LPort,_} ->
-			my_server:call(rtp_sup,{rtp_report,R_OrigID,{call_phone,PhInfo}}),
-			L_session = make_default_session(L_OrigID, OSVer, false),
-			L_audio = make_default_audio(L_SSRC, LPort, {ICEUfrag,ICEpwd,K_S}),
-			C1 = make_candidate(?CC_RTP,avscfg:get(host_ip),LPort),
-			C2 = make_candidate(?CC_RTP,avscfg:get(wan_ip),LPort),
-			AnsSDP = sdp:encode(L_session, [L_audio#media_desc{candidates=[C1,C2]}]),
-			my_server:call(rtp_sup,{info_rtp,R_OrigID,{add_stream,audio,Options2}}),
-			my_server:call(rtp_sup,{info_rtp,R_OrigID,{add_candidate,{R_Addr,R_Port}}}),
-			{successful,R_OrigID,AnsSDP};
-		{failure,Reason} when is_atom(Reason) ->
-			{failure,Reason}
-	end.
-
-stopVOIP(Orig) when is_integer(Orig) ->
-	successful = my_server:call(rtp_sup,{close_rtp,Orig,now}),
-	ok.
-
-getVOIP(Orig) when is_integer(Orig) ->
-	rtp_sup ! {get_session,Orig,self()},
-	receive
-		{session_status,Status} -> {ok, Status}
-	after 500 -> {ok,released}
-	end.
 
 % ------- video conference ---------
 processCONF(SDP,Media,PartySess,[MyIP,UDP_RANGE]) when is_binary(SDP),is_pid(Media),is_list(PartySess) ->

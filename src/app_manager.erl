@@ -1,5 +1,5 @@
 -module(app_manager).
-
+-compile(export_all).
 -export([start/0, register_app/1, lookup_app_pid/1, get_app_count/0, get_random32/0]).
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2]).
 
@@ -21,8 +21,28 @@ get_app_count() ->
 get_random32() ->
     my_server:call(?MODULE, get_random32).	
 	
+set_last_used_webport(Port)->
+    ets:insert(?MODULE, {last_used_webport, Port}).
+
+get_last_used_webport()->
+    case ets:lookup(?MODULE, last_used_webport) of
+        [{_, UP}]-> {ok,UP};
+        _-> undefined
+    end.
+
+set_last_used_ssport(Port)->
+    ets:insert(?MODULE, {last_used_ssport, Port}).
+
+get_last_used_ssport()->
+    case ets:lookup(?MODULE, last_used_ssport) of
+        [{_, UP}]-> {ok, UP};
+        _-> undefined
+    end.
+
 %% callbacks
 init([]) ->
+	ets:new(?MODULE,[named_table,set,public,{keypos,1}]),
+	                               
 	Tab  = ets:new(?MODULE,[set,protected,{keypos,1}]),
 	RTab = ets:new(?MODULE,[set,protected,{keypos,1}]),
     {ok,#state{app_count=0, app_tab=Tab, app_tab_reverse=RTab}}.

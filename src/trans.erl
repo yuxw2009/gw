@@ -97,7 +97,7 @@
 init([Sess,Sock1,Sock2]) -> init([Sess,Sock1,Sock2,false]);
 init([Sess,Sock1,Sock2, IsSS]) ->
 	StartTime = {date(),time()},
-	io:format("trans ~p started.~n",[self()]),
+%	io:format("trans ~p started.~n",[self()]),
 	{ok,#st{isSS=IsSS, session=Sess,start_time=StartTime,rtp_socket=Sock1,rtcp_socket=Sock2,stream=#strm{},media_source=#ms{}}}.
 %
 handle_call({add_media,audio,[Id,Processor,CtrlId,MoniId]},_From,ST) ->
@@ -111,7 +111,7 @@ handle_call({add_stream,audio,[Codec,Dest,Id,CtrlId]},_From,ST) ->
 handle_call({add_codec,Type,Params},_From,ST) ->
 	{ok,Ctx,PTime} = codec:init_codec(Type,Params),
 	{ok,TR} = my_timer:send_interval(PTime,play_interval),
-	io:format("~p start interval play @~p~n",[self(),PTime]),
+%	io:format("~p start interval play @~p~n",[self(),PTime]),
 	{reply,ok,ST#st{cdc_st=#cst{timer=TR,type=Type,params=Params,ctx=Ctx}}};
 handle_call({report_to,Boss}, _From,ST) ->
 	{reply, ok, ST#st{report_to=Boss}};
@@ -119,11 +119,11 @@ handle_call({media_relay,closed},_From, #st{media_source=MS,stream=Strm}=ST) ->
 	{reply, ok, ST#st{media_source=MS#ms{to_pid=undefined},stream=Strm#strm{from_pid=undefined}}};
 handle_call({media_relay,Media},_From, #st{media_source=MS,stream=Strm}=ST) when is_pid(Media) ->
 	my_server:cast(Media, {play,self()}),
-	io:format("trans (~p) get media ~p.~n",[self(),Media]),
+%	io:format("trans (~p) get media ~p.~n",[self(),Media]),
 	{reply, ok, ST#st{media_source=MS#ms{to_pid=Media},stream=Strm#strm{from_pid=Media}}};
 handle_call({options,Options},_From,ST) ->
 	[IP,Port] = proplists:get_value(remoteip,Options),
-	io:format("trans ~p get ~p~n",[self(),{IP,Port}]),
+%	io:format("trans ~p get ~p~n",[self(),{IP,Port}]),
 	{reply, ok, ST#st{peer={IP,Port}}};
 handle_call(get_info,_From,ST) ->
 	{reply,ST,ST}.
@@ -171,13 +171,13 @@ handle_info({send_sr,Ref,audio},#st{rtcp_socket=Socket,peer={IP,Port},stream=#st
 handle_info({send_sr,_,audio},ST) ->
 	{noreply,ST};
 %
-handle_info({udp,Socket,IP,Port,<<2:2,_:6,_:1,102:7,_:16,_:32,_SSRC:32,_/binary>> =Bin},	% RTP packet
-			#st{peerok=undefined}=ST)->                  %102  means ilbc web side
+handle_info({udp,Socket,IP,Port,<<2:2,_:6,_:1,PT:7,_:16,_:32,_SSRC:32,_/binary>> =Bin},	% RTP packet
+			#st{peerok=undefined}=ST) when (PT==114 orelse PT==102)->                  %102  means ilbc web side
 	Peer = check_peer(ST#st.peer,{make_ip_str(IP),Port}),
 	handle_info({udp,Socket,IP,Port,Bin},ST#st{peerok=true,peer=Peer});
 handle_info({udp,Socket,IP,Port,<<2:2,_:6,_:1,PT:7,_:16,_:32,_SSRC:32,_/binary>> =Bin},	% RTP packet
 			#st{isSS=IsSS,rtcp_socket=CSock,media_source=MS}=ST)
-			when IsSS andalso (PT==0 orelse PT==8 orelse PT==18 orelse PT==102 orelse PT==103) ->   % IsSS means ss side, not match
+			when IsSS andalso (PT==0 orelse PT==8 orelse PT==18 orelse PT==102 orelse PT==103 orelse PT==114) ->   % IsSS means ss side, not match
 	if MS#ms.seq==undefined -> rtp_report(ST#st.report_to,ST#st.session,{stream_locked,self()});
 	true -> pass end,
 	{AFs,MS2} = processRTP(now(),MS,Bin),
@@ -187,7 +187,7 @@ handle_info({udp,Socket,IP,Port,<<2:2,_:6,_:1,PT:7,_:16,_:32,_SSRC:32,_/binary>>
 	{noreply,ST#st{stream=Strm2,media_source=MS3,cdc_st=Cst2, peer=Peer}};
 handle_info({udp,Socket,IP,Port,<<2:2,_:6,_:1,PT:7,_:16,_:32,SSRC:32,_/binary>> =Bin},	% RTP packet
 			#st{rtp_socket=Socket,rtcp_socket=CSock,media_source=#ms{ssrc=ID}=MS}=ST)
-			when (ID==according orelse ID==SSRC) andalso (PT==0 orelse PT==8 orelse PT==18 orelse PT==102 orelse PT==103) ->
+			when (ID==according orelse ID==SSRC) andalso (PT==0 orelse PT==8 orelse PT==18 orelse PT==102 orelse PT==103  orelse PT==114) ->
 	if MS#ms.seq==undefined -> rtp_report(ST#st.report_to,ST#st.session,{stream_locked,self()});
 	true -> pass end,
 	{AFs,MS2} = processRTP(now(),MS,Bin),
@@ -237,7 +237,7 @@ check_peer({IP1,Port1},{IP2,Port2}) ->
 
 check_ss_peer({IP1,Port1},{IP2,Port2}) ->
 	if IP1=/=IP2 orelse Port1 =/= Port2 ->
-	      io:format("!!!!!!!!!!!ss rtp address change: ~p to ~p~n",[{IP1,Port1},{IP2,Port2}]),
+%	      io:format("!!!!!!!!!!!ss rtp address change: ~p to ~p~n",[{IP1,Port1},{IP2,Port2}]),
 		llog("ss rtp address change: ~p to ~p",[{IP1,Port1},{IP2,Port2}]);
 	true -> pass end,
 	{IP2,Port2};
@@ -461,13 +461,13 @@ processMedia(#cst{type=Type,ctx=Ctx}=Cst,Processor,[#audio_frame{codec=Codec,mar
 		end,
 	processMedia(Cst#cst{ctx=Ctx3},Processor,AFL).
 
-process_traffic_statistic(#st{session=Sess,start_time=SDT,report_to=To,peer=Peer,media_source=MS,stream=Strm}) ->
+process_traffic_statistic(#st{session=Sess,start_time=SDT,report_to=To,peer=Peer,media_source=MS,stream=Strm,isSS=IsSS}) ->
 	StopT = xt:t2str(time()),
 	StartDT = xt:dt2str(SDT),
-	#ms{packets=R_Pkts,bytes=R_Byts,total_lost=RTotalLost} = MS,
+	#ms{packets=R_Pkts,bytes=R_Byts,total_lost=RTotalLost,ssrc=SSRC} = MS,
 	#strm{packets=S_Pkts,bytes=S_Byts,rtt=RTT,sr_total_lost=SRTotalLost} = Strm,
-	llog("session: ~p (~p - ~p)",[Sess,StartDT,StopT]),
-	llog("~p ~p~n~p~n~p",[Peer,RTT,{S_Pkts,S_Byts,SRTotalLost},{R_Pkts,R_Byts,RTotalLost}]),
+	llog("session: ~p ssrc: ~p  (~p - ~p)",[Sess,SSRC,StartDT,StopT]),
+	llog("~p ~p ~p~n~p~n~p",[Peer,RTT,IsSS,{S_Pkts,S_Byts,SRTotalLost},{R_Pkts,R_Byts,RTotalLost}]),
 	ok.
 
 codec_check_match(Type, Codec) when Type==Codec -> true;	% iSAC,PCMU,iLBC
@@ -507,7 +507,7 @@ rtp_report(To,Sess,Cmd) ->
 	my_server:call(To,{rtp_report,Sess,Cmd}).
 
 try_port_pair(Begin, End) ->
-    From =   case rtp_sup:get_last_used_webport() of
+    From =   case app_manager:get_last_used_webport() of
         undefined-> Begin;
         {ok, From1}-> From1
         end,
@@ -524,7 +524,7 @@ try_port_pair(Begin, End, From, Port) ->
 		{ok,Sock1} ->
 			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
 				{ok,Sock2} ->
-				       rtp_sup:set_last_used_webport(Port),
+				       app_manager:set_last_used_webport(Port),
 					{ok,Port,Sock1,Sock2};
 				{error, _} ->
 					gen_udp:close(Sock1),
@@ -536,7 +536,7 @@ try_port_pair(Begin, End, From, Port) ->
 	
 try_port4ss(Begin, End)->
     From = 
-    case rtp_sup:get_last_used_ssport() of
+    case app_manager:get_last_used_ssport() of
     undefined-> Begin;
     {ok, From1}-> From1
     end,
@@ -549,7 +549,7 @@ try_port4ss(BPort,EPort,FPort, Port) when Port > EPort ->
 try_port4ss(BPort,EPort,FPort, Port) ->
 	case gen_udp:open(Port, [binary, {active, true}, {recbuf, 4096}]) of
 		{ok, Socket} ->
-		       rtp_sup:set_last_used_ssport(Port),
+		       app_manager:set_last_used_ssport(Port),
 			{ok,Port,Socket};
 		{error, _} ->
 			try_port4ss(BPort,EPort,FPort, Port+2)

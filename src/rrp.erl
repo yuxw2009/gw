@@ -86,7 +86,8 @@
 
 init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr]) ->
 	VCR = if Vcr==has_vcr-> vcr:start(mkvfn("wvoip")); true-> undefined end,
-	{ok,Noise} = file:read_file("cn.pcm"),
+%	{ok,Noise} = file:read_file("cn.pcm"),
+	Noise = tone:cn_pcm(),
 	ST = case WebCdc of
 			pcmu ->
 				llog("rrp ~p started: pcmu@web",[Session]),
@@ -145,15 +146,15 @@ handle_info({play,WebRTP}, State) ->
 	TR = case WCdc of
 		   isac ->
 			{ok,Tr} = my_timer:send_interval(?ISACPTIME,isac_to_webrtc),
-			{ok,_} = my_timer:send_after(5,delay_pcmu_to_sip),
+			{ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
 			Tr;
 		   ilbc ->
 			{ok,Tr} = my_timer:send_interval(?ILBCPTIME,ilbc_to_webrtc),
-			{ok,_} = my_timer:send_after(5,delay_pcmu_to_sip),
+			{ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
 			Tr;
 		   opus ->
 			{ok,Tr} = my_timer:send_interval(?OPUSPTIME,opus_to_webrtc),
-			{ok,_} = my_timer:send_after(5,delay_pcmu_to_sip),
+			{ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
 			Tr;
 		   pcmu ->		% pcmu old method
 			{ok,Tr} = my_timer:send_interval(?PTIME,send_sample_interval),
@@ -376,7 +377,7 @@ handle_info(#audio_frame{codec=?LOSTiSAC,samples=_N},
 			#st{to_sip=#apip{abuf=AB,cdc=Isac,last_samples=LastSamples}=ToSip}=ST) ->
 	{noreply,ST}; % #st{to_sip=ToSip#apip{abuf=AB2}}};
 handle_info(#audio_frame{codec=?iSAC,body=Body,samples=Samples},
-			#st{to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
+			#st{webcodec=isac,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
 	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
 	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
@@ -401,7 +402,7 @@ handle_info(#audio_frame{codec=?iCNG,body=Body,samples=Samples},
 %  test opus codec (wcg -> ss)
 %
 handle_info(#audio_frame{codec=?OPUS,body=Body,samples=Samples},
-			#st{to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
+			#st{webcodec=opus,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
 	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
@@ -413,7 +414,7 @@ handle_info(#audio_frame{codec=?OPUS,body=Body,samples=Samples},
 %  test ilbc codec (wcg -> ss)
 %
 handle_info(#audio_frame{codec=?iLBC,body=Body,samples=Samples},
-			#st{to_sip=#apip{abuf=AB,cdc=Ilbc}=ToSip}=ST) ->
+			#st{webcodec=ilbc,to_sip=#apip{abuf=AB,cdc=Ilbc}=ToSip}=ST) ->
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
 	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
@@ -502,7 +503,9 @@ mkvfn(Name) ->
 
 llog(F,P) ->
 	case whereis(llog) of
-		undefined -> io:format(F++"~n",P);
+		undefined -> 
+		    llog:start(),
+		    llog ! {self(),F,P};
 		Pid when is_pid(Pid) -> llog ! {self(), F, P}
 	end.
 
@@ -748,7 +751,7 @@ processRPE(#ev{actived=true,nu=Nu1},_,_,_,<<0:4,Nu2:4,0:1,_IsRsv:1,Volume:6,Dura
 	llog("dtmf ~p dailed.",[Nu1]),
 	#ev{actived=true,nu=Nu2,vol=Volume,dura=Dura};
 processRPE(Ev,_,_,_,Info)->	% not handled
-	llog("dtmf packet unhandled EV:~p  Info:~p~n.",[Ev, Info]),
+%	llog("dtmf packet unhandled EV:~p  Info:~p~n.",[Ev, Info]),
 	Ev.
 
 processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=320 ->

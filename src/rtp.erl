@@ -27,7 +27,7 @@
 -define(JITTERLENGTH,32).
 -define(SENTSAVELENGTH,64).
 -define(PSIZE,160).
-
+-define(is_rtcp(PT), (PT==200 orelse PT==201 orelse PT==202 orelse PT==203 orelse PT==205 orelse PT==206)).
 -record(st, {
 	ice,
 	wan_ip
@@ -54,7 +54,10 @@
 -record(state, {
 	sess,
 	socket,
+	rtcp_sck,
+	mobile=false,
 	peer,
+	peer_rtcp_addr,
 	key_strategy,       % dtls | crypto.
 	transport_status = stunning, % stunning | handshaking | inservice
 	dtls,
@@ -72,18 +75,25 @@
 	vp8,
 	ice_state,
 	bw = #esti{},
-	base_wall_clock,
 	report_to,
 	v_jttr,
 	moni		% audio monitor rtp port
 }).
 
+init([Session,{Sock1,Sock2},Options]) ->
+	{Mega,Sec,_Micro} = now(),
+	BaseWC = {Mega,Sec,0},
+	NewState = processOptions(#state{},Options),
+	ReportTo = proplists:get_value(report_to,Options),
+	Media = proplists:get_value(media,Options),
+	{ok,NewState#state{out_media=Media,in_media=Media,sess=Session, transport_status=stunning, socket=Sock1,
+	                                                                           rtcp_sck=Sock2,vp8=#vp8_cdc{},report_to=ReportTo,mobile=true}};
 init([Session,Socket,Options]) ->
 	{Mega,Sec,_Micro} = now(),
 	BaseWC = {Mega,Sec,0},
 	NewState = processOptions(#state{},Options),
 	ReportTo = proplists:get_value(report_to,Options),
-	{ok,NewState#state{sess=Session, transport_status=stunning, socket=Socket,vp8=#vp8_cdc{},base_wall_clock=BaseWC,report_to=ReportTo}}.
+	{ok,NewState#state{sess=Session, transport_status=stunning, socket=Socket,vp8=#vp8_cdc{},report_to=ReportTo}}.
 
 handle_call({options,Options},_From,State) ->
 	NewState = processOptions(State,Options),
@@ -182,7 +192,7 @@ handle_cast({add_candidate,{IP,Port}},State) ->
 		    	dtls ->
 		    	    dtls4srtp:start(State#state.dtls),
 		    	    {noreply, State#state{transport_status=handshaking, peer={IP,Port}}};
-		    	crypto ->
+		    	_cryptoOrUndefined ->
 		    	    {noreply, State#state{transport_status=inservice, peer={IP,Port}}}
 		    end;
 		_ ->
@@ -270,6 +280,21 @@ handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},
 %
 % pcmu audio frame and comfortable_noise received.
 %
+handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
+			#state{sess=Sess, r_base=#base_info{seq=undefined,ssrc=undefined}=Remote0,r_srtp=Cryp,mobile=true}=ST)
+			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
+	Peer = trans:check_peer(ST#state.peer,{Addr,Port}),
+	rtp_report(ST#state.report_to,Sess,{stun_locked,Sess}),
+	send_media(ST#state.out_media,{stun_locked,self()}),
+					
+	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq,ssrc=SSRC,pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1},
+	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
+			  true -> 960 end,
+	AParams = [ST#state.out_media,Mark,Codec,{0,InSeq},Samples,SSRC,Cryp=undefined],
+	decryp_and_send_audio(AParams,Bin),
+	start_rtcp(ST#state.in_audio,ST#state.in_video,Remote,ST#state.vr_base),
+	{noreply,ST#state{peer=Peer,r_base=Remote}};
+
 handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{r_base=#base_info{seq=undefined,ssrc=SSRC}=Remote0,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
 			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
@@ -385,6 +410,27 @@ handle_info({udp,_,_,_,<<2:2,_:6,Mark:1,?VP8:7,InSeq:16,TS:32,SSRC:32,_/binary>>
 %
 %% ******** RTCP ********
 %
+handle_info(Udp={udp, _Socket, Addr, Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,_SSRC:32,_/binary>>},
+	#state{mobile=true,peer_rtcp_addr=undefined}=ST) when ?is_rtcp(PT) ->
+       handle_info(Udp,ST#state{peer_rtcp_addr={Addr,Port}});
+handle_info({udp, _Socket, Addr, Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,SSRC:32,_/binary>> =Bin},
+	#state{socket=Socket,mobile=true,vp8=Vcdc,bw=BWE,peer_rtcp_addr={Addr, Port}}=ST) when ?is_rtcp(PT) ->
+	Now = now(),
+	Parsed = rtcp:parse(Bin),
+	{Rbase2,VRbase2} = update_sr_timecode(Now,Parsed,{ST#state.r_base,ST#state.vr_base}),
+	{InAudio1,InVideo2} = update_fb_info(Now,Parsed,{ST#state.in_audio,ST#state.in_video}),
+	InAudio2 = update_avg_rtt(InAudio1),
+	notify_lost_seqs(Now,Parsed,{ST#state.in_audio,ST#state.in_video}),
+	notify_video_pli(Parsed,ST#state.in_media),
+	if is_record(ST#state.in_video,base_rtp) ->		% rpt expect peer-rtcp source_report
+		{Level2,BWE2} =
+			estimate_video_level3((ST#state.vp8)#vp8_cdc.level,(ST#state.in_video)#base_rtp.ssrc,Parsed,BWE),
+		{noreply,ST#state{in_audio=InAudio2,in_video=InVideo2,r_base=Rbase2,vr_base=VRbase2,
+					  vp8=Vcdc#vp8_cdc{level=Level2},bw=BWE2}};
+	true ->
+		{noreply,ST#state{in_audio=InAudio2,in_video=InVideo2,r_base=Rbase2,vr_base=VRbase2}}
+	end;
+
 handle_info({udp, _Socket, Addr, _Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,SSRC:32,_/binary>> =Bin},
 	#state{socket=Socket,r_srtcp=#cryp{method=Method, e_k=Key,e_s=Salt,a_k=A_k},vp8=Vcdc,bw=BWE}=ST) when PT==?RTCP_SR;PT==?RTCP_RR ->
 	Now = now(),
@@ -416,6 +462,21 @@ handle_info({udp, _Socket, Addr, _Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,SSRC:32,_
 handle_info({send_sr,_,_},#state{transport_status=TS} = ST) when TS =/= inservice ->
 	{noreply,ST};
 	
+handle_info({send_sr,_,audio},#state{sess=Session, peer_rtcp_addr=Peer,rtcp_sck=Socket,r_base=RcvCtx, in_audio=InAudio,
+                                     mobile=true} = ST) ->
+	Now = now(),
+	my_timer:send_after(?RTCPINTERVAL, {send_sr,0,audio}),
+	#base_rtp{cssrc=VSSRC,last_sr=LastSR} = InAudio,
+	{NRBase1,Head,Body} = make_rtcp(Now,InAudio,ST#state.r_base),
+	NRBase = update_avg_ij(NRBase1),
+	Stat = calc_rtp_statistics(Peer, RcvCtx, InAudio),
+	
+	rtp_report(ST#state.report_to,Session,{call_stats, Session, Stat}),
+	case Peer of
+	{IP,Port}->	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>);
+	_-> void
+	end,
+	{noreply, ST#state{in_audio=InAudio#base_rtp{last_sr=LastSR+1},r_base=NRBase}};
 handle_info({send_sr,_,audio},#state{sess=Session, peer={IP,Port}=Peer,socket=Socket,r_base=RcvCtx, in_audio=InAudio,
                                      l_srtcp=#cryp{method=Method,e_k=Key,e_s=Salt,a_k=A_k}} = ST) ->
 	Now = now(),
@@ -562,6 +623,11 @@ handle_info({dtls, key_material, #srtp_params{protection_profile_name=PPN,
 %
 handle_info({udp, _Socket, Addr, Port, Bin},ST) ->
 	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),
+	llog("rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]),
+	{noreply,ST};
+handle_info(Msg,ST) ->
+	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),
+	llog("rtp unknown msg ~p~nST:~p~n",[Msg,ST]),
 	{noreply,ST}.
 
 %
@@ -580,6 +646,7 @@ processOptions(State,Options) ->
 	KeyStrategy = proplists:get_value(key_strategy, Options),
 	{{ReadSRTP, ReadSRTCP}, Dtls} = 
 		case KeyStrategy of
+		      undefined->{{undefined,undefined},undefined};
 			crypto ->
 			    {Meth,KeySalt} = proplists:get_value(crypto,Options),
 			    %io:format("Options:~p,KeySalt:~p.~n", [Options, KeySalt]),
@@ -1257,6 +1324,18 @@ start_within(Session,Options,{BEGIN_UDP_RANGE,END_UDP_RANGE}) ->
 			{error,Reason}
 	end.
 
+start_mobile(Session,Options) ->
+	{MOBILE_BEGIN_UDP_RANGE,MOBILE_END_UDP_RANGE} = avscfg:get(mweb_udp_range),
+	case try_port_pair(MOBILE_BEGIN_UDP_RANGE,MOBILE_END_UDP_RANGE) of
+		{ok,Port,Sock1,Sock2} ->
+			{ok,Pid} = my_server:start(?MODULE,[Session,{Sock1,Sock2},Options],[]),
+			gen_udp:controlling_process(Sock1, Pid),
+			gen_udp:controlling_process(Sock2, Pid),
+			{ok,Pid,Port};
+		{error, Reason} ->
+			{error,Reason}
+	end.
+
 start(Session,Options) ->
 	{WEB_BEGIN_UDP_RANGE,WEB_END_UDP_RANGE} = avscfg:get(web_udp_range),
 	case try_port(WEB_BEGIN_UDP_RANGE,WEB_END_UDP_RANGE) of
@@ -1286,6 +1365,34 @@ try_port(Port,END_UDP_RANGE) ->
 			{ok,Port,Socket};
 		{error, _} ->
 			try_port(Port + 1,END_UDP_RANGE)
+	end.
+
+try_port_pair(Begin, End) ->
+    From =   case app_manager:get_last_used_webport() of
+        undefined-> Begin;
+        {ok, From1}-> From1
+        end,
+    try_port_pair(Begin, End, From, From+2).
+    
+try_port_pair(Begin, End, From, Port) when (Port rem 2)=/=0 ->
+	try_port_pair(Begin, End, From, Port+1);
+try_port_pair(Begin, End, From, Port) when Port==From;Port==From+1 ->
+	{error,udp_over_range};
+try_port_pair(Begin, End, From, Port) when Port>End ->
+	try_port_pair(Begin, End, From, Begin);
+try_port_pair(Begin, End, From, Port) ->
+	case gen_udp:open(Port, [binary, {active, true}, {recbuf, 4096}]) of
+		{ok,Sock1} ->
+			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
+				{ok,Sock2} ->
+				       app_manager:set_last_used_webport(Port),
+					{ok,Port,Sock1,Sock2};
+				{error, _} ->
+					gen_udp:close(Sock1),
+					try_port_pair(Begin, End, From, Port+2)
+			end;
+		{error, _} ->
+			try_port_pair(Begin, End, From, Port+2)
 	end.
 	
 send_udp(Socket, Addr, Port, RTPs) ->
@@ -1347,3 +1454,5 @@ stop_moni({Pid,_, Media}) ->
 	media:stop(Media),
 	rtp:stop(Pid),
 	ok.
+	
+
