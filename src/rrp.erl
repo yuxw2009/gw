@@ -373,75 +373,10 @@ handle_info({udp,_,A,P,B},ST) ->
 %
 %   isac codec (wcg -> sip)
 %
-handle_info(#audio_frame{codec=?LOSTiSAC,samples=_N},
-			#st{to_sip=#apip{abuf=AB,cdc=Isac,last_samples=LastSamples}=ToSip}=ST) ->
+handle_info(#audio_frame{codec=?LOSTiSAC,samples=_N},#st{to_sip=#apip{abuf=AB,cdc=Isac,last_samples=LastSamples}=ToSip}=ST) ->
 	{noreply,ST}; % #st{to_sip=ToSip#apip{abuf=AB2}}};
-handle_info(#audio_frame{codec=?iSAC,body=Body,samples=Samples},
-			#st{webcodec=isac,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
-	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
-	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
-	true ->
-	  {OK, Adec} = erl_isac_nb:xdec(Isac,Body,960,Samples),
-	  Adec2 = if OK==0 -> Adec;
-			     OK==1;OK==2 -> Adec;		% error occurred
-			  true -> L2=OK*2, <<A1:L2/binary,_/binary>> = Adec, A1
-			  end,
-	  {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec2/binary>>,last_samples=Samples}}}
-	end;
-handle_info(#audio_frame{codec=?iCNG,body=Body,samples=Samples},
-			#st{to_sip=#apip{abuf=AB,cngd=CNGD}=ToSip}=ST) ->
-	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
-	    {noreply, ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
-	true ->
-	    0 = erl_cng:xupd(CNGD,Body),
-	    Noise = generate_noise_nb(CNGD,Samples,<<>>),
-	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Noise/binary>>}}}
-	end;
-
-%
-%  test opus codec (wcg -> ss)
-%
-handle_info(#audio_frame{codec=?OPUS,body=Body,samples=Samples},
-			#st{webcodec=opus,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
-	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
-	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
-	true ->
-	    {0, FrameSize, Adec} = erl_opus:xdec(Isac,Body),
-	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
-	end;
-
-%
-%  test ilbc codec (wcg -> ss)
-%
-handle_info(#audio_frame{codec=?iLBC,body=Body,samples=Samples},
-			#st{webcodec=ilbc,to_sip=#apip{abuf=AB,cdc=Ilbc}=ToSip}=ST) ->
-	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
-	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
-	true ->
-	    Adec = ilbc_dec_pkgs(Ilbc, Body, <<>>),
-	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
-	end;
-handle_info(#audio_frame{codec=?CN,body=Body,samples=Samples},
-			#st{webcodec=ilbc,to_sip=#apip{abuf=AB,cngd=CNGD}=ToSip}=ST) ->
-	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
-	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
-	true ->
-	    0 = erl_cng:xupd(CNGD,Body),
-	    Noise = generate_noise_nb(CNGD,Samples,<<>>),
-	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Noise/binary>>,last_samples=Samples}}}
-	end;
-
-%
-% sip pcmu <-> web pcmu with cng (old version)
-%
-handle_info(#audio_frame{codec=Codec},#st{webcodec=pcmu,peerok=false} = State) when Codec==?PCMU;Codec==?CN ->
-    {noreply,State};
-handle_info(#audio_frame{codec=?PCMU,body=Body}, #st{u2sip=U2Sip,vcr=VCR,vcr_buf=VB}=State) ->
-	VB2 = if is_pid(VCR)-> <<VB/binary,Body/binary>>; true-> VB end,
-	{noreply, State#st{u2sip= <<U2Sip/binary,Body/binary>>,vcr_buf=VB2}};
-handle_info(#audio_frame{codec=?CN}, #st{webcodec=pcmu,u2sip=U2Sip,noise=Noise}=State) ->
-	Body=get_random_160s(Noise),
-	{noreply, State#st{u2sip= <<U2Sip/binary,Body/binary>>}};
+handle_info(AudioFrame=#audio_frame{},ST) -> 
+    handle_audio_frame(AudioFrame,ST);
 %
 handle_info(send_sample_interval,#st{peerok=false} = State) ->
 	{noreply,State};
@@ -463,6 +398,74 @@ handle_info(Msg, ST) ->
 
 terminate(normal,_) ->
 	ok.
+
+handle_audio_frame(#audio_frame{codec=?LOSTiSAC,samples=_N},#st{to_sip=#apip{abuf=AB,cdc=Isac,last_samples=LastSamples}=ToSip}=ST) ->
+	{noreply,ST}; % #st{to_sip=ToSip#apip{abuf=AB2}}};
+handle_audio_frame(#audio_frame{codec=?iSAC,body=Body,samples=Samples},#st{webcodec=isac,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
+	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+	  {OK, Adec} = erl_isac_nb:xdec(Isac,Body,960,Samples),
+	  Adec2 = if OK==0 -> Adec;
+			     OK==1;OK==2 -> Adec;		% error occurred
+			  true -> L2=OK*2, <<A1:L2/binary,_/binary>> = Adec, A1
+			  end,
+	  {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec2/binary>>,last_samples=Samples}}}
+	end;
+handle_audio_frame(#audio_frame{codec=?iCNG,body=Body,samples=Samples},#st{to_sip=#apip{abuf=AB,cngd=CNGD}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
+	    {noreply, ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+	    0 = erl_cng:xupd(CNGD,Body),
+	    Noise = generate_noise_nb(CNGD,Samples,<<>>),
+	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Noise/binary>>}}}
+	end;
+
+%
+%  test opus codec (wcg -> ss)
+%
+handle_audio_frame(#audio_frame{codec=?OPUS,body=Body,samples=Samples},#st{webcodec=opus,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
+	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+	    {0, FrameSize, Adec} = erl_opus:xdec(Isac,Body),
+	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
+	end;
+
+%
+%  test ilbc codec (wcg -> ss)
+%
+handle_audio_frame(#audio_frame{codec=?iLBC,body=Body,samples=Samples},#st{webcodec=ilbc,to_sip=#apip{abuf=AB,cdc=Ilbc}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
+	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+	    Adec = ilbc_dec_pkgs(Ilbc, Body, <<>>),
+	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
+	end;
+handle_audio_frame(#audio_frame{codec=?CN,body=Body,samples=Samples},#st{webcodec=ilbc,to_sip=#apip{abuf=AB,cngd=CNGD}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
+	    {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+	    0 = erl_cng:xupd(CNGD,Body),
+	    Noise = generate_noise_nb(CNGD,Samples,<<>>),
+	    {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Noise/binary>>,last_samples=Samples}}}
+	end;
+
+%
+% sip pcmu <-> web pcmu with cng (old version)
+%
+handle_audio_frame(#audio_frame{codec=Codec},#st{webcodec=pcmu,peerok=false} = State) when Codec==?PCMU;Codec==?CN ->
+    {noreply,State};
+handle_audio_frame(#audio_frame{codec=?PCMU,body=Body}, #st{u2sip=U2Sip,vcr=VCR,vcr_buf=VB}=State) ->
+	VB2 = if is_pid(VCR)-> <<VB/binary,Body/binary>>; true-> VB end,
+	{noreply, State#st{u2sip= <<U2Sip/binary,Body/binary>>,vcr_buf=VB2}};
+handle_audio_frame(#audio_frame{codec=?CN}, #st{webcodec=pcmu,u2sip=U2Sip,noise=Noise}=State) ->
+	Body=get_random_160s(Noise),
+	{noreply, State#st{u2sip= <<U2Sip/binary,Body/binary>>}};
+handle_audio_frame(#audio_frame{}=Frame,State) ->
+	llog("rrp unexcept audio_frame ~p.~n",[Frame]),
+	{noreply, State}.
+	
 
 erl_cng_xenc(CNGE,ND1,0) ->
 	case erl_cng:xenc(CNGE,ND1,0) of

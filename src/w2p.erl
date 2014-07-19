@@ -2,6 +2,7 @@
 
 -export([start/5, stop/1, get_call_status/1, dial/2, peek/1]).
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2]).
+-compile(export_all).
 
 -include("sdp.hrl").
 
@@ -102,7 +103,7 @@ handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
 	RrpPid ! {send_phone_event,Nu,9,160*7},
 	{noreply,State};
 handle_cast({stun_locked, Aid}, State=#state{aid=Aid, pltype=PLType}) ->
-    llog("rtp ~p stun locked.",[Aid]),
+    llog("rtp ~p stun locked.pltype:~p",[Aid,PLType]),
 	Codec = acquire_codec(PLType),
 	{ok,RrpPid,Port} = rrp:start(Aid,Codec),
 	start_resource_monitor(RrpPid, Codec),

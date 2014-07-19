@@ -622,9 +622,11 @@ handle_info({dtls, key_material, #srtp_params{protection_profile_name=PPN,
 %
 % ******** bad message, socket received *******
 %
-handle_info({udp, _Socket, Addr, Port, Bin},ST) ->
+handle_info({udp, _Socket, Addr, Port, Bin},ST=#state{transport_status=TranStatus}) ->
 	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),
-	llog("rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]),
+	if TranStatus == inservice-> 	llog("rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]);
+	   true-> void
+	end,
 	{noreply,ST};
 handle_info(Msg,ST) ->
 	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),

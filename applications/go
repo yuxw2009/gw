@@ -1,1 +1,2 @@
-yaws --conf yaws.conf --name wvoip2@10.61.34.58 --erlarg "-setcookie hkxyz" 
+ulimit -n 20480
+erl -name gw_git@14.17.107.196 -setcookie sbxyz -pa ../ebin +K true -s voip 

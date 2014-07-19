@@ -166,8 +166,8 @@ check_sdp_params_for_voip(Desc) ->
 							end
 					end;
 				opus ->
-					case {lists:member(111,PLs),lists:member(107,PLs)} of
-						{true,true} -> {ok,opus};
+					case {lists:member(111,PLs)} of
+						{true} -> {ok,opus};
 						_ ->
 							case {lists:member(0,PLs),lists:member(13,PLs)} of
 								{true,true} -> {ok,pcmu};

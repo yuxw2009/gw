@@ -57,8 +57,12 @@ ts() ->
 
 % ----------------------------------
 start() ->
+    case whereis(llog) of
+    undefined->
 	{ok, L} = my_server:start({local,llog},?MODULE, [], []),
-	L.
+	L;
+    P->P
+    end.
 
 stop() ->
 	my_server:cast(llog, stop).
