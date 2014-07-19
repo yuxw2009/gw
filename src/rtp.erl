@@ -75,6 +75,7 @@
 	vp8,
 	ice_state,
 	bw = #esti{},
+	base_wall_clock,
 	report_to,
 	v_jttr,
 	moni		% audio monitor rtp port
@@ -93,7 +94,7 @@ init([Session,Socket,Options]) ->
 	BaseWC = {Mega,Sec,0},
 	NewState = processOptions(#state{},Options),
 	ReportTo = proplists:get_value(report_to,Options),
-	{ok,NewState#state{sess=Session, transport_status=stunning, socket=Socket,vp8=#vp8_cdc{},report_to=ReportTo}}.
+	{ok,NewState#state{sess=Session, transport_status=stunning, socket=Socket,vp8=#vp8_cdc{},base_wall_clock=BaseWC,report_to=ReportTo}}.
 
 handle_call({options,Options},_From,State) ->
 	NewState = processOptions(State,Options),

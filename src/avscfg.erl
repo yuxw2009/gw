@@ -4,12 +4,12 @@
 % modified this file as your server configuration.
 
 %% public IP
-get(host_ip) -> "58.221.60.37";
-get(internal_ip) -> "58.221.60.37";  % media server ip for internal media
-get(ip4sip) ->  "58.221.60.37";
+get(host_ip) -> "14.17.107.196";
+get(internal_ip) -> "14.17.107.196";  % media server ip for internal media
+get(ip4sip) ->  "14.17.107.196";
 
-get(web_socket_ip) -> "58.221.60.37";
-get(sip_socket_ip) -> "58.221.60.37";
+get(web_socket_ip) -> "14.17.107.196";
+get(sip_socket_ip) -> "14.17.107.196";
 
 
 get(sip_app_node) -> {voip_ua, 'voice@58.221.60.37'};
