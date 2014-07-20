@@ -281,7 +281,7 @@ handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},
 %
 % pcmu audio frame and comfortable_noise received.
 %
-handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
+handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{sess=Sess, r_base=#base_info{seq=undefined,ssrc=undefined}=Remote0,r_srtp=Cryp,mobile=true}=ST)
 			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
 	Peer = trans:check_peer(ST#state.peer,{Addr,Port}),
@@ -292,21 +292,21 @@ handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 			  true -> 960 end,
 	AParams = [ST#state.out_media,Mark,Codec,{0,InSeq},Samples,SSRC,Cryp=undefined],
-	decryp_and_send_audio(AParams,Bin),
+	decryp_and_send_audio(AParams,UdpMsg),
 	start_rtcp(ST#state.in_audio,ST#state.in_video,Remote,ST#state.vr_base),
 	{noreply,ST#state{peer=Peer,r_base=Remote}};
 
-handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
+handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{r_base=#base_info{seq=undefined,ssrc=SSRC}=Remote0,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
 			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
 	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq},
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 			  true -> 960 end,
 	AParams = [ST#state.out_media,Mark,Codec,{0,InSeq},Samples,SSRC,Cryp],
-	decryp_and_send_audio(AParams,Bin),
+	decryp_and_send_audio(AParams,UdpMsg),
 	{noreply,ST#state{r_base=Remote#base_info{pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1}}};
 
-handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
+handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{r_base=#base_info{roc=LastROC,seq=LastSeq,timecode=LastTs,ssrc=SSRC}=Remote,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
 			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
 	Now = now(),
@@ -316,7 +316,7 @@ handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:
 	{ExpectROC,ExpectSeq} = get_expect_seq(LastROC,LastSeq),
 	if InSeq==ExpectSeq ->
 		AParams = [ST#state.out_media,Mark,Codec,{ExpectROC,InSeq},TS-LastTs,SSRC,Cryp],
-		decryp_and_send_audio(AParams,Bin),
+		decryp_and_send_audio(AParams,UdpMsg),
 		{noreply,ST#state{r_base=Remote#base_info{pln=Codec,roc=ExpectROC,seq=ExpectSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2,pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1}}};
 	true ->
 		case judge_bad_seq(LastSeq,InSeq) of
@@ -326,7 +326,7 @@ handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:
 				Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 						  true -> 960 end,
 				AParams = [ST#state.out_media,Mark,Codec,{ROC,InSeq},Samples,SSRC,Cryp],
-				decryp_and_send_audio(AParams,Bin),
+				decryp_and_send_audio(AParams,UdpMsg),
 				{noreply,ST#state{r_base=Remote#base_info{pln=Codec,roc=ROC,seq=InSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2,pkts_rcvd=PktR+1,pkts_lost=PktL+(N-1), cumu_lost=CumuL+(N-1),cumu_rcvd=CumuR+1}}};
 			{backward,_} ->
 				{noreply,ST}
@@ -1115,12 +1115,12 @@ count_up_to_seq(N,InSeq,{LastROC,LastSeq}) ->
 	{ROC,Seq} = get_expect_seq(LastROC,LastSeq),
 	count_up_to_seq(N+1,InSeq,{ROC,Seq}).
 
-decryp_and_send_audio([OutMedia,Mark,Codec,{ROC,InSeq},Samples0,SSRC,Cryp], Bin) ->
+decryp_and_send_audio([OutMedia,Mark,Codec,{ROC,InSeq},Samples0,SSRC,Cryp], {udp,_Socket,Addr,Port,Bin}) ->
 	Marker = if Mark==1 -> true; true -> false end,
 	Samples = if Samples0 < 0 -> Samples0 + 16#100000000; true -> Samples0 end,
 	case get_media_frame(SSRC,ROC,InSeq,Cryp,Bin) of
 		{ok,Body} ->
-			Frame = #audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},
+			Frame = #audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples,addr=Addr,port=Port},
 			send_media(OutMedia, Frame);
 		bad_digest ->
 			%%io:format("~p audio ~p bad_digest.~n",[self(),SSRC]),

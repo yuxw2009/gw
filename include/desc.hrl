@@ -65,6 +65,8 @@
 	codec 	       = undefined, %%frame_codec()|undefined,
 	marker         = false,
 	samples,					%% number of samples in frame
+	addr,
+	port,
 	body           = <<>>       %%binary()
 }).
 

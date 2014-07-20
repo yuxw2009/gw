@@ -25,7 +25,8 @@ get(web_udp_range) ->  {55000,56000};
 get(web_proto) -> udp;
 get(certificate) -> {"./webRTCVoIP.pem", "./webRTCVoIP_key.pem"};
 
-get(wcgs)-> [{gw_git,"/yyy/yyy/gw_git"},{wrtc5,"/yyy/yyy/wrtc5/gw_run"},{wrtc6,"/yyy/yyy/wrtc6/gw_run"}];
+get(wcgs)-> [{gw_git,"/yyy/yyy/gw_git"}];
+get(monitor)-> 'monitor@14.17.107.196';
 % not used yet
 get(wan_ip) -> avscfg:get(host_ip);
 get(wcall_cid) -> "0085268895100";
