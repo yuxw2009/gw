@@ -121,6 +121,7 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_get_int(env, argv[2], &kForceSid))
     return enif_make_badarg(env);
 
+  if(enc[no].in_use == 0) return enif_make_int(env, 1);
   encLen = WebRtcCng_Encode(enc[no].ctx,
   							(int16_t *)sigIn.data,
   							(int16_t)(sigIn.size/sizeof(int16_t)),
@@ -151,6 +152,7 @@ static ERL_NIF_TERM xupd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &sigIn))
     return enif_make_badarg(env);
 
+  if(dec[no].in_use == 0) return enif_make_int(env, 1);
   if (WebRtcCng_UpdateSid(dec[no].ctx, sigIn.data, sigIn.size) != 0) {
     res = 1;
   }
@@ -171,6 +173,7 @@ static ERL_NIF_TERM xgen(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_get_int(env, argv[1], &samples))
     return enif_make_badarg(env);
 
+  if(dec[no].in_use == 0) return enif_make_int(env, 1);
   sigOut = enif_make_new_binary(env, samples*sizeof(int16_t), &rbin);
   if (WebRtcCng_Generate(dec[no].ctx, (int16_t *)sigOut, (int16_t)samples, (int16_t)new_period) != 0)
     res = 1;

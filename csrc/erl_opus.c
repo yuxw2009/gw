@@ -107,6 +107,7 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &enc))
     return enif_make_badarg(env);
 
+  if(opus[no].in_use == 0) return enif_make_int(env, 1);
   output_samples = opus_decode(opus[no].dec, enc.data, (opus_int32)enc.size, decoded_data, 960*6, 0);
   
   sigOut = enif_make_new_binary(env, output_samples*2, &rbin);
@@ -130,6 +131,7 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &sigIn))
     return enif_make_badarg(env);
 
+  if(opus[no].in_use == 0) return enif_make_int(env, 1);
   samples = sigIn.size / 2,
   cdlen = opus_encode(opus[no].enc, (opus_int16 *)sigIn.data, samples, encoded_data, MAX_PACKET);
 

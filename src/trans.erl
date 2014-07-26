@@ -231,7 +231,7 @@ terminate(normal,_) ->
 % ----------------------------------
 check_peer({IP1,Port1},{IP2,Port2}) ->
 	if IP1=/=IP2 ->
-		llog("rtp address change: ~p to ~p",[{IP1,Port1},{IP2,Port2}]);
+		llog("rtp address change: ~p to ~p",[IP1++":"++portstr(Port1),make_ip_str(IP2)++":"++portstr(Port2)]);
 	true -> pass end,
 	{IP2,Port2}.
 
@@ -243,9 +243,12 @@ check_ss_peer({IP1,Port1},{IP2,Port2}) ->
 	{IP2,Port2};
 check_ss_peer(Addr0, _) ->
 	Addr0.
+portstr(Port) when  is_integer(Port) -> integer_to_list(Port);
+portstr(_)-> "unkown".
 
 make_ip_str({A,B,C,D}) ->
-	integer_to_list(A)++"."++integer_to_list(B)++"."++integer_to_list(C)++"."++integer_to_list(D).
+	integer_to_list(A)++"."++integer_to_list(B)++"."++integer_to_list(C)++"."++integer_to_list(D);
+make_ip_str(_)-> "unknown".
 
 processRTP(Now,#ms{seq=undefined}=MS,
 		   <<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,ID:32,PL/binary>>) ->

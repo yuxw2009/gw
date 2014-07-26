@@ -624,9 +624,9 @@ handle_info({dtls, key_material, #srtp_params{protection_profile_name=PPN,
 %
 handle_info({udp, _Socket, Addr, Port, Bin},ST=#state{transport_status=TranStatus}) ->
 	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),
-	if TranStatus == inservice-> 	llog("rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]);
-	   true-> void
-	end,
+%	if TranStatus == inservice-> 	llog("rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]);
+%	   true-> void
+%	end,
 	{noreply,ST};
 handle_info(Msg,ST) ->
 	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),
@@ -1359,17 +1359,29 @@ info(Pid,Info) ->
 rtp_report(To, _Sess, Cmd) ->
 	my_server:cast(To, Cmd).
 	
-try_port(Port,END_UDP_RANGE) when Port > END_UDP_RANGE ->
+
+
+try_port(Begin, End) ->
+    From =   case app_manager:get_last_used_webport() of
+        undefined-> Begin;
+        {ok, From1}-> From1
+        end,
+    try_port(Begin, End, From, From+1).
+    
+try_port(Begin, End, From, Port) when Port==From ->
 	{error,udp_over_range};
-try_port(Port,END_UDP_RANGE) ->
+try_port(Begin, End, From, Port) when Port>End ->
+	try_port(Begin, End, From, Begin);
+try_port(Begin, End, From, Port) ->
     {ok,HostIP} = inet:parse_address(avscfg:get(web_socket_ip)),
 	case gen_udp:open(Port, [binary, {active, true}, {ip,HostIP}, {recbuf, 8192}]) of
 		{ok, Socket} ->
+		    app_manager:set_last_used_webport(Port),
 			{ok,Port,Socket};
 		{error, _} ->
-			try_port(Port + 1,END_UDP_RANGE)
+			try_port(Begin, End, From, Port+1)
 	end.
-
+	
 try_port_pair(Begin, End) ->
     From =   case app_manager:get_last_used_webport() of
         undefined-> Begin;
@@ -1427,10 +1439,11 @@ send_media(undefined,_) ->
 %
 % ----------------------------------
 llog(F,P) ->
-	case whereis(llog) of
-		undefined -> io:format(F++"~n",P);
-		Pid when is_pid(Pid) -> llog ! {self(), F, P}
-	end.
+%	case whereis(llog) of
+%		undefined -> io:format(F++"~n",P);
+%		Pid when is_pid(Pid) -> llog ! {self(), F, P}
+%	end.
+    void.
 
 
 show_tc_ts(?iCNG,{LastTS,PrevTC},{TS,Now}) ->

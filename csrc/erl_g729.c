@@ -121,7 +121,9 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_badarg(env);
   if (!enif_inspect_binary(env, argv[1], &sigIn) || (sigIn.size % 160 != 0))
     return enif_make_badarg(env);
-
+  
+  if(g729[no].in_use == 0) return enif_make_int(env, 1);
+  
   loops = (int) sigIn.size / 160;
   sigOut = enif_make_new_binary(env, loops * 10, &rbin);
   
@@ -152,6 +154,8 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &enc))
     return enif_make_badarg(env);
 
+  if(g729[no].in_use == 0) return enif_make_int(env, 1);
+  
   edp = (char *)enc.data;
   ddp = (int16_t *)enif_make_new_binary(env, 320, &rbin);	// 320 bytes (20ms) out always.
 

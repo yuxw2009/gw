@@ -18,7 +18,7 @@ decode(Announce) when is_binary(Announce) ->
   KeyValues = [{atom([K]), Value} || [K,$=|Value] <- Lines],
   decode(KeyValues);
 
-decode(Announce) ->
+decode(Announce) when is_list(Announce)>
   {Session, Announce2} = parse_session(Announce, #session_desc{}),
   Streams = parse_announce(Announce2, [], undefined, undefined),
   {Session,Streams}.

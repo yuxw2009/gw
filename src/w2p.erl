@@ -104,6 +104,7 @@ handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
 	{noreply,State};
 handle_cast({stun_locked, Aid}, State=#state{aid=Aid, pltype=PLType}) ->
     llog("rtp ~p stun locked.pltype:~p",[Aid,PLType]),
+    
 	Codec = acquire_codec(PLType),
 	{ok,RrpPid,Port} = rrp:start(Aid,Codec),
 	start_resource_monitor(RrpPid, Codec),
@@ -128,9 +129,12 @@ handle_info({callee_status, Status},State=#state{rtp_pid=RtpPid,rrp_pid=RrpPid})
     {noreply,State#state{status=Status}};
 handle_info({callee_sdp,SDP_FROM_SS},State=#state{aid=Aid,rrp_pid=RrpPid}) ->
     llog("app ~p ss sdp: ~p",[Aid,SDP_FROM_SS]),
-    {PeerIp,PeerPort} = get_port_from_sdp(SDP_FROM_SS),
-    PeerAddr = [{remoteip,[PeerIp,PeerPort]}],
-	ok = rrp:set_peer_addr(RrpPid, PeerAddr),
+    case  get_port_from_sdp(SDP_FROM_SS) of
+    {PeerIp,PeerPort}->
+        PeerAddr = [{remoteip,[PeerIp,PeerPort]}],
+	  ok = rrp:set_peer_addr(RrpPid, PeerAddr);
+    _-> void
+    end,
 %	{noreply,State#state{status=hook_off}};	
 	{noreply,State};	
 handle_info({'DOWN', _Ref, process, UA, _Reason},State=#state{aid=Aid,sip_ua=UA})->
@@ -200,9 +204,10 @@ start_sip_call(State=#state{aid=Aid, call_info=CallInfo, rrp_port=RrpPort}) ->
     llog("gw ~p port ~p call ~p sdp_to_ss ~p~n", [Aid,RrpPort,CallInfo,SDP_TO_SS]),
 	State#state{start_time=now(),status=invite,sip_ua=UA}.
 	
-get_port_from_sdp(SDP_FROM_SS) ->
+get_port_from_sdp(SDP_FROM_SS) when is_binary(SDP_FROM_SS)->
     {#session_desc{connect={_Inet4,Addr}},[St2]} = sdp:decode(SDP_FROM_SS),
-    {Addr,St2#media_desc.port}.
+    {Addr,St2#media_desc.port};
+get_port_from_sdp(_)->  undefined.
 
 get_local_sdp(LPort) ->
     {Se1,St1} = 'SAMPLE'(LPort),
@@ -244,7 +249,8 @@ duration({M1,S1,_}) ->
     end.
 	
 llog(F,P) ->
-	case whereis(llog) of
-		undefined -> pass;
-		Pid when is_pid(Pid) -> llog ! {self(), F, P}
-	end.
+%	case whereis(llog) of
+%		undefined -> pass;
+%		Pid when is_pid(Pid) -> llog ! {self(), F, P}
+%	end.
+     void.

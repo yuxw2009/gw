@@ -73,6 +73,7 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &enc))
     return enif_make_badarg(env);
 
+  if(ilbc[no].in_use == 0) return enif_make_int(env, 1);
   sigOut = (WebRtc_Word16 *)enif_make_new_binary(env, ilbc[no].mode<<4, &rbin);
   len=WebRtcIlbcfix_Decode(ilbc[no].dec,(WebRtc_Word16 *)enc.data,(WebRtc_Word16)enc.size,sigOut,&spType);
 
@@ -96,6 +97,7 @@ static ERL_NIF_TERM xplc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_get_uint(env, argv[0], &no))
     return enif_make_badarg(env);
 
+  if(ilbc[no].in_use == 0) return enif_make_int(env, 1);
   sigOut = (WebRtc_Word16 *)enif_make_new_binary(env, ilbc[no].mode<<4, &rbin);
   len=WebRtcIlbcfix_DecodePlc(ilbc[no].dec, sigOut, 1);
 
@@ -119,6 +121,7 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &sigIn))
     return enif_make_badarg(env);
 
+  if(ilbc[no].in_use == 0) return enif_make_int(env, 1);
   cdlen=WebRtcIlbcfix_Encode(ilbc[no].enc,(WebRtc_Word16 *)sigIn.data,(WebRtc_Word16)(sigIn.size>>1),encoded_data);
   sigOut = enif_make_new_binary(env, cdlen, &rbin);
   memcpy(sigOut,(unsigned char *)encoded_data,cdlen);
@@ -150,7 +153,7 @@ static ERL_NIF_TERM xdtr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 static ERL_NIF_TERM cdcn(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   int total=MAXCHNO+1;
-  int num = 0;
+  int num = 0,i=0;
   
   for (i=0;i<=MAXCHNO;i++) {
     if (ilbc[i].in_use == 0) {

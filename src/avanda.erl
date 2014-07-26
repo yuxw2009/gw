@@ -38,7 +38,7 @@ processNATIVE2({R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_
 	{successful,Aid,{avscfg:get(mhost_ip),LPort}}.
 
 stopNATIVE(Orig) ->
-	io:format("58.37 kill ~p~n",[Orig]),
+%	io:format("58.37 kill ~p~n",[Orig]),
 	w2p:stop(Orig),
 	ok.
 
@@ -47,7 +47,6 @@ getNATIVE(Orig) when is_integer(Orig) ->
 	{ok,Status}.
 
 get_waddr(Addrs) ->
-	io:format("mobile addrs ~p~n",[Addrs]),
 	Ads = [{inet_parse:address(X),X}||X<-Addrs],
 %	hd([Ad||{{ok,{A,_,_,_}},Ad}<-Ads,A=/=192]).
 	case [Ad||{{ok,{A,_,_,_}},Ad}<-Ads,A=/=192] of

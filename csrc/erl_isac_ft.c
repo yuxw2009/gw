@@ -132,6 +132,7 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_get_uint(env, argv[3], &tsDelta))
     return enif_make_badarg(env);
 
+  if(isac[no].in_use == 0) return enif_make_int(env, 1);
 /*  get_arrival_time(samples, tsDelta, &isac[no].BN_data);
   if (enc.size>100) asize=100;
   else asize=enc.size;
@@ -174,7 +175,8 @@ static ERL_NIF_TERM xplc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_badarg(env);
   if (!enif_get_uint(env, argv[1], &samples))
     return enif_make_badarg(env);
-    
+  if(isac[no].in_use == 0) return enif_make_int(env, 1);
+  
   if (samples == 480)
     noOfLostFrames = 1;
   else
@@ -206,7 +208,8 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_badarg(env);
   if (!enif_inspect_binary(env, argv[1], &sigIn))
     return enif_make_badarg(env);
-
+  if(isac[no].in_use == 0) return enif_make_int(env, 1);
+  
   noOfCalls=0;
   cdlen=0;
   while (cdlen<=0) {
@@ -420,9 +423,24 @@ static ERL_NIF_TERM du16k(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return enif_make_int(env,res);
 }
 
+static ERL_NIF_TERM cdcn(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+  int total=MAXCHNO+1;
+  int num = 0,i=0;
+  
+  for (i=0;i<=MAXCHNO;i++) {
+    if (isac[i].in_use == 0) {
+		num+=1;
+    }
+  }
+
+  return enif_make_tuple2(env,enif_make_int(env,num),enif_make_int(env,total));
+}
+
 // ---------------------------------
 static ErlNifFunc eiSAC_funcs[] =
 {
+    {"cdcnum", 0, cdcn},
     {"icdc", 3, icdc},
     {"xdec", 4, xdec},
     {"xplc", 2, xplc},
