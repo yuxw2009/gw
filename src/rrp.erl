@@ -421,10 +421,10 @@ record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon}, Peer1={Addr,_Port}
     case sets:is_element(Addr,Froms) of
     false->    
         if Peer=/= Peer1-> 
-	        send_2_monitor(Mon,{unexpected_mgsid_peer,[xt:dt2str(erlang:localtime()),trans:make_ip_str(Peer1),trans:make_ip_str(Peer),atom_to_list(node())]}),
+	        send_2_monitor(Mon,{unexpected_mgsid_peer,[xt:dt2str(erlang:localtime()),trans:make_ip_str(Peer1),trans:make_ip_str(Peer),atom_to_list(node())]});
               true-> void
 	 end,
-        send_2_monitor(Mon,{mgside_peerip,trans:make_ip_str(Addr)),
+        send_2_monitor(Mon,{mgside_peerip,trans:make_ip_str(Addr)}),
         sets:add_element(Addr,Froms);
     _-> Froms
     end,
