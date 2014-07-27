@@ -2,6 +2,7 @@
 -compile(export_all).
 
 -include("desc.hrl").
+-include("erl_debug.hrl").
 
 -define(KFS,8).
 -define(PCMU,0).
@@ -23,7 +24,7 @@ init([From,PTime,To]) ->
 handle_info(#audio_frame{codec=?LOSTSEQ,samples=_N},ST) ->
 	{noreply,ST};
 handle_info(#audio_frame{codec=?PCMU,marker=Marker,body=Body,samples=Samples},#st{out=Out}=ST) ->
-	Dec = erl_isac_nb:udec(Body),
+	Dec =  ?APPLY(erl_isac_nb, udec, [Body]) ,
 	Out ! {pcm_raw,Samples,Dec},
 	{noreply,ST};
 handle_info({pcm_raw,Samples,Raw},#st{sbuf=Buf}=ST) ->
@@ -31,7 +32,7 @@ handle_info({pcm_raw,Samples,Raw},#st{sbuf=Buf}=ST) ->
 handle_info(play_audio,#st{in=In,sbuf=Buf,mode=PTime,c_2udp=C2udp}=ST) ->
 	if size(Buf)>=PTime*?KFS*2 ->
 		{R1,Rest} = split_binary(Buf,PTime*?KFS*2),
-		Enc = erl_isac_nb:uenc(R1),
+		Enc =  ?APPLY(erl_isac_nb, uenc, [R1]) ,
 		Marker = if C2udp==0 -> 1; true -> 0 end,
 		In ! #audio_frame{codec=?PCMU,marker=Marker,body=Enc,samples=PTime*?KFS},
 		{noreply,ST#st{sbuf=Rest,c_2udp=C2udp+1}};

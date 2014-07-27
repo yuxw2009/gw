@@ -1,6 +1,7 @@
 -module(meeting_room).
 -compile(export_all).
 
+-include("erl_debug.hrl").
 -define(CN,13).
 -define(PCMU,0).
 -define(VP8, 100).
@@ -67,7 +68,7 @@ init([Name,HasVCR]) ->
 	{ok,#st{name=Name,chairs=[],usr=[],noise=Noise,has_vcr=HasVCR,vcr=undefined}}.
 
 handle_info({play,RTP}, #st{usr=Usr}=ST) ->
-	{0,DCtx} = erl_vp8:idec(),
+	{0,DCtx} =  ?APPLY(erl_vp8, idec, []) ,
 	llog("~p@~p get decoder ~p.",[RTP,ST#st.name,DCtx]),
 	Ref = erlang:monitor(process,RTP),
 	Vdec = #vd_st{locked=false,expid=0,w_h={?VWIDTH,?VHEIGHT},samples=0,tmpframe= <<>>,ctx=DCtx},
@@ -108,7 +109,7 @@ handle_info({video_pli,RTP}, #st{usr=Usr}=ST) ->
 	{noreply,ST#st{usr=lists:keyreplace(RTP,#strm.ortp,Usr,Usr1#strm{pli=true})}};
 handle_info(init_vp8_encode, #st{name=Name,has_vcr=HasVCR}=ST) ->
 	{ok,AR} = my_timer:send_interval(20,play_audio),
-	{0,ECtx,Flags,_} = erl_vp8:ienc(?VWIDTH,?VHEIGHT,?DBITRATE),
+	{0,ECtx,Flags,_} =  ?APPLY(erl_vp8, ienc, [?VWIDTH,?VHEIGHT,?DBITRATE]) ,
 	{Mega,Sec,Micro} = now(),
 	BaseTC = {Mega,Sec,0},
 	LastTC = {Mega,Sec,minisec(Micro)},
@@ -118,8 +119,8 @@ handle_info(init_vp8_encode, #st{name=Name,has_vcr=HasVCR}=ST) ->
 	{noreply,ST#st{venc=VEnc,force_key=false,img_lock=undefined,atimer=AR,vcr=VCR}};
 handle_info(stop_vp8_encode, #st{venc=#ve_st{ctx=ECtx,last_ts=PTS},atimer=AT}=ST) ->
 	my_timer:cancel(AT),
-	0 = erl_vp8:xenc(ECtx,<<>>,PTS,33,0),
-	0 = erl_vp8:xdtr(ECtx,0),	% 0 for enc
+	0 =  ?APPLY(erl_vp8, xenc, [ECtx,<<>>,PTS,33,0]) ,
+	0 =  ?APPLY(erl_vp8, xdtr, [ECtx,0]) ,	% 0 for enc
 	llog("meeting room ~p release vp8 ~p.",[ST#st.name,ECtx]),
 	if is_pid(ST#st.vcr) -> vcr:stop(ST#st.vcr);
 	true -> pass end,
@@ -210,8 +211,8 @@ handle_call(get_info,_,ST) ->
 handle_cast(stop,#st{name=Name,venc=#ve_st{ctx=ECtx,last_ts=PTS},usr=Usr,atimer=AT}=ST) ->
 	my_timer:cancel(AT),
 	llog("video conference ~p stopped at: ~p users.",[Name,length(ST#st.usr)]),
-	0 = erl_vp8:xenc(ECtx,<<>>,PTS,33,0),
-	0 = erl_vp8:xdtr(ECtx,0),	% 0 for enc
+	0 =  ?APPLY(erl_vp8, xenc, [ECtx,<<>>,PTS,33,0]) ,
+	0 =  ?APPLY(erl_vp8, xdtr, [ECtx,0]) ,	% 0 for enc
 	0 = destory_dec(0,Usr),
 	{stop,normal,[]}.
 terminate(normal, _) ->
@@ -227,16 +228,16 @@ llog(F,P) ->
 rm_user_vp8dec(RTP,Usr) ->
 	{value,Usr1} = lists:keysearch(RTP,#strm.ortp,Usr),
 	DCtx = (Usr1#strm.vdec)#vd_st.ctx,
-	0 = erl_vp8:xdtr(DCtx,1),
+	0 =  ?APPLY(erl_vp8, xdtr, [DCtx,1]) ,
 	lists:keydelete(RTP,#strm.ortp,Usr).
 
 safe_vp8dec(DCtx,NewV,Rsult) ->
 	safe_vp8dec(DCtx,NewV,Rsult,{?DWIDTH,?DHEIGHT}).
 
 safe_vp8dec(DCtx,NewV,Rsult,{DestW,DestH}) ->
-	case erl_vp8:xdec(DCtx,NewV) of
+	case  ?APPLY(erl_vp8, xdec, [DCtx,NewV])  of
 		0 ->	% erl_vp8 return 0 for successful
-			{0,Dat} = erl_vp8:gdec(DCtx),
+			{0,Dat} =  ?APPLY(erl_vp8, gdec, [DCtx]) ,
 			yv12_resample:scl_image(Rsult,{DestW,DestH},Dat);
 		_ ->	% vp8 decode failure
 			llog("vp8 decoder ~p error,empty frame created.",[DCtx]),
@@ -366,7 +367,7 @@ mix_audio(Noise,AFs) ->
 	{#audio_frame{codec=?PCMU,body=All,samples=160},pcm2mix(AFs,Mixs)}.
 
 mix_pcmu2(PCMs) ->
-	{_,Blk} = erl_amix:x(PCMs),
+	{_,Blk} =  ?APPLY(erl_amix, x, [PCMs]) ,
 	[Sum|Mixs] = split_audio_blk(Blk),
 	{Sum,Mixs}.
 
@@ -487,8 +488,8 @@ encVP8(ForceKey,_,Td,YUV,#ve_st{n=N,flags=TemporalFlags,level=TemporalLevels,ctx
 	EFlags2 = if (N rem 32)==0 -> EFlags; true -> EFlags band 16#fffffffe end,
 	Flags = EFlags2 bor if ForceKey -> 1; true -> 0 end,
 	{TD,ThisTC} = compute_td(Td,LastTC),
-	0 = erl_vp8:xenc(Ctx,YUV,PTS,TD,Flags),
-	{0,Key,EncDat} = erl_vp8:genc(Ctx),
+	0 =  ?APPLY(erl_vp8, xenc, [Ctx,YUV,PTS,TD,Flags]) ,
+	{0,Key,EncDat} =  ?APPLY(erl_vp8, genc, [Ctx]) ,
 	{Key,Level,TD*90,EncDat,VEnc#ve_st{n=N+1,last_tc=ThisTC,last_ts=PTS+TD}}.
 
 packetVP8(VN,_Key,TC,<<_Size:32/little,_N:64/little,VP8/binary>>) when size(VP8) =< ?MAXRTPLEN ->
@@ -527,7 +528,7 @@ frameOf(Bin) ->
 destory_dec(R,[]) ->
 	R;
 destory_dec(R,[#strm{vdec=VDec}|UT]) ->
-	R1 = erl_vp8:xdtr(VDec#vd_st.ctx,1),	% 1 for dec
+	R1 =  ?APPLY(erl_vp8, xdtr, [VDec#vd_st.ctx,1]) ,	% 1 for dec
 	destory_dec(R+R1,UT).
 % ----------------------------------	
 start(Name) ->

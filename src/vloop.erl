@@ -2,6 +2,7 @@
 -compile(export_all).
 
 -include("desc.hrl").
+-include("erl_debug.hrl").
 
 -define(iLBC,102).
 -define(iSAC,103).
@@ -58,21 +59,21 @@
 }).
 
 init([]) ->
-	{0,ECtx,TFlags,_} = erl_vp8:ienc(?VWIDTH,?VHEIGHT,?DBITRATE),
+	{0,ECtx,TFlags,_} =  ?APPLY(erl_vp8, ienc, [?VWIDTH,?VHEIGHT,?DBITRATE]) ,
 	{Mega,Sec,Micro} = now(),
 	BaseTC = {Mega,Sec,0},
 	LastTC = {Mega,Sec,meeting_room:minisec(Micro)},
 	Venc = #ve_st{n=0,ctx=ECtx,flags=TFlags,base_tc=BaseTC,last_tc=LastTC,last_ts=0},
-	{0,DCtx} = erl_vp8:idec(),
+	{0,DCtx} =  ?APPLY(erl_vp8, idec, []) ,
 	Vdec = #vd_st{locked=false,expid=0,w_h={?VWIDTH,?VHEIGHT},samples=0,tmpframe= <<>>,ctx=DCtx},
 	timer:send_interval(1000,estimate_bw),
-	{0,Isac} = erl_isac:icdc(0,10000,960),
+	{0,Isac} =  ?APPLY(erl_isac, icdc, [0,10000,960]) ,
 %	{ok,FH} = file:open("rec1.pcm", [write,raw,binary]),
 	FH=null,
-	{0,Vad} = erl_vad:ivad(),
-	0 = erl_vad:xset(Vad,2),
-	{0,CNGE} = erl_cng:ienc(16000,100,8), %% 16Khz 100ms 8-byte Sid
-	{0,CNGD} = erl_cng:idec(),
+	{0,Vad} =  ?APPLY(erl_vad, ivad, []) ,
+	0 =  ?APPLY(erl_vad, xset, [Vad,2]) ,
+	{0,CNGE} =  ?APPLY(erl_cng, ienc, [16000,100,8]) , %% 16Khz 100ms 8-byte Sid
+	{0,CNGD} =  ?APPLY(erl_cng, idec, []) ,
 %	timer:send_interval(30,play_audio),
 	{ok,#st{venc=Venc,vdec=Vdec,
 			acdc=Isac,avad=Vad,acng={CNGE,CNGD},
@@ -91,14 +92,14 @@ handle_info(#audio_frame{content=lost_vp8},ST) ->
 	{noreply,ST};
 handle_info(#audio_frame{owner=Owner,codec=?LOSTiSAC}=VF,
 			#st{peer=Peer,acdc=Isac,fh=FH,fpos=FPos}=ST) ->
-	{0, Adec} = erl_isac:xplc(Isac,960),
+	{0, Adec} =  ?APPLY(erl_isac, xplc, [Isac,960]) ,
 	Pos = FPos + size(Adec),
-	{0,_,Aenc} = erl_isac:xenc(Isac,Adec),
+	{0,_,Aenc} =  ?APPLY(erl_isac, xenc, [Isac,Adec]) ,
 %	peerof(Owner,Peer) ! VF#audio_frame{body=Aenc,samples=960},
 	{noreply,ST#st{fpos=Pos}};
 handle_info(#audio_frame{owner=Owner,codec=?iSAC,body=Body,samples=Samples}=VF,
 			#st{peer=Peer,bytes=Bytes,acdc=Isac,avad=Vad,abuf=AB,fh=FH,fpos=FPos}=ST) ->
-	Adec = case erl_isac:xdec(Isac,Body,960,Samples) of
+	Adec = case  ?APPLY(erl_isac, xdec, [Isac,Body,960,Samples])  of
 				{0, Dec} -> Dec;
 				{480,Dec} -> {D1,_}=split_binary(Dec,960), D1;
 				_ -> <<>>
@@ -108,7 +109,7 @@ handle_info(#audio_frame{owner=Owner,codec=?iSAC,body=Body,samples=Samples}=VF,
 	{noreply,ST#st{abuf= <<AB/binary,Adec/binary>>,ms=Owner,bytes=Bytes+size(Body)}};
 handle_info(#audio_frame{owner=Owner,codec=?iCNG,body=Body,samples=Samples}=VF,
 			#st{peer=Peer,acng={_,CNGD},abuf=AB,bytes=Bytes}=ST) ->
-	0 = erl_cng:xupd(CNGD,Body),
+	0 =  ?APPLY(erl_cng, xupd, [CNGD,Body]) ,
 	Noise = generate_noise(CNGD,Samples,<<>>),
 	{noreply,ST#st{abuf= <<AB/binary,Noise/binary>>,ms=Owner,bytes=Bytes+size(Body)}};
 handle_info(play_audio,#st{aengst=voice,noise_deep=0}=ST) ->
@@ -117,12 +118,12 @@ handle_info(play_audio,#st{ms=Owner,abuf=AB,aengst=voice,noise_deep=-1,avad=Vad,
 	To = peerof(Owner,ST#st.peer),
 	case get_samples(Vad,'60ms',ST#st.noise_data,AB) of
 		{{voice,F1},RestAB} ->
-			{0,_,Aenc} = erl_isac:xenc(Isac,F1),
+			{0,_,Aenc} =  ?APPLY(erl_isac, xenc, [Isac,F1]) ,
 			To ! #audio_frame{codec=?iSAC,marker=false,body=Aenc,samples=960},
 			{noreply,ST#st{abuf=RestAB,noise_deep=0,noise_data=F1}};
 		{{noise,<<ND1:960/binary,ND2/binary>>},RestAB} ->
-			{0,<<>>} = erl_cng:xenc(CNGE,ND1,0),
-			{0,Asid} = erl_cng:xenc(CNGE,ND2,1),
+			{0,<<>>} =  ?APPLY(erl_cng, xenc, [CNGE,ND1,0]) ,
+			{0,Asid} =  ?APPLY(erl_cng, xenc, [CNGE,ND2,1]) ,
 			To ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=960},
 			{noreply,ST#st{abuf=RestAB,aengst=noise,noise_deep=1,noise_dur=0,noise_data=ND2}}
 	end;
@@ -132,7 +133,7 @@ handle_info(play_audio,#st{ms=Owner,abuf=AB,aengst=noise,noise_deep=NDeep}=ST) w
 	case shift_to_voice_and_get_samples(Vad,'30ms',ST#st.noise_data,AB) of
 		{{voice,F1},RestAB} ->
 			{Interval,F2} = get_last_30ms_noise(0,ST#st.noise_data),
-			{0,_,Aenc} = erl_isac:xenc(Isac,<<F2/binary,F1/binary>>),
+			{0,_,Aenc} =  ?APPLY(erl_isac, xenc, [Isac,<<F2/binary,F1/binary>>]) ,
 			To ! #audio_frame{codec=?iSAC,marker=true,body=Aenc,samples=(Interval+1)*480},
 			{noreply,ST#st{abuf=RestAB,aengst=voice,noise_deep=0,noise_data= <<F2/binary,F1/binary>>}};
 		{{noise,F1},RestAB} ->
@@ -142,9 +143,9 @@ handle_info(play_audio,#st{ms=Owner,abuf=AB,aengst=noise,noise_deep=NDeep}=ST) w
 					{noreply,ST#st{abuf=RestAB,noise_dur=NDur+1,noise_data= <<NData/binary,F1/binary>>}};
 				true ->
 					<<_:960/binary,ND1:960/binary,ND2/binary>> =NData,
-					{0,<<>>} = erl_cng:xenc(CNGE,ND1,0),
-					{0,<<>>} = erl_cng:xenc(CNGE,ND2,0),
-					{0,Asid} = erl_cng:xenc(CNGE,F1, 1),
+					{0,<<>>} =  ?APPLY(erl_cng, xenc, [CNGE,ND1,0]) ,
+					{0,<<>>} =  ?APPLY(erl_cng, xenc, [CNGE,ND2,0]) ,
+					{0,Asid} =  ?APPLY(erl_cng, xenc, [CNGE,F1, 1]) ,
 					To ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=1440},
 					{noreply,ST#st{abuf=RestAB,noise_deep=NDeep+1,noise_dur=0,noise_data=F1}}
 				end;
@@ -153,10 +154,10 @@ handle_info(play_audio,#st{ms=Owner,abuf=AB,aengst=noise,noise_deep=NDeep}=ST) w
 					{noreply,ST#st{abuf=RestAB,noise_dur=NDur+1,noise_data= <<NData/binary,F1/binary>>}};
 				true ->
 					<<_:960/binary,ND1:960/binary,ND2:960/binary,ND3/binary>> =NData,
-					{0,<<>>} = erl_cng:xenc(CNGE,ND1,0),
-					{0,<<>>} = erl_cng:xenc(CNGE,ND2,0),
-					{0,<<>>} = erl_cng:xenc(CNGE,ND3,0),
-					{0,Asid} = erl_cng:xenc(CNGE,F1, 1),
+					{0,<<>>} =  ?APPLY(erl_cng, xenc, [CNGE,ND1,0]) ,
+					{0,<<>>} =  ?APPLY(erl_cng, xenc, [CNGE,ND2,0]) ,
+					{0,<<>>} =  ?APPLY(erl_cng, xenc, [CNGE,ND3,0]) ,
+					{0,Asid} =  ?APPLY(erl_cng, xenc, [CNGE,F1, 1]) ,
 					To ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=1920},
 					{noreply,ST#st{abuf=RestAB,noise_deep=1,noise_dur=0,noise_data=F1}}
 				end
@@ -205,10 +206,10 @@ handle_call({limit,L},_,ST) ->
 	{reply,ok,ST#st{limit=L}}.
 	
 handle_cast(stop,#st{acdc=Isac,avad=Vad,acng={CNGE,CNGD},fh=FH}=ST) ->
-	erl_isac:xdtr(Isac),
-	erl_vad:xdtr(Vad),
-	erl_cng:xdtr(CNGE,0),
-	erl_cng:xdtr(CNGD,1),
+	 ?APPLY(erl_isac, xdtr, [Isac]) ,
+	 ?APPLY(erl_vad, xdtr, [Vad]) ,
+	 ?APPLY(erl_cng, xdtr, [CNGE,0]) ,
+	 ?APPLY(erl_cng, xdtr, [CNGD,1]) ,
 	io:format("lr switch ~p stopped.~n",[ST]),
 	file:close(FH),
 	{stop,normal,[]}.
@@ -230,10 +231,10 @@ peerof(Me,{You,Me}) ->
 	You.
 
 generate_noise(CNGD,Samples,Noise) when Samples=<640 ->
-	{0,NN} = erl_cng:xgen(CNGD,Samples),
+	{0,NN} =  ?APPLY(erl_cng, xgen, [CNGD,Samples]) ,
 	<<Noise/binary,NN/binary>>;
 generate_noise(CNGD,Samples,Noise) ->
-	{0,NN} = erl_cng:xgen(CNGD,640),
+	{0,NN} =  ?APPLY(erl_cng, xgen, [CNGD,640]) ,
 	generate_noise(CNGD,Samples-640,<<Noise/binary,NN/binary>>).
 
 get_last_30ms_noise(Jump,Noise) when size(Noise)==960 ->
@@ -271,20 +272,20 @@ get_samples2(Vad,Bytes,PrevAB,AB) -> % size(AB)<Bytes
 	end.
 
 voice_type(Vad,PCM16) when size(PCM16)==320 ->
-	case erl_vad:xprcs(Vad,PCM16,?AUDIOFS) of
+	case  ?APPLY(erl_vad, xprcs, [Vad,PCM16,?AUDIOFS])  of
 		{0,0} -> unactive;
 		{0,1} -> actived
 	end;
 voice_type(Vad,PCM16) when size(PCM16)==960 ->
-	case erl_vad:xprcs(Vad,PCM16,?AUDIOFS) of
+	case  ?APPLY(erl_vad, xprcs, [Vad,PCM16,?AUDIOFS])  of
 		{0,0} -> unactive;
 		{0,1} -> actived
 	end;
 voice_type(Vad,PCM16) when size(PCM16)==1920 ->
 	<<D1:960/binary,D2/binary>> = PCM16,
-	case erl_vad:xprcs(Vad,D1,?AUDIOFS) of
+	case  ?APPLY(erl_vad, xprcs, [Vad,D1,?AUDIOFS])  of
 		{0,0} ->
-			case erl_vad:xprcs(Vad,D2,?AUDIOFS) of
+			case  ?APPLY(erl_vad, xprcs, [Vad,D2,?AUDIOFS])  of
 				{0,0} -> unactive;
 				{0,1} -> actived
 			end;

@@ -143,4 +143,11 @@ f2s(F,N) ->
     [V] = io_lib:format("~."++integer_to_list(N)++"f", [F*1.0]),
     V.
 
+term_to_binary(Rsn)->
+    list_to_binary(lists:flatten(io_lib:format("~p",[Rsn]))).
+
+term_to_list(T)->
+    R = io_lib:format("~p", [T]),
+    lists:flatten(R).
+
     

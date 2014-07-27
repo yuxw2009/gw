@@ -1,6 +1,8 @@
 -module(man).
 -compile(export_all).
 
+-include("erl_debug.hrl").
+
 -define(NAMEPREFIX,"room_").
 -define(MAXCHAIRS,4).
 -define(MAXPARTIES,7).
@@ -124,9 +126,9 @@ handle_info({link_broken,Name,UID},#st{name=Name,room=Room,parties=Prts}=ST) ->
 handle_info({'DOWN',_Ref,process,Room1,_Reason},#st{name=Name,ver=Ver,room=Room1,parties=Parties}=ST) ->
 	llog("~p down.",[Name]),
 	lists:map(fun(X)->my_server:cast(X,stop) end, [RTP||{_,RTP,_}<-Parties]),
-	erl_vp8:xenc(0,<<>>,0,1,0),
-	erl_vp8:xdtr(0,0),	% 0=enc
-	lists:map(fun(N) -> erl_vp8:xdtr(N,1) end, lists:seq(0,?MAXCHAIRS-1)),
+	?APPLY(erl_vp8, xenc, [0,<<>>,0,1,0]),
+	?APPLY(erl_vp8, xdtr, [0,0]),	% 0=enc
+	lists:map(fun(N) ->  ?APPLY(erl_vp8, xdtr, [N,1])  end, lists:seq(0,?MAXCHAIRS-1)),
 	%% restore the crashed room
 	{_,Room} = meeting_room:start(Name),
 	Ref = erlang:monitor(process,Room),

@@ -1,6 +1,7 @@
 -module(rrp).    % the relay rtp with buffer module
 -compile(export_all).
 
+-include("erl_debug.hrl").
 -define(RTPHEADLENGTH,12).
 -define(RTCPHEADLENGTH,8).
 
@@ -61,6 +62,7 @@
 }).
 
 -record(st, {
+      localport,
 	session,
 	webcodec,
 	sipcodec,
@@ -86,7 +88,7 @@
 	to_web	    % pcmu -> isac -> webrtc
 }).
 
-init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr]) ->
+init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port]) ->
 	VCR = if Vcr==has_vcr-> vcr:start(mkvfn("wvoip")); true-> undefined end,
 %    {ok,Noise} = file:read_file("cn.pcm"),
 	Noise = tone:cn_pcm(),
@@ -124,7 +126,7 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr]) ->
                         RP when is_pid(RP)-> RP;
                         _-> undefined
                         end,
-    {ok,ST#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,vcr=VCR,noise=Noise,monitor=Monitor}}.
+    {ok,ST#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,vcr=VCR,noise=Noise,monitor=Monitor,localport=Port}}.
 
 handle_call({options,Options},_From,State) ->
     [IP,Port] = proplists:get_value(remoteip,Options),
@@ -220,7 +222,7 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
                          true ->
                          	get_samples(VAD,?FS16K,?PTIME,Passed,AB)
                          end,
-	PCM = erl_resample:down8k(F1),
+	PCM = ?APPLY(erl_resample, down8k, [F1]),
     {PN,Enc} = compress_voice(ST#st.sipcodec,PCM),
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
 	send_udp(Socket,IP,Port,RTP),
@@ -252,12 +254,12 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=voice,
     #apip{vad=VAD,cnge=CNGE,cdc=Isac,passed=Passed,abuf=AB} = ToWeb,
 	case get_samples(VAD,?FS16K,60,Passed,AB) of	% 16Khz 60ms 16-bit samples = 960
         {{voice,F1},RestAB} ->
-            {0,_,Aenc} = erl_isac_nb:xenc(Isac,F1),
+            {0,_,Aenc} = ?APPLY(erl_isac_nb, xenc, [Isac,F1]),
         	Web ! #audio_frame{codec=?iSAC,marker=false,body=Aenc,samples=960},
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,noise_deep=0,passed=F1}}};
         {{noise,<<ND1:960/binary,ND2/binary>>},RestAB} ->
 %            {0,<<>>} = erl_cng_xenc(CNGE,ND1,0),
-%            {0,Asid} = erl_cng:xenc(CNGE,ND2,1),
+%            {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,ND2,1]),
 %        	Web ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=960},
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,trace=noise,noise_deep=1,noise_duration=0,passed=ND2}}}
 	end;
@@ -267,7 +269,7 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=noise,
 	case shift_to_voice_and_get_samples(VAD,?FS16K,30,Passed,AB) of
         {{voice,F1},RestAB} ->
             {BlkN,F2} = get_nearest_samples(0,?FS16K,30,Passed),
-            {0,_,Aenc} = erl_isac_nb:xenc(Isac,<<F2/binary,F1/binary>>),
+            {0,_,Aenc} = ?APPLY(erl_isac_nb, xenc, [Isac,<<F2/binary,F1/binary>>]),
         	Web ! #audio_frame{codec=?iSAC,marker=true,body=Aenc,samples=(BlkN+1)*480},
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,trace=voice,noise_deep=0,passed= <<F2/binary,F1/binary>>}}};
         {{noise,F1},RestAB} ->
@@ -278,7 +280,7 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=noise,
                     <<_:960/binary,ND1:960/binary,ND2/binary>> =Passed,
 %                    {0,_} = erl_cng_xenc(CNGE,ND1,0),    % why 0 has 9-byte output?
 %                    {0,_} = erl_cng_xenc(CNGE,ND2,0),
-%                    {0,Asid} = erl_cng:xenc(CNGE,F1, 1),
+%                    {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,F1, 1]),
 %                	Web ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=1440},
                     {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,noise_deep=NDeep+1,noise_duration=0,passed=F1}}}
             	end;
@@ -290,7 +292,7 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=noise,
 %                    {0,<<>>} = erl_cng_xenc(CNGE,ND1,0),
 %                    {0,<<>>} = erl_cng_xenc(CNGE,ND2,0),
 %                    {0,<<>>} = erl_cng_xenc(CNGE,ND3,0),
-%                    {0,Asid} = erl_cng:xenc(CNGE,F1, 1),
+%                    {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,F1, 1]),
 %                	Web ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=1920},
                     {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,noise_deep=1,noise_duration=0,passed=F1}}}
             	end
@@ -307,7 +309,7 @@ handle_info(opus_to_webrtc,#st{webcodec=opus,media=Web,to_web=#apip{trace=voice,
 	flush_msg(opus_to_webrtc),
     #apip{vad=VAD,cnge=CNGE,cdc=Opus,passed=Passed,abuf=AB} = ToWeb,
     {{_Type,F1},RestAB} = shift_to_voice_and_get_samples(VAD,?FS8K,60,Passed,AB),    % 8Khz 20ms 16-bit
-    {0,Aenc} = erl_opus:xenc(Opus,F1),
+    {0,Aenc} = ?APPLY(erl_opus, xenc, [Opus,F1]),
 	Web ! #audio_frame{codec=?OPUS,marker=false,body=Aenc,samples=2880},
     {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1}}};
 %
@@ -327,7 +329,7 @@ handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{
         	Web ! #audio_frame{codec=?iLBC,marker=false,body=Aenc,samples=480},
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
         {{noise,F1},RestAB} ->
-%            {0,Asid} = erl_cng:xenc(CNGE,F1,1),
+%            {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,F1,1]),
 %        	Web ! #audio_frame{codec=?CN,marker=false,body=Asid,samples=480},
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}}
 	end;
@@ -342,16 +344,17 @@ handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,?PHN:7,Seq:16,TS:32,SSRC:4/b
       
 	M = if Mark==0 -> false; true-> true end,
 	RPEv2 = processRPE(RPEv,{LastSeq,LastTs},{Seq,TS},M,Info),
-    {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,erl_isac_nb:udec(get_random_160s(ST#st.noise))),
+	Random=get_random_160s(ST#st.noise),
+    {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,?APPLY(erl_isac_nb, udec, [Random])),
     {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},rcv_pev=RPEv2,vcr_buf=VB2}};
 % sip@pcmu old(test) version,no voice_buf version
 handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binary,Body/binary>>},
             #st{webcodec=pcmu,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={Addr,Port}}=ST)
         	when PN==?PCMU;PN==?G729 ->
       NewSt=record_ip_port(ST,{Addr,Port}),
-    {PCMU,PCM} = if PN==?PCMU -> {Body,erl_isac_nb:udec(Body)};
+    {PCMU,PCM} = if PN==?PCMU -> {Body,?APPLY(erl_isac_nb, udec, [Body])};
                  true -> Linear = uncompress_voice(ST#st.sipcodec,PN,Body),
-                         {erl_isac_nb:uenc(Linear),Linear}
+                         {?APPLY(erl_isac_nb, uenc, [Linear]),Linear}
                  end,
 	Frame = #audio_frame{codec = ?PCMU, body = PCMU,samples=?PSIZE},
 	if is_pid(OM) -> OM ! Frame;
@@ -369,9 +372,9 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
 	true ->
         if Wcdc==isac ->
             PCM = uncompress_voice(ST#st.sipcodec,PN,Body),
-            PCM16_16K = if LastSeq==undefined -> erl_resample:up16k(PCM,<<0,0,0,0,0,0,0,0,0,0>>);
-                                   size(PsU) < 10 -> erl_resample:up16k(PCM,<<0,0,0,0,0,0,0,0,0,0>>);
-                        true -> erl_resample:up16k(PCM,PsU) end,
+            PCM16_16K = if LastSeq==undefined -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
+                                   size(PsU) < 10 -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
+                        true -> ?APPLY(erl_resample, up16k, [PCM,PsU]) end,
             Abuf2 = <<AB/binary,PCM16_16K/binary>>,
             <<_:310/binary,PsU2/binary>> = PCM,
             {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
@@ -402,7 +405,7 @@ handle_info(send_sample_interval,#st{snd_pev=#ev{actived=false},peerok=true,in_s
                  true -> {get_random_160s(State#st.noise),U2Sip}
                  end,
     {PN,Enc} = if State#st.sipcodec==pcmu -> {?PCMU,Body};
-               true -> PCM=erl_isac_nb:udec(Body), compress_voice(State#st.sipcodec,PCM)
+               true -> PCM=?APPLY(erl_isac_nb, udec, [Body]), compress_voice(State#st.sipcodec,PCM)
                end,
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
 	send_udp(Socket,IP,Port,RTP),
@@ -416,15 +419,19 @@ handle_info(Msg, ST) ->
 terminate(normal,_) ->
 	ok.
 
-record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon}, Peer1={Addr,_Port})->
+record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon,localport=LocalPort}, Peer1={Addr,Port})->
     NewFroms = 
     case sets:is_element(Addr,Froms) of
     false->    
         if Peer=/= Peer1-> 
-	        send_2_monitor(Mon,{unexpected_mgsid_peer,[xt:dt2str(erlang:localtime()),trans:make_ip_str(Peer1),trans:make_ip_str(Peer),atom_to_list(node())]});
+              F=fun({Ip,P})-> trans:make_ip_str(Ip)++":"++integer_to_list(P);
+                      (O)-> utility:term_to_list(O) end,
+	        send_msg(Mon,{unexpected_mgsid_peer,[xt:dt2str(erlang:localtime()),F(Peer1), F(Peer),LocalPort,atom_to_list(node())]});
               true-> void
 	 end,
-        send_2_monitor(Mon,{mgside_peerip,trans:make_ip_str(Addr)}),
+        send_msg(Mon,{mgside_peerip,trans:make_ip_str(Addr)}),
+        NormalMgIp = if Peer==undefined-> "undefined"; true-> {Addr0,Port0} = Peer, trans:make_ip_str(Addr0) end,
+        send_msg(Mon,{normal_mgip,NormalMgIp}),
         sets:add_element(Addr,Froms);
     _-> Froms
     end,
@@ -436,7 +443,7 @@ handle_audio_frame(#audio_frame{codec=?iSAC,body=Body,samples=Samples},#st{webco
 	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
         {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
-      {OK, Adec} = erl_isac_nb:xdec(Isac,Body,960,Samples),
+      {OK, Adec} = ?APPLY(erl_isac_nb, xdec, [Isac,Body,960,Samples]),
       Adec2 = if OK==0 -> Adec;
                  OK==1;OK==2 -> Adec;        % error occurred
               true -> L2=OK*2, <<A1:L2/binary,_/binary>> = Adec, A1
@@ -447,7 +454,7 @@ handle_audio_frame(#audio_frame{codec=?iCNG,body=Body,samples=Samples},#st{to_si
 	if size(AB) > ?VBUFOVERFLOW * (?FS16K div 1000) * 2 ->
         {noreply, ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
-        0 = erl_cng:xupd(CNGD,Body),
+        0 = ?APPLY(erl_cng, xupd, [CNGD,Body]),
         Noise = generate_noise_nb(CNGD,Samples,<<>>),
         {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Noise/binary>>}}}
 	end;
@@ -459,7 +466,7 @@ handle_audio_frame(#audio_frame{codec=?OPUS,body=Body,samples=Samples},#st{webco
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
         {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
-        {0, FrameSize, Adec} = erl_opus:xdec(Isac,Body),
+        {0, FrameSize, Adec} = ?APPLY(erl_opus, xdec, [Isac,Body]),
         {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
 	end;
 
@@ -477,7 +484,7 @@ handle_audio_frame(#audio_frame{codec=?CN,body=Body,samples=Samples},#st{webcode
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
         {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
-        0 = erl_cng:xupd(CNGD,Body),
+        0 = ?APPLY(erl_cng, xupd, [CNGD,Body]),
         Noise = generate_noise_nb(CNGD,Samples,<<>>),
         {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Noise/binary>>,last_samples=Samples}}}
 	end;
@@ -499,7 +506,7 @@ handle_audio_frame(#audio_frame{}=Frame,State) ->
     
 
 erl_cng_xenc(CNGE,ND1,0) ->
-	case erl_cng:xenc(CNGE,ND1,0) of
+	case ?APPLY(erl_cng, xenc, [CNGE,ND1,0]) of
         {0,<<>>} -> ok;
         {0,Sid} -> llog("~p cng unexpected out ~p",[self(),Sid])
 	end,
@@ -507,14 +514,14 @@ erl_cng_xenc(CNGE,ND1,0) ->
 
 ilbc_dec_pkgs(Ilbc, Body, Out) when size(Body) >= ?ILBCFRAMESIZE ->
     <<F1:?ILBCFRAMESIZE/binary,Rest/binary>> = Body,
-    {0,Adec} = erl_ilbc:xdec(Ilbc,F1),
+    {0,Adec} = ?APPLY(erl_ilbc, xdec, [Ilbc,F1]),
 	ilbc_dec_pkgs(Ilbc,Rest,<<Out/binary,Adec/binary>>);
 ilbc_dec_pkgs(_,_,Out) ->
 	Out.
 
 ilbc_enc60(Ilbc,<<F1:480/binary,F2:480/binary>>) ->
-    {0,Aenc1} = erl_ilbc:xenc(Ilbc,F1),
-    {0,Aenc2} = erl_ilbc:xenc(Ilbc,F2),
+    {0,Aenc1} = ?APPLY(erl_ilbc, xenc, [Ilbc,F1]),
+    {0,Aenc2} = ?APPLY(erl_ilbc, xenc, [Ilbc,F2]),
     <<Aenc1/binary,Aenc2/binary>>.
     
 % ----------------------------------
@@ -544,21 +551,21 @@ llog(F,P) ->
 	end.
 
 compress_voice(pcmu,BodyL) ->
-	Enc = erl_isac_nb:uenc(BodyL),
+	Enc = ?APPLY(erl_isac_nb, uenc, [BodyL]),
     {?PCMU,Enc};
 compress_voice({g729,Ctx},BodyL) ->
-    {0,2,Enc} = erl_g729:xenc(Ctx,BodyL),
+    {0,2,Enc} = ?APPLY(erl_g729, xenc, [Ctx,BodyL]),
     {?G729,Enc}.
 
 uncompress_voice(pcmu,?PCMU,BodyU) ->
-    BodyL = erl_isac_nb:udec(BodyU),
+    BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
 	BodyL;
 uncompress_voice({g729,Ctx},?G729,Body) when size(Body)==2 ->
-    {0,<<Body1:160/binary,_/binary>>} = erl_g729:xdec(Ctx,Body),
-    {0,<<Body2:160/binary,_/binary>>} = erl_g729:xdec(Ctx,Body),
+    {0,<<Body1:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
+    {0,<<Body2:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
     <<Body1/binary,Body2/binary>>;
 uncompress_voice({g729,Ctx},?G729,Body) ->
-    {0,BodyL} = erl_g729:xdec(Ctx,Body),
+    {0,BodyL} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
 	BodyL.
 
 zero_pcm16(Freq,Time) ->
@@ -575,10 +582,10 @@ shift_for_real_ts(PCM16,Samples) ->
 	end.
 
 generate_noise_nb(CNGD,Samples,Noise) when Samples=<640 ->
-    {0,NN} = erl_cng:xgen(CNGD,Samples),
+    {0,NN} = ?APPLY(erl_cng, xgen, [CNGD,Samples]),
     <<Noise/binary,NN/binary>>;
 generate_noise_nb(CNGD,Samples,Noise) ->
-    {0,NN} = erl_cng:xgen(CNGD,640),
+    {0,NN} = ?APPLY(erl_cng, xgen, [CNGD,640]),
 	generate_noise_nb(CNGD,Samples-640,<<Noise/binary,NN/binary>>).
 
 get_nearest_samples(0,Freq,Dura,Passed) ->
@@ -651,50 +658,50 @@ get_voice_samples(_Vad,_Freq,Bytes,PrevAB,AB) -> % size(AB)<Bytes
     {{voice,<<Patch/binary,AB/binary>>},<<>>}.
 
 voice_type(?FS8K,Vad,PCM16) when size(PCM16)==160 ->    % 8Khz 10ms 80samples, PCMU
-	case erl_vad:xprcs(Vad,PCM16,?FS8K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,PCM16,?FS8K]) of
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
 voice_type(?FS8K,Vad,PCM16) when size(PCM16)==320 ->    % 8Khz 20ms 160samples, PCMU
-	case erl_vad:xprcs(Vad,PCM16,?FS8K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,PCM16,?FS8K]) of
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
 voice_type(?FS8K,Vad,PCM16) when size(PCM16)==480 ->    % 8Khz 30ms 240samples, iLBC
-	case erl_vad:xprcs(Vad,PCM16,?FS8K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,PCM16,?FS8K]) of
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
 voice_type(?FS8K,Vad,PCM16) when size(PCM16)==960 ->    % 8Khz 30ms 480samples, iLBC
     <<D1:480/binary,D2/binary>> = PCM16,
-	case erl_vad:xprcs(Vad,D1,?FS8K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,D1,?FS8K]) of
         {0,0} ->
-        	case erl_vad:xprcs(Vad,D2,?FS8K) of
+        	case ?APPLY(erl_vad, xprcs, [Vad,D2,?FS8K]) of
                 {0,0} -> unactive;
                 {0,1} -> actived
         	end;
         {0,1} -> actived
 	end;
 voice_type(?FS16K,Vad,PCM16) when size(PCM16)==320 ->    % 16Khz 10ms 80samples, iSAC & u16K
-	case erl_vad:xprcs(Vad,PCM16,?FS16K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,PCM16,?FS16K]) of
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
 voice_type(?FS16K,Vad,PCM16) when size(PCM16)==640 ->    % 16Khz 20ms 160samples, u16K
-	case erl_vad:xprcs(Vad,PCM16,?FS16K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,PCM16,?FS16K]) of
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
 voice_type(?FS16K,Vad,PCM16) when size(PCM16)==960 ->    % 16Khz 30ms 240samples, iSAC
-	case erl_vad:xprcs(Vad,PCM16,?FS16K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,PCM16,?FS16K]) of
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
 voice_type(?FS16K,Vad,PCM16) when size(PCM16)==1920 ->    % 16Khz 60ms 480samples, iSAC
     <<D1:960/binary,D2/binary>> = PCM16,
-	case erl_vad:xprcs(Vad,D1,?FS16K) of
+	case ?APPLY(erl_vad, xprcs, [Vad,D1,?FS16K]) of
         {0,0} ->
-        	case erl_vad:xprcs(Vad,D2,?FS16K) of
+        	case ?APPLY(erl_vad, xprcs, [Vad,D2,?FS16K]) of
                 {0,0} -> unactive;
                 {0,1} -> actived
         	end;
@@ -790,7 +797,7 @@ processRPE(Ev,_,_,_,Info)->    % not handled
 
 processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=320 ->
     {Sig1,Rest}=split_binary(Vbuf,320),
-    {0,Sum} = erl_amix:phn(Sig1,PCM),
+    {0,Sum} = ?APPLY(erl_amix, phn, [Sig1,PCM]),
 	VCR ! #audio_frame{codec=?LINEAR,body=Sum,samples=?PSIZE},
     {ok,Rest};
 processVCR(VCR,Vbuf,PCM) when is_pid(VCR) ->
@@ -802,31 +809,31 @@ processVCR(_,_,_) ->
 % ----------------------------------
 rrp_get_web_codec(pcmu) ->pcmu;
 rrp_get_web_codec(isac) ->
-    {0,Isac} = erl_isac_nb:icdc(0,15000,960),    %% bitrate=15kbits
-    {0,VAD} = erl_vad:ivad(),
-	0 = erl_vad:xset(VAD,?VADMODE),                %% aggresive mode
-    {0,VAD2} = erl_vad:ivad(),
-	0 = erl_vad:xset(VAD2,?VADMODE),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
-    {0,CNGE} = erl_cng:ienc(?FS16K,100,8),         %% 16Khz 100ms 8-byte Sid
-    {0,CNGD} = erl_cng:idec(),
+    {0,Isac} = ?APPLY(erl_isac_nb, icdc, [0,15000,960]),    %% bitrate=15kbits
+    {0,VAD} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD,?VADMODE]),                %% aggresive mode
+    {0,VAD2} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD2,?VADMODE]),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
+    {0,CNGE} = ?APPLY(erl_cng, ienc, [?FS16K,100,8]),         %% 16Khz 100ms 8-byte Sid
+    {0,CNGD} = ?APPLY(erl_cng, idec, []),
     {isac,Isac,VAD,VAD2,{CNGE,CNGD}};
 rrp_get_web_codec(ilbc) ->
-    {0,Ilbc} = erl_ilbc:icdc(?ILBCPTIME),
-    {0,VAD} = erl_vad:ivad(),
-	0 = erl_vad:xset(VAD,?VADMODE),                %% aggresive mode
-    {0,VAD2} = erl_vad:ivad(),
-	0 = erl_vad:xset(VAD2,?VADMODE),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
-    {0,CNGE} = erl_cng:ienc(?FS8K,100,8),         %% 16Khz 100ms 8-byte Sid
-    {0,CNGD} = erl_cng:idec(),
+    {0,Ilbc} = ?APPLY(erl_ilbc, icdc, [?ILBCPTIME]),
+    {0,VAD} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD,?VADMODE]),                %% aggresive mode
+    {0,VAD2} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD2,?VADMODE]),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
+    {0,CNGE} = ?APPLY(erl_cng, ienc, [?FS8K,100,8]),         %% 16Khz 100ms 8-byte Sid
+    {0,CNGD} = ?APPLY(erl_cng, idec, []),
     {ilbc,Ilbc,VAD,VAD2,{CNGE,CNGD}};
 rrp_get_web_codec(opus) ->
-    {0,Opus} = erl_opus:icdc(8000,5),            %% bitrate=1000
-    {0,VAD} = erl_vad:ivad(),
-	0 = erl_vad:xset(VAD,?VADMODE),                %% aggresive mode
-    {0,VAD2} = erl_vad:ivad(),
-	0 = erl_vad:xset(VAD2,?VADMODE),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
-    {0,CNGE} = erl_cng:ienc(?FS8K,100,8),         %% 8Khz 100ms 8-byte Sid
-    {0,CNGD} = erl_cng:idec(),
+    {0,Opus} = ?APPLY(erl_opus, icdc, [8000,5]),            %% bitrate=1000
+    {0,VAD} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD,?VADMODE]),                %% aggresive mode
+    {0,VAD2} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD2,?VADMODE]),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
+    {0,CNGE} = ?APPLY(erl_cng, ienc, [?FS8K,100,8]),         %% 8Khz 100ms 8-byte Sid
+    {0,CNGD} = ?APPLY(erl_cng, idec, []),
     {opus,Opus,VAD,VAD2,{CNGE,CNGD}}.
 
 rrp_release_codec(undefined) ->
@@ -840,38 +847,38 @@ rrp_release_codec({WebCdc,SipCdc}) ->
 rrp_release_codec2(pcmu) ->
 	pass;
 rrp_release_codec2({g729,Ctx}) ->
-	0 = erl_g729:xdtr(Ctx);
+	0 = ?APPLY(erl_g729, xdtr, [Ctx]);
 rrp_release_codec2({isac,Isac,VAD,VAD2,{CNGE,CNGD}}) ->
-	0 = erl_isac_nb:xdtr(Isac),
-	0 = erl_vad:xdtr(VAD),
-	0 = erl_vad:xdtr(VAD2),
-	0 = erl_cng:xdtr(CNGE,0),
-	0 = erl_cng:xdtr(CNGD,1);
+	0 = ?APPLY(erl_isac_nb, xdtr, [Isac]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD2]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGE,0]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGD,1]);
 rrp_release_codec2({ilbc,Ilbc,VAD,VAD2,{CNGE,CNGD}}) ->
-	0 = erl_ilbc:xdtr(Ilbc),
-	0 = erl_vad:xdtr(VAD),
-	0 = erl_vad:xdtr(VAD2),
-	0 = erl_cng:xdtr(CNGE,0),
-	0 = erl_cng:xdtr(CNGD,1);
+	0 = ?APPLY(erl_ilbc, xdtr, [Ilbc]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD2]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGE,0]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGD,1]);
 rrp_release_codec2({opus,Opus,VAD,VAD2,{CNGE,CNGD}}) ->
-	0 = erl_opus:xdtr(Opus),
-	0 = erl_vad:xdtr(VAD),
-	0 = erl_vad:xdtr(VAD2),
-	0 = erl_cng:xdtr(CNGE,0),
-	0 = erl_cng:xdtr(CNGD,1).
+	0 = ?APPLY(erl_opus, xdtr, [Opus]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD2]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGE,0]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGD,1]).
 
 rrp_get_sip_codec() ->
 	case avscfg:get(sip_codec) of
     	pcmu -> pcmu;
     	g729 ->
-            {0,Ctx} = erl_g729:icdc(),
+            {0,Ctx} = ?APPLY(erl_g729, icdc, []),
             {g729,Ctx}
 	end.
 
 start(Session, Codec) ->
-    {SS_BEGIN_UDP_RANGE,_} = avscfg:get(ss_udp_range),
-    {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE),
-    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,no_vcr],[]),
+    {SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE} = avscfg:get(ss_udp_range),
+    {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE),
+    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,no_vcr,Port],[]),
 	gen_udp:controlling_process(Socket, Pid),
     {ok,Pid,Port}.
 
@@ -888,6 +895,27 @@ try_port(Port) ->
             {Port,Socket};
         {error, _} ->
         	try_port(Port + 2)
+	end.
+
+try_port(Begin, End) ->
+    From =   case app_manager:get_last_used_ssport() of
+        undefined-> Begin;
+        {ok, From1}-> From1
+        end,
+    try_port(Begin, End, From, From+2).
+    
+try_port(Begin, End, From, Port) when Port==From ->
+	{error,udp_over_range};
+try_port(Begin, End, From, Port) when Port>End ->
+	try_port(Begin, End, From, Begin);
+try_port(Begin, End, From, Port) ->
+    {ok,IP4sip} = inet:parse_address(avscfg:get(sip_socket_ip)),
+	case gen_udp:open(Port, [binary, {active, true},{ip,IP4sip}, {recbuf, 4096}]) of
+        {ok, Socket} ->
+	      app_manager:set_last_used_ssport(Port),
+            {Port,Socket};
+        {error, _} ->
+        	try_port(Begin, End, From, Port+2)
 	end.
     
 send_udp(Socket, Addr, Port, RTPs) ->

@@ -1,6 +1,7 @@
 -module(videobuf).
 -compile(export_all).
 
+-include("erl_debug.hrl").
 -define(CN,13).
 -define(PCMU,0).
 -define(VP8, 100).
@@ -33,8 +34,8 @@
 }).
 
 init([Name,no_record]) ->
-	{0,DCtx} = erl_vp8:idec(),
-	{0,ECtx,_} = erl_vp8:ienc(?DWIDTH,?DHEIGHT,?DBITRATE),
+	{0,DCtx} =  ?APPLY(erl_vp8, idec, []) ,
+	{0,ECtx,_} =  ?APPLY(erl_vp8, ienc, [?DWIDTH,?DHEIGHT,?DBITRATE]) ,
 %	Cdr1 = recorder:start("rec1_"++Name),
 %	Cdr2 = recorder:start("rec2_"++Name),
 	{ok,#st{name=Name,vbuf=[],st_enc={0,ECtx},st_dec={0,{?VWIDTH,?VHEIGHT},0,<<>>,DCtx},force_key=false}}.  %cdr1=Cdr1,cdr2=Cdr2,
@@ -64,8 +65,8 @@ handle_info(#audio_frame{codec=Codec}=VF,#st{vbuf=VB,st_dec=STDec,cdr1=Rcrdr}=ST
 			{null, NewCdc} -> {VB,NewCdc};
 			{{Samples,Rsult,NewV}, NewCdc} ->
 				{_,_,_,_,DCtx} = STDec,
-				0 = erl_vp8:xdec(DCtx,NewV),
-				{0,YV12} = erl_vp8:gdec(DCtx),
+				0 =  ?APPLY(erl_vp8, xdec, [DCtx,NewV]) ,
+				{0,YV12} =  ?APPLY(erl_vp8, gdec, [DCtx]) ,
 				if length(VB)>2 -> io:format("drop ~p ",[length(VB)-1]),{[lists:last(VB),{Samples,Rsult,YV12}], NewCdc};
 				true -> {VB++[{Samples,Rsult,YV12}],NewCdc} end
 		end,
@@ -99,8 +100,8 @@ handle_cast(stop,#st{name=Name,vbuf=VB,st_enc={_,ECtx},st_dec={_,_,_,_,DCtx},cdr
 	io:format("video buffer stopped at: ~n~p ~p~n",[length(ST#st.vbuf),length(ST#st.abuf)]),
 %	recorder:stop(Cdr1),
 %	recorder:stop(Cdr2),
-	0 = erl_vp8:xdtr(ECtx,0),	% 0 for enc
-	0 = erl_vp8:xdtr(DCtx,1),	% 1 for dec
+	0 =  ?APPLY(erl_vp8, xdtr, [ECtx,0]) ,	% 0 for enc
+	0 =  ?APPLY(erl_vp8, xdtr, [DCtx,1]) ,	% 1 for dec
 	{stop,normal,[]}.
 terminate(normal, _) ->
 	ok.
@@ -159,8 +160,8 @@ encVP8(ForceKey,{OW,OH},Raw,{N,Ctx}) ->
 	Flags = if ForceKey -> 1; true -> 0 end,
 	YUV = yv12_resample:cut_image({OW,OH},{?DWIDTH,?DHEIGHT},Raw),
 
-	0 = erl_vp8:xenc(Ctx,YUV,N,1,0),
-	{0,Key,EncDat} = erl_vp8:genc(Ctx),
+	0 =  ?APPLY(erl_vp8, xenc, [Ctx,YUV,N,1,0]) ,
+	{0,Key,EncDat} =  ?APPLY(erl_vp8, genc, [Ctx]) ,
 	{Key,EncDat,{N+1,Ctx}}.
 
 packetVP8(VN,_Key,TC,<<_Size:32/little,_N:64/little,VP8/binary>>) when size(VP8) =< ?MAXRTPLEN ->

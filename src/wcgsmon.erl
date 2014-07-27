@@ -3,7 +3,7 @@
 %-export([start/0, get_count/0, get_node/0]).
 -define(BASE_DIR, "../..").
 
--record(st,{last_packets=[],count=0,mgside_peerip=sets:new(), unexpected_mgsid_peer=[]}).
+-record(st,{last_packets=[],count=0,mgside_peerip=sets:new(), unexpected_mgsid_peer=[],normal_mgip=sets:new()}).
 
 get_state() ->
     ?MODULE ! {get_state, self()},
@@ -18,7 +18,18 @@ get_node() ->
 	    {value, R} -> R
 		after 2000 -> timeout
 	end.
-	
+
+get_normal_mgs()->
+    St= get_state(),
+    sets:to_list(St#st.normal_mgip).
+
+get_mgs()->
+    St= get_state(),
+    sets:to_list(St#st.mgside_peerip).
+
+get_unexp()->
+    St= get_state(),
+    St#st.unexpected_mgsid_peer.
 
 stop_node(Nd) when is_list(Nd)-> stop_node(list_to_atom(Nd));
 stop_node(Nd)-> ?MODULE ! {stop_node,Nd}.
@@ -62,7 +73,7 @@ init(NodeDirs) ->
     timer:send_after(5000,{monitor_it,NodeDirs}),
     loop(NodeDirs,#st{}).
 	
-loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_mgsid_peer=UnexpPeers}) ->
+loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_mgsid_peer=UnexpPeers,normal_mgip=NormMgIps}) ->
     receive
 	    {nodedown, Node} ->
 	        io:format("node:~p down~n",[Node]),
@@ -95,6 +106,8 @@ loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_
 		    loop(NodeDirs, St#st{unexpected_mgsid_peer=[Info|UnexpPeers]});
 		{mgside_peerip,Info}->
 		    loop(NodeDirs, St#st{mgside_peerip=sets:add_element(Info,MgIps)});
+		{normal_mgip,NormalMgIp}->
+		    loop(NodeDirs, St#st{normal_mgip=sets:add_element(NormalMgIp,NormMgIps)});
 		{monitor_it,NodeDirs_mon} ->
 		    [monitor_node(Node,true)||{Node,_}<-NodeDirs_mon],
 		    io:format("monitor ~p~n", [NodeDirs_mon]),

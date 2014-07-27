@@ -1,6 +1,7 @@
 -module(rbt).
 -compile(export_all).
 
+-include("erl_debug.hrl").
 -define(PCMU,0).
 -define(iSAC,103).
 -include("desc.hrl").
@@ -106,9 +107,9 @@ get_tone(FP,<<Size:16,Bin/binary>>) ->
 make_tone(isac,FileName) ->
 	{ok,Bin} = file:read_file(FileName),
 	{ok,FH} = file:open("rbt.isac",[write,binary,raw]),
-	{0,Isac} = erl_isac_nb:icdc(0,32000,960),
+	{0,Isac} =  ?APPLY(erl_isac_nb, icdc, [0,32000,960]) ,
 	AFs = transcode(Isac,100,Bin,<<>>),
-	0 = erl_isac_nb:xdtr(Isac),
+	0 =  ?APPLY(erl_isac_nb, xdtr, [Isac]) ,
 	file:write(FH,AFs),
 	file:close(FH);
 make_tone(pcmu,FileName) ->
@@ -121,14 +122,14 @@ make_tone(pcmu,FileName) ->
 transcode(_Isac,0,_,Bin) ->
 	Bin;
 transcode(Isac,N,<<F1:1920/binary,Rest/binary>>, Bin) ->
-	{0,_,Enc} = erl_isac_nb:xenc(Isac,F1),
+	{0,_,Enc} = ?APPLY(erl_isac_nb, xenc, [Isac,F1]),
 	Size = size(Enc),
 	transcode(Isac,N-1,Rest,<<Bin/binary,Size:16,Enc/binary>>).
 
 transcode_pcm(0,_,Bin) ->
 	Bin;
 transcode_pcm(N,<<F1:640/binary,Rest/binary>>,Bin) ->
-	Enc = erl_isac_nb:ue16k(0,F1),
+	Enc = ?APPLY(erl_isac_nb, ue16k, [0,F1]),
 	Size = size(Enc),
 	transcode_pcm(N-1,Rest,<<Bin/binary,Size:16,Enc/binary>>).
 

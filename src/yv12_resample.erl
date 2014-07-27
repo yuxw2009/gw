@@ -1,13 +1,15 @@
 -module(yv12_resample).
 -compile(export_all).
 
+-include("erl_debug.hrl").
+
 -define(OVW, 640).
 -define(OVH, 480).
 
 -define(BLACKUV,128).
 
 scl_image({OW,OH},{DW,DH},YV12) when OW > DW ->
-	{0,YUV} = erl_video:xscl(YV12,OW,OH,DW,DH),
+	{0,YUV} =  ?APPLY(erl_video, xscl, [YV12,OW,OH,DW,DH]) ,
 	YUV;
 scl_image({OW,OH},{DW,DH},YV12) when OW < DW ->
 	YUV = add_kuang({OW,OH},{DW,DH},YV12),
