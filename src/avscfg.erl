@@ -27,7 +27,7 @@ get(certificate) -> {"./webRTCVoIP.pem", "./webRTCVoIP_key.pem"};
 
 get(wcgs)-> [{gw,"/yyy/yyy/gw"}];
 get(monitor)-> 'monitor@58.221.60.37';
-get(codec_node)->{'codec@14.17.107.196', "/home/wcg/gw"};
+get(codec_node)->'codec@58.221.60.37';
 % not used yet
 get(wan_ip) -> avscfg:get(host_ip);
 get(wcall_cid) -> "0085268895100";

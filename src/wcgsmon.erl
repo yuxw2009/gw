@@ -3,8 +3,20 @@
 %-export([start/0, get_count/0, get_node/0]).
 -define(BASE_DIR, "../..").
 
--record(st,{last_packets=[],count=0,mgside_peerip=sets:new(), unexpected_mgsid_peer=[],normal_mgip=sets:new()}).
+-record(st,{last_packets=[],
+			count=0,
+			mgside_peerip=sets:new(), 
+			unexpected_mgsid_peer=[],
+			normal_mgip=sets:new(),
+			codec_st=up,
+			ccalls=[]
+			}).
 
+get(Member)->
+    R_attrs=record_info(fields,st),
+    StPls=lists:zip([st|R_attrs],tuple_to_list(get_state())),
+    lists:keyfind(Member,1,StPls).
+    
 get_state() ->
     ?MODULE ! {get_state, self()},
 	receive
@@ -68,12 +80,17 @@ restart_node(Node,BaseDir)->
 	[Wcg,_] = string:tokens(atom_to_list(Node),"@"),
       start_wcg(Wcg,BaseDir).
 
+get_ccalls()->
+    St=get_state(),
+    St#st.ccalls.
+    
 init(NodeDirs) ->
     llog:start(),
     timer:send_after(5000,{monitor_it,NodeDirs}),
     loop(NodeDirs,#st{}).
 	
-loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_mgsid_peer=UnexpPeers,normal_mgip=NormMgIps}) ->
+loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_mgsid_peer=UnexpPeers,normal_mgip=NormMgIps,
+				ccalls=Ccalls}) ->
     receive
 	    {nodedown, Node} ->
 	        io:format("node:~p down~n",[Node]),
@@ -112,6 +129,18 @@ loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_
 		    [monitor_node(Node,true)||{Node,_}<-NodeDirs_mon],
 		    io:format("monitor ~p~n", [NodeDirs_mon]),
 			loop(NodeDirs, St);
+	      {ccalls,Info={badrpc,_}} when St#st.codec_st =/=down ->
+	          loop(NodeDirs,St#st{codec_st=down,ccalls=[Info|Ccalls]});
+	      {ccalls,Info}->
+	          if St#st.codec_st == up-> 
+	                NewCcalls = if length(Ccalls)>10000->  
+	                                       [_last|T]= lists:reverse(Ccalls),
+	                                       [Info|lists:reverse(T)];
+	                                true-> [Info|Ccalls]
+	                                end,
+	                loop(NodeDirs,St#st{ ccalls=NewCcalls});
+	              true-> loop(NodeDirs,St)
+	          end;
 	      _Other->
 	          io:format("."),
 	          loop(NodeDirs,St)
@@ -123,15 +152,17 @@ log(Node,LP)->
 	io:fwrite(Handle, llog:ts() ++ " ~p down Msg:~p~n", [Node,Msg]),
 	file:close(Handle).
 	
-record_last_msg(Node,Msg)->
-    case whereis(?MODULE) of
-    	undefined-> void;
-    	P->  	    
-    	    P! {last,Node,Msg,self()}
-    	end.
+record_last_msg(Node,Msg)-> send({last,Node,Msg,self()}).
 
 monitor_pid()->  whereis(?MODULE).
 
+send(Info)->
+    case whereis(?MODULE) of
+    	undefined-> void;
+    	P->  	    
+    	    P! Info
+    	end.
+    
 llog(F,P) ->
 	case whereis(llog) of
 		undefined ->
@@ -139,4 +170,5 @@ llog(F,P) ->
 		_Pid -> ok
 	end,
 	llog ! {self(), F, P}.
+
 
