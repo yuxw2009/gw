@@ -3,8 +3,16 @@
 
 -define(SAMPLE_INTERVAL, 5000).
 
--record(state, {current_calls=0, cpu_usage="0.0", processes=[]}).
+-record(state, {current_calls=0, cpu_usage="0.0", processes=[],cdc_evt=[],is_cdc_working=true}).
 
+restart()->
+    case whereis(?MODULE) of
+    undefined-> start();
+    P->    
+        exit(P,kill),
+        start()
+    end.
+    
 get()->
     ensure_alive(),
     ?MODULE ! {get_infos, self()},
@@ -12,7 +20,24 @@ get()->
         {value, R}-> R
     after 5000-> timeout
     end.
+is_working()->
+    ensure_alive(),
+    ?MODULE ! {is_working, self()},
+    receive
+        {value, R}-> R
+    after 5000-> false
+    end.
 
+get_state()->
+    case whereis(?MODULE) of
+    undefined-> not_alive;
+    P-> 
+        P ! {get_state,self()},
+        receive
+            {value,R}-> R
+        after 1000-> timeout
+        end
+    end.
 add_call()->
     ensure_alive(),
     ?MODULE ! add_call.
@@ -44,10 +69,33 @@ on_message(dec_call, State=#state{current_calls=Calls})->
 on_message({cpu_usage_report,CpuUsage}, State)->
     State#state{cpu_usage=CpuUsage};	
 	
+on_message({get_infos, From}, State=#state{is_cdc_working=false})->
+	From ! {value, cdc_node_down},
+    State;
 on_message({get_infos, From}, State=#state{cpu_usage=CpuUsage, processes=Procs})->
     {value, Calls} = app_manager:get_app_count(),
 	From ! {value, [{current_calls, Calls},{cpu_usage, CpuUsage}, {processes, Procs}]},
     State;
+
+on_message({get_state, From}, State)->
+	From ! {value, State},
+    State;
+
+on_message({is_working, From}, State=#state{cpu_usage=CpuUsage, processes=Procs,is_cdc_working=CdcStatus})->
+	From ! {value, CdcStatus},
+    State;
+
+on_message({ccalls, Evt={_TS,badrpc,_} }, State=#state{is_cdc_working=true,cdc_evt=Evts}) ->
+    NewEvts = [Evt|Evts],
+    utility:log("cdc_down.log", "~p", [NewEvts]),
+    State#state{is_cdc_working=false,cdc_evt=[]};
+on_message({ccalls, Evt={TS,Ack,_} }, State=#state{is_cdc_working=true,cdc_evt=Ccalls})->
+    NewCcalls = if length(Ccalls)>10000->  
+                           [_last|T]= lists:reverse(Ccalls),
+                           [Evt|lists:reverse(T)];
+                    true-> [Evt|Ccalls]
+                    end,
+    State#state{cdc_evt=NewCcalls};
 	
 on_message(sample_timer, State=#state{processes=Procs})->
     Self = self(),

@@ -150,4 +150,13 @@ term_to_list(T)->
     R = io_lib:format("~p", [T]),
     lists:flatten(R).
 
+d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}}) ->    
+    DateStr = string:join([integer_to_list(I) || I <- tuple_to_list(Date)], "-"),
+    TimeStr = string:join([integer_to_list(I) || I <- tuple_to_list(Time)], ":"),
+    DateStr ++" "++TimeStr.
+
+log(Filename, Str, CmdList) ->
+    {ok, IODev} = file:open(Filename, [append]),
+    io:format(IODev,"~s: "++Str++"~n",[d2s(erlang:localtime())|CmdList]),
+    file:close(IODev).
     

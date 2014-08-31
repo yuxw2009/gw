@@ -4,9 +4,13 @@
 -define(CALLTIMEOUT, 5000).
 
 start({local,Name}, Module, Arg, Options) ->
-	{ok, Svr} = start(Module, Arg, Options),
-	register(Name,Svr),
-	{ok, Svr}.
+    case whereis(Name) of
+    undefined->
+	 {ok, Svr} = start(Module, Arg, Options),
+        register(Name,Svr);
+    Svr-> void
+    end,
+    {ok, Svr}.
 	
 start(Module, Arg, _Options) ->
 	Svr = spawn(fun() -> 

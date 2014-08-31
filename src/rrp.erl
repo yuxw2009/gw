@@ -353,7 +353,7 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
         	when PN==?PCMU;PN==?G729 ->
       NewSt=record_ip_port(ST,{Addr,Port}),
     {PCMU,PCM} = if PN==?PCMU -> {Body,?APPLY(erl_isac_nb, udec, [Body])};
-                 true -> Linear = uncompress_voice(ST#st.sipcodec,PN,Body),
+                 true -> Linear = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
                          {?APPLY(erl_isac_nb, uenc, [Linear]),Linear}
                  end,
 	Frame = #audio_frame{codec = ?PCMU, body = PCMU,samples=?PSIZE},
@@ -371,7 +371,7 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
       {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
 	true ->
         if Wcdc==isac ->
-            PCM = uncompress_voice(ST#st.sipcodec,PN,Body),
+            PCM = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
             PCM16_16K = if LastSeq==undefined -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
                                    size(PsU) < 10 -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
                         true -> ?APPLY(erl_resample, up16k, [PCM,PsU]) end,
@@ -380,7 +380,7 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
             {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
             {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},passu=PsU2,vcr_buf=VB2}};
         true ->     % ilbc or opus
-            PCM = uncompress_voice(ST#st.sipcodec,PN,Body),
+            PCM = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
             Abuf2 = <<AB/binary,PCM/binary>>,
             {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
             {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},vcr_buf=VB2}}
@@ -554,18 +554,18 @@ compress_voice(pcmu,BodyL) ->
 	Enc = ?APPLY(erl_isac_nb, uenc, [BodyL]),
     {?PCMU,Enc};
 compress_voice({g729,Ctx},BodyL) ->
-    {0,2,Enc} = ?APPLY(erl_g729, xenc, [Ctx,BodyL]),
+    {0,2,Enc} = ?APPLY(erl_g729, xenc, [Ctx,BodyL],[Ctx]),
     {?G729,Enc}.
 
-uncompress_voice(pcmu,?PCMU,BodyU) ->
+uncompress_voice(pcmu,?PCMU,BodyU,_ST) ->
     BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
 	BodyL;
-uncompress_voice({g729,Ctx},?G729,Body) when size(Body)==2 ->
+uncompress_voice({g729,Ctx},?G729,Body,_ST) when size(Body)==2 ->
     {0,<<Body1:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
     {0,<<Body2:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
     <<Body1/binary,Body2/binary>>;
-uncompress_voice({g729,Ctx},?G729,Body) ->
-    {0,BodyL} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
+uncompress_voice({g729,Ctx},?G729,Body,ST) ->
+    {0,BodyL} = ?APPLY(erl_g729, xdec, [Ctx,Body],[Ctx,ST#st.peer]),
 	BodyL.
 
 zero_pcm16(Freq,Time) ->

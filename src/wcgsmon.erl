@@ -1,9 +1,11 @@
 -module(wcgsmon).
 -compile(export_all).
 %-export([start/0, get_count/0, get_node/0]).
--define(BASE_DIR, "../..").
+-define(BASE_DIR, "/home/wcg/run/").
+-define(EBIN_DIR, "/home/wcg/gw_git0/ebin/").
 
 -record(st,{last_packets=[],
+                   status=working,
 			count=0,
 			mgside_peerip=sets:new(), 
 			unexpected_mgsid_peer=[],
@@ -12,20 +14,47 @@
 			ccalls=[]
 			}).
 
+start()->
+    Wcg_node_nums=rpc:call(avscfg:get(www),  wcg_disp, get_all_wcgs, []),
+    Wcgs=[Wcg||{Wcg,_N}<-Wcg_node_nums],
+    start(Wcgs).
+start(Wcgs)->
+    NameDirs0= [get_name_dir(Wcg) || Wcg<-Wcgs],
+    NameDirs=[ND||ND<-NameDirs0, ND=/= node_down],
+    start0(NameDirs).
+add_node(Node)->
+    case get_name_dir(Node) of
+    node_down-> void;
+    {Name,Dir}->  add_monitor(Name,Dir)
+    end.
+delete_node(Node)->
+    stop_monitor(Node).
+get_name_dir(Wcg_node)->
+    [Name,_Host]=string:tokens(atom_to_list(Wcg_node), "@"),
+    case rpc:call(Wcg_node,file,get_cwd,[]) of
+    {ok,Dir}-> {Name,Dir};
+    _-> node_down
+    end.
+    
 get(Member)->
     R_attrs=record_info(fields,st),
-    StPls=lists:zip([st|R_attrs],tuple_to_list(get_state())),
-    lists:keyfind(Member,1,StPls).
+    case get_state() of
+    timeout->
+        timeout;
+    St->
+        StPls=lists:zip([st|R_attrs],tuple_to_list(St)),
+        lists:keyfind(Member,1,StPls)
+    end.
     
 get_state() ->
-    ?MODULE ! {get_state, self()},
+    send( {get_state, self()}),
 	receive
 	    {value, R} -> R
 		after 2000 -> timeout
 	end.
 	
 get_node() ->
-    ?MODULE ! {get_node, self()},
+    send({get_node, self()}),
 	receive
 	    {value, R} -> R
 		after 2000 -> timeout
@@ -44,37 +73,38 @@ get_unexp()->
     St#st.unexpected_mgsid_peer.
 
 stop_node(Nd) when is_list(Nd)-> stop_node(list_to_atom(Nd));
-stop_node(Nd)-> ?MODULE ! {stop_node,Nd}.
-stop_monitor(Wcg)->    ?MODULE ! {stop_monitor,Wcg}.
+stop_node(Nd)-> send({stop_node,Nd}).
+stop_monitor(Node)->   send( {stop_monitor,Node}).
 
-add_monitor(Wcg)->    add_monitor(Wcg,?BASE_DIR++"/gw_run/").
-add_monitor(Wcg,BaseDir)->    ?MODULE ! {add_monitor,Wcg,BaseDir}.
 
-start() ->start(avscfg:get(wcgs)).
-start(Wcgs) ->
+%%------------------------------------------------------------------------------------------------------
+add_monitor(WcgName) when is_atom(WcgName)->  add_monitor(atom_to_list(WcgName));
+add_monitor(WcgName)->    add_monitor(WcgName,?BASE_DIR++WcgName).
+add_monitor(WcgName,BaseDir)->    send({add_monitor,WcgName,BaseDir}).
+
+
+start0(Wcgs) ->
       NodeDirs=[start_wcg(Wcg)||Wcg<-Wcgs],
       case whereis(?MODULE) of
       	undefined->	register(?MODULE, spawn(fun() -> init(NodeDirs) end));
       	_-> void
       end.
 
-start_wcg(Wcg) when is_atom(Wcg)-> start_wcg(atom_to_list(Wcg));
-start_wcg(Wcg) when is_list(Wcg)->  start_wcg(Wcg,?BASE_DIR++"/gw_run/");
-start_wcg({NodeName, Base_dir})-> start_wcg(NodeName,Base_dir).    
+start_wcg(WcgName) when is_atom(WcgName)-> start_wcg(atom_to_list(WcgName));
+start_wcg(WcgName) when is_list(WcgName)->  start_wcg(WcgName,?BASE_DIR++WcgName);
+start_wcg({WcgName, Base_dir})-> start_wcg(WcgName,Base_dir).    
 
-start_wcg(Wcg,Base) when is_atom(Wcg)-> start_wcg(atom_to_list(Wcg),Base);
-start_wcg(Wcg,Base) when is_list(Wcg)->
+start_wcg(Wcg,WorkPath) when is_atom(Wcg)-> start_wcg(atom_to_list(Wcg),WorkPath);
+start_wcg(Wcg,WorkPath) when is_list(Wcg)->
 	[_,AtNode] = string:tokens(atom_to_list(node()),"@"),
       COOKIE = atom_to_list(erlang:get_cookie()),
       NodeStr= Wcg++"@"++AtNode,
-    CodePath = Base++"/ebin",
-    WorkPath = Base++"/applications",
     {ok,Pwd}=file:get_cwd(),
     c:cd(WorkPath),
-	Cmd = "erl -name "++NodeStr++" -setcookie "++COOKIE++" -pa "++ CodePath++" +K true -s voip -detached",
+	Cmd = "erl -name "++NodeStr++" -setcookie "++COOKIE++" -pa "++ ?EBIN_DIR++" -pa . "++" +K true -s voip -detached",
 	os:cmd(Cmd),
 	c:cd(Pwd),
-	{list_to_atom(NodeStr),Base}.
+	{list_to_atom(NodeStr),WorkPath}.
 
 restart_node(Node,BaseDir)->
 	[Wcg,_] = string:tokens(atom_to_list(Node),"@"),
@@ -85,23 +115,31 @@ get_ccalls()->
     St#st.ccalls.
     
 init(NodeDirs) ->
-    llog:start(),
     timer:send_after(5000,{monitor_it,NodeDirs}),
     loop(NodeDirs,#st{}).
 	
 loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_mgsid_peer=UnexpPeers,normal_mgip=NormMgIps,
 				ccalls=Ccalls}) ->
     receive
-	    {nodedown, Node} ->
-	        io:format("node:~p down~n",[Node]),
-	        case lists:keysearch(Node,1,NodeDirs) of
+	        {nodedown, 'gw_test1@58.221.60.37'} ->
+		        io:format("node: 'gw_test1@58.221.60.37' down write log to gw_test1.log~n"),
+		        {Node,Dir}={'gw_test1@58.221.60.37',"/home/wcg/gw_test/applications"},
+			  restart_node(Node,Dir),
+			  timer:send_after(5000, {monitor_it,[{Node,Dir}]}),
+		        utility:log("gw_test1.log", "gw_test1 down, ccalls is: ~n~p~n", [Ccalls]),
+                     loop(NodeDirs,St#st{ccalls=[]});
+	        {nodedown, Node} ->
+	            io:format("node:~p down~n",[Node]),
+	            case lists:keysearch(Node,1,NodeDirs) of
 	        	{value,{Node,Dir}}->
-			        log(Node,LP),
-			        restart_node(Node,Dir),
-					timer:send_after(5000, {monitor_it,[{Node,Dir}]});
-				_-> void
-			end,
-			loop(NodeDirs,St#st{count=Count+1});
+			    log(Node,LP),
+			    restart_node(Node,Dir),
+			    timer:send_after(5000, {monitor_it,[{Node,Dir}]}),
+			    timer:send_after(1000*60*3,{restore_normal}),
+			    loop(NodeDirs,St#st{count=Count+1,status=justdown});
+			_-> 
+			    loop(NodeDirs,St)
+			end;
 		{get_state, From} ->
 		    From ! {value, St},
 			loop(NodeDirs, St);
@@ -129,6 +167,7 @@ loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_
 		    [monitor_node(Node,true)||{Node,_}<-NodeDirs_mon],
 		    io:format("monitor ~p~n", [NodeDirs_mon]),
 			loop(NodeDirs, St);
+	      {restore_normal}-> loop(NodeDirs,St#st{status=working});
 	      {ccalls,Info={badrpc,_}} when St#st.codec_st =/=down ->
 	          loop(NodeDirs,St#st{codec_st=down,ccalls=[Info|Ccalls]});
 	      {ccalls,Info}->

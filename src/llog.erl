@@ -53,7 +53,8 @@ chkfilesize(LogHd) ->
 ts() ->
 	{Y, Mo, D} = date(),
 	{H, Mi, S} = time(),
-	xt:int2(Y) ++ "-" ++ xt:int2(Mo) ++ "-" ++ xt:int2(D) ++ " " ++ xt:int2(H) ++ "-" ++ xt:int2(Mi) ++ "-" ++ xt:int2(S).
+	{_,_,MS}=erlang:now(),
+	xt:int2(Y) ++ "-" ++ xt:int2(Mo) ++ "-" ++ xt:int2(D) ++ " " ++ xt:int2(H) ++ ":" ++ xt:int2(Mi) ++ ":" ++ xt:int2(S)++":"++xt:int2(MS).
 
 % ----------------------------------
 start() ->
