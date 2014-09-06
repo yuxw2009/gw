@@ -332,21 +332,6 @@ hang_up(Pid) ->
 	ok.
 
 % ----------------------------------
-
-relay_call(UUID, Phno,OrigId,Monitor) ->
-	F = fun(Pid) ->
-			my_server:call(rtp_sup,{info_rtp,OrigId,{media_relay,Pid}})
-		end,
-	relay_sup:start_call(OrigId,Phno,Monitor,F),		% call status monitor message
-	llog ! {self(),"~p browser ~p call ~p",[UUID,OrigId,Phno]},
-	ok.
-
-relay_bye(OrigId) ->
-	relay_sup:stop_call(OrigId),
-	llog ! {self(),"browser ~p leave.",[OrigId]},
-	ok.
-	
-% ----------------------------------
 start(WsPid) ->
 	{ok,Pid} = my_server:start(wkr,[WsPid],[]),
 	Pid.
