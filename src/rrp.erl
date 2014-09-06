@@ -177,7 +177,7 @@ handle_info({play,WebRTP}, State) ->
 handle_info(delay_pcmu_to_sip, ST) ->
     {ok,TR} = my_timer:send_interval(?PTIME,pcmu_to_sip),
     {noreply,ST#st{timeru=TR}};
-handle_info({deplay,WebRTP}, #st{timer=TR,timeru=TRU}=State) ->
+handle_info({deplay,_WebRTP}, #st{timer=TR,timeru=TRU}=State) ->
     %%io:format("RRP leave rtp: ~p.~n",[WebRTP]),
 	my_timer:cancel(TR),
 	if TRU=/=undefined -> my_timer:cancel(TRU); true->pass end,
@@ -376,7 +376,11 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
                                    size(PsU) < 10 -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
                         true -> ?APPLY(erl_resample, up16k, [PCM,PsU]) end,
             Abuf2 = <<AB/binary,PCM16_16K/binary>>,
-            <<_:310/binary,PsU2/binary>> = PCM,
+            PsU2 = 
+                case PCM of
+                <<_:310/binary,PsU2_/binary>> -> PsU2_;
+                _->  <<0,0,0,0,0,0,0,0,0,0>>
+                end,
             {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
             {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},passu=PsU2,vcr_buf=VB2}};
         true ->     % ilbc or opus

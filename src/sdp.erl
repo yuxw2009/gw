@@ -136,6 +136,8 @@ parse_one_announce("ice"++Type,Value,Stream,Announce) ->
         	  Stream#media_desc.ice
         end,
   {Stream#media_desc{ice=NewICE},Announce};
+parse_one_announce("acap",Value,Stream,Announce) ->
+  {parse_acap(Stream, Value),Announce};
 parse_one_announce("crypto",Value,Stream,Announce) ->
   {parse_crypto(Stream, Value),Announce};
 parse_one_announce("fingerprint",Value,Stream,Announce) ->
@@ -239,6 +241,11 @@ parse_crypto(Stream, Crypto) ->
   %"1 AES_CM_128_HMAC_SHA1_80 inline:XE+QXqoqyFUkRzQxUq/8PyMaRQk27YuK6FlcN1tX"
   Params = re:split(Crypto, "[ :]", [{return, list}]),
   Stream#media_desc{key_strategy=crypto, crypto={lists:nth(1,Params),lists:nth(2,Params),lists:nth(4,Params)}}.
+
+parse_acap(Stream, Acap) ->
+  %"1 crypto:1 AES_CM_128_HMAC_SHA1_80 inline:XE+QXqoqyFUkRzQxUq/8PyMaRQk27YuK6FlcN1tX"
+  Params = re:split(Acap, "[ :]", [{return, list}]),
+  Stream#media_desc{key_strategy=crypto, crypto={lists:nth(3,Params),lists:nth(4,Params),lists:nth(6,Params)}}.
 
 parse_fingerprint(#media_desc{key_strategy=crypto}=Stream, _FingerPrint) ->
   Stream;
@@ -486,6 +493,9 @@ str2codec(CodecCode) ->
 		"VP8" -> vp8;
 		"red" -> red;
 		"ulpfec" -> ulpfec;
+		"SPEEX"->speex;
+		"GSM"->gsm;
+		"H264"->h264;
 		"opus" -> opus
     end.
 

@@ -23,14 +23,14 @@
                    case whereis(statistic) of
 	                   undefined->void;
 	                   P->
-	                       DebugInfo = if Ack==badrpc   -> {ccalls, {llog:ts(),Ack,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} };
-	                                            {MOD,FUN}=={erl_g729,xenc} orelse {MOD,FUN}=={erl_g729,xdec} ->
-	                                                                     {ccalls, {llog:ts(),not_ack,[MOD,FUN, ?MODULE,?LINE,Other]} };
-	                                            {MOD,FUN}=={erl_g729,xdtr} orelse {MOD,FUN}=={erl_g729,icdc} ->
-	                                                {ccalls, {llog:ts(),Ack,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} };
-	                                            true-> {ccalls, {llog:ts(),Ack,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} }
-	                                            end,
-	                         P ! DebugInfo
+                             if Ack==badrpc   -> 
+                                  P ! {ccalls, {llog:ts(),Ack,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} };
+                             {MOD,FUN}=={erl_g729,xenc} orelse {MOD,FUN}=={erl_g729,xdec} ->
+                                  void; %P ! {ccalls, {llog:ts(),not_ack,[MOD,FUN, ?MODULE,?LINE,Other]} };
+                             {MOD,FUN}=={erl_g729,xdtr} orelse {MOD,FUN}=={erl_g729,icdc} ->
+                                 P ! {ccalls, {llog:ts(),Ack,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} };
+                             true-> void
+                             end
                    end,
                    Ack
                end
