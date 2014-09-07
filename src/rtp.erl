@@ -28,6 +28,17 @@
 -define(SENTSAVELENGTH,64).
 -define(PSIZE,160).
 -define(is_rtcp(PT), (PT==200 orelse PT==201 orelse PT==202 orelse PT==203 orelse PT==205 orelse PT==206)).
+
+
+-define(PTIME,20).
+-define(ISACPTIME,30).
+-define(ILBCPTIME,30).
+-define(OPUSPTIME,60).
+
+-define(AUDIO_JITTERLENGTH, 10).
+-define(AUDIO_SENTSAVELENGTH,20).
+-define(QUERY_INTERVAL_NUM, 5).
+
 -record(st, {
 	ice,
 	wan_ip
@@ -78,6 +89,8 @@
 	base_wall_clock,
 	report_to,
 	v_jttr,
+	buffers=[],
+	pltype,
 	moni		% audio monitor rtp port
 }).
 
@@ -87,7 +100,10 @@ init([Session,{Sock1,Sock2},Options]) ->
 	NewState = processOptions(#state{},Options),
 	ReportTo = proplists:get_value(report_to,Options),
 	Media = proplists:get_value(media,Options),
-	{ok,NewState#state{out_media=Media,in_media=Media,sess=Session, transport_status=stunning, socket=Sock1,
+      Pltype = proplists:get_value(pltype, Options),
+
+%	start_buf_timer(Pltype),
+	{ok,NewState#state{out_media=Media,in_media=Media,sess=Session, transport_status=stunning, socket=Sock1,pltype=Pltype,
 	                                                                           rtcp_sck=Sock2,vp8=#vp8_cdc{},report_to=ReportTo,mobile=true}};
 init([Session,Socket,Options]) ->
 	{Mega,Sec,_Micro} = now(),
@@ -283,7 +299,7 @@ handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},
 %
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{sess=Sess, r_base=#base_info{seq=undefined,ssrc=undefined}=Remote0,r_srtp=Cryp,mobile=true}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
+			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->   %first packet from mobile
 	Peer = trans:check_peer(ST#state.peer,{Addr,Port}),
 	rtp_report(ST#state.report_to,Sess,{stun_locked,Sess}),
 	send_media(ST#state.out_media,{stun_locked,self()}),
@@ -298,7 +314,7 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{r_base=#base_info{seq=undefined,ssrc=SSRC}=Remote0,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
+			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS -> %first packet from pc
 	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq},
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 			  true -> 960 end,
@@ -308,7 +324,7 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{r_base=#base_info{roc=LastROC,seq=LastSeq,timecode=LastTs,ssrc=SSRC}=Remote,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
+			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS -> %packet from mobile or pc
 	Now = now(),
 	#base_info{interarrival_jitter=IAJitter,previous_ts=PreTS}=Remote,
 	#base_info{pkts_rcvd=PktR,pkts_lost=PktL,cumu_lost=CumuL,lost_seqs=LastLost, cumu_rcvd=CumuR}=Remote,
@@ -1471,4 +1487,12 @@ stop_moni({Pid,_, Media}) ->
 	rtp:stop(Pid),
 	ok.
 	
-
+start_buf_timer(Pltype)->
+    Ptime = case Pltype of
+                       isac ->?ISACPTIME;
+                       ilbc -> ?ILBCPTIME;
+                       opus -> ?OPUSPTIME;
+                       _ -> ?PTIME
+                end,
+    {ok,Tr} = my_timer:send_interval(Ptime*?QUERY_INTERVAL_NUM, query_interval),
+    Tr.    

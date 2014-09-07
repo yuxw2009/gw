@@ -68,7 +68,7 @@ peek(AppId) ->
 %% callbacks
 init([{mobile,Options1}, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
-	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{report_to, self()}|Options1]), 
+	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{pltype,PLType},{report_to, self()}|Options1]), 
 	link(RtpPid),
 	rtp:info(RtpPid,{add_stream,audio,Options2}),
 	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
