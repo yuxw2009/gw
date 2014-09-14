@@ -68,7 +68,7 @@ peek(AppId) ->
 %% callbacks
 init([{mobile,Options1}, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
-	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{pltype,PLType},{report_to, self()}|Options1]), 
+	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{phinfo,PhInfo},{pltype,PLType},{report_to, self()}|Options1]), 
 	link(RtpPid),
 	rtp:info(RtpPid,{add_stream,audio,Options2}),
 	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
@@ -102,14 +102,22 @@ handle_call(_Call, _From, State) ->
 handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
 	RrpPid ! {send_phone_event,Nu,9,160*7},
 	{noreply,State};
-handle_cast({stun_locked, Aid}, State=#state{aid=Aid, pltype=PLType}) ->
+handle_cast({stun_locked, Aid}, State=#state{aid=Aid, call_info=CallInfo,pltype=PLType}) ->
     llog("rtp ~p stun locked.pltype:~p",[Aid,PLType]),
     
 	Codec = acquire_codec(PLType),
-	{ok,RrpPid,Port} = rrp:start(Aid,Codec),
+	{ok,RrpPid,Port} = rrp:start(Aid,Codec,[{call_info,CallInfo}]),
 	start_resource_monitor(RrpPid, Codec),
 	link(RrpPid),
-	NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec}),
+	case  re:run(proplists:get_value(phone, CallInfo),rrp_loop_phone())  of
+	{match,_}-> NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec,test=true});
+	_-> 	
+	    case re:run(proplists:get_value(phone, CallInfo),rtp_loop_phone())  of
+	    {match,_}-> NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec,test=rtp_loop});
+	    _->
+	    NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec})
+	    end
+	end,
 	{noreply, NewState};
 handle_cast({call_stats,Aid,Stat}, State=#state{aid=Aid}) ->
     {noreply, State#state{call_stats=Stat}};	
@@ -191,8 +199,11 @@ start_resource_monitor(RrpPid, Codec) ->
 	    end,
 	spawn(M).
 	
+start_sip_call(State=#state{test=rtp_loop, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid=RrpPid}) ->
+	rtp:info(RtpPid, {media_relay,RtpPid}),
+	State#state{start_time=now(),status=hook_off};
 start_sip_call(State=#state{test=true, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid=RrpPid}) ->
-    PeerAddr = [{remoteip,["127.0.0.1",RrpPort]}],
+    PeerAddr = [{remoteip,[avscfg:get(sip_socket_ip),RrpPort]}],
 	ok = rrp:set_peer_addr(RrpPid, PeerAddr),
 	rtp:info(RtpPid, {media_relay,RrpPid}),
 	State#state{start_time=now(),status=hook_off};
@@ -249,8 +260,10 @@ duration({M1,S1,_}) ->
     end.
 	
 llog(F,P) ->
-%	case whereis(llog) of
-%		undefined -> pass;
-%		Pid when is_pid(Pid) -> llog ! {self(), F, P}
-%	end.
-     void.
+    llog:log(F,P).
+%     {unused,F,P}.
+     
+rrp_loop_phone()->    "18888888888".     
+rtp_loop_phone()->    "19999999999".     
+
+

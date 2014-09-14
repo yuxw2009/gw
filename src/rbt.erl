@@ -62,6 +62,7 @@ output_interval(T,Msg) ->
 	my_timer ! {self(),T,Msg}.
 
 is_isac(103) -> true;
+is_isac(102) -> true;
 is_isac(105) -> true;
 is_isac(_) -> false.
 

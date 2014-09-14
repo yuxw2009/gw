@@ -4,20 +4,13 @@
                true->  
                    case proplists:get_value(monitor,Other) of
                    undefined-> 
-%	                   Mon_node= avscfg:get(monitor),
-%	                   rpc:call(Mon_node,wcgsmon, send, [{ccalls, {llog:ts(),local_request,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} }]),
-	                   R=apply(MOD,FUN,ARGS),
-%	                   rpc:call(Mon_node,wcgsmon, send, [{ccalls, {llog:ts(),local_ack,[R,Other]} }]),
-	                   R;
+	                   apply(MOD,FUN,ARGS);
                    Mon when is_pid(Mon)->
-%                         Mon  ! {ccalls, {llog:ts(),local_request,[MOD,FUN,ARGS, ?MODULE,?LINE,Other]} },
-	                   R=apply(MOD,FUN,ARGS),
-%	                   Mon ! {ccalls, {llog:ts(),local_ack,[R,Other]} },
-	                   R
+	                   apply(MOD,FUN,ARGS)
 	             end;
                _->
                    Ack=case rpc:call(C_Node,MOD,FUN,ARGS) of
-		                   R={badrpc,_}->    badrpc;
+		                   {badrpc,_}->    badrpc;
 		                   R-> R
 		               end,
                    case whereis(statistic) of
