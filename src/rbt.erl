@@ -113,12 +113,27 @@ make_tone(isac,FileName) ->
 	0 =  ?APPLY(erl_isac_nb, xdtr, [Isac]) ,
 	file:write(FH,AFs),
 	file:close(FH);
+make_tone(ilbc,FileName) ->
+	{ok,Bin} = file:read_file(FileName),
+	{ok,FH} = file:open("rbt1.ilbc",[write,binary,raw]),
+	{0,Ilbc} = ?APPLY(erl_ilbc, icdc, [30]),
+	AFs = transcode_ilbc(Ilbc,100,Bin,<<>>),
+	0 =  ?APPLY(erl_ilbc, xdtr, [Ilbc]) ,
+	file:write(FH,AFs),
+	file:close(FH);
 make_tone(pcmu,FileName) ->
 	{ok,Bin} = file:read_file(FileName),
 	{ok,FH} = file:open("rbt.pcmu",[write,binary,raw]),
 	AFs = transcode_pcm(300,Bin,<<>>),
 	file:write(FH,AFs),
 	file:close(FH).
+
+transcode_ilbc(_Isac,0,_,Bin) ->
+	Bin;
+transcode_ilbc(Ilbc,N,<<F1:480/binary,F2:480/binary,Rest/binary>>, Bin) ->
+	Enc=rrp:ilbc_enc60(Ilbc,<<F1/binary,F2/binary>>),
+	Size = size(Enc),
+	transcode(Ilbc,N-1,Rest,<<Bin/binary,Size:16,Enc/binary>>).
 
 transcode(_Isac,0,_,Bin) ->
 	Bin;
@@ -136,3 +151,10 @@ transcode_pcm(N,<<F1:640/binary,Rest/binary>>,Bin) ->
 
 start() ->
     my_server:start({local,rbt},?MODULE,[],[]).	
+    
+  to_pcm({pcmu,PCMU})-> to_pcm({pcmu,PCMU},<<>>).
+  to_pcm({pcmu,PCMU},R) when size(PCMU) <160 ->   R;
+  to_pcm({pcmu,<<H:160/binary,Rest/binary>>},Result)-> 
+      New= erl_isac_nb:udec(H),
+      to_pcm({pcmu,Rest},<<Result/binary,New/binary>>).
+    

@@ -28,6 +28,7 @@
 -define(SENTSAVELENGTH,64).
 -define(PSIZE,160).
 -define(is_rtcp(PT), (PT==200 orelse PT==201 orelse PT==202 orelse PT==203 orelse PT==205 orelse PT==206)).
+-define(IS_RTP(Codec), (Codec==?PCMU orelse Codec==?CN orelse Codec==?iSAC orelse Codec==?iCNG orelse Codec==?iLBC orelse Codec==?OPUS)).
 
 
 -define(PTIME,20).
@@ -35,7 +36,7 @@
 -define(ILBCPTIME,30).
 -define(OPUSPTIME,60).
 
--define(AUDIO_JITTERLENGTH, 12).
+-define(AUDIO_JITTERLENGTH, 4).
 -define(AUDIO_SENTSAVELENGTH,20).
 -define(QUERY_INTERVAL_NUM, max(?AUDIO_JITTERLENGTH div 2, 10)).
 -define(STAT_INTERVAL, 1000).
@@ -63,6 +64,10 @@
 	v_snd_remb
 }).
 
+-record(packet_stats,{up_udppkts=0,last_up_udppkts=0,up_udpbytes=0,last_up_udpbytes=0,
+                       down_udppkts=0,last_down_udppkts=0,down_udpbytes=0,last_down_udpbytes=0,
+                       up_rrppkts=0,last_up_rrppkts=0,up_rrpbytes=0,last_up_rrpbytes=0,
+                       down_rrppkts=0,last_down_rrppkts=0,down_rrpbytes=0,last_down_rrpbytes=0}).
 -record(state, {
 	sess,
 	socket,
@@ -93,7 +98,9 @@
 	last_buffers,
 	buffers=[],
 	phinfo=[],
+	stats=#packet_stats{},
 	pltype,
+	mon_pids=[],
 	moni		% audio monitor rtp port
 }).
 
@@ -108,7 +115,7 @@ init([Session,{Sock1,Sock2},Options]) ->
       
 
       my_timer:send_interval(?STAT_INTERVAL, stats),
-	start_buf_timer(Pltype),
+%	start_buf_timer(Pltype),
 	{ok,NewState#state{out_media=Media,in_media=Media,sess=Session, transport_status=stunning, socket=Sock1,pltype=Pltype,
 	                                                                          phinfo=Phinfo, rtcp_sck=Sock2,vp8=#vp8_cdc{},report_to=ReportTo,mobile=true}};
 init([Session,Socket,Options]) ->
@@ -234,10 +241,12 @@ handle_cast({media_relay,Media}, #state{in_media=OldMedia}=State) when is_pid(Me
 handle_cast(_Msg, State) ->
     {noreply, State}.	
 	
+handle_info({add_mon,Monitor},#state{mon_pids=Mons} = State)  ->    
+    {noreply,State#state{mon_pids=[Monitor|Mons]}};
 handle_info(query_interval,#state{buffers=[]} = State)  ->    
     {noreply,State};
 handle_info(query_interval,#state{buffers=Bufs,last_buffers=Bufs} = ST)->
-    io:format("|"),
+%    io:format("|"),
     NewST = do_trans_all_buffers(ST),
     llog1(ST,"rtp query_interval do_trans_all_buffers oldbuflen:~p newbuflen:~p oldseq:~p newseq:~p",
            [length(ST#state.buffers),length(NewST#state.buffers), ST#state.r_base#base_info.seq, NewST#state.r_base#base_info.seq]),
@@ -246,9 +255,10 @@ handle_info(query_interval,#state{buffers=Bufs} = State)->
 %    io:format("|"),
     {noreply,State#state{last_buffers=Bufs}};
     
-handle_info(stats,#state{buffers=Bufs} = State)->
+handle_info(stats,ST)->
 %    io:format("|"),
-    {noreply,State#state{last_buffers=Bufs}};
+    NewST = stats_log(ST),
+    {noreply,NewST};
 %% ******** RTP SENDOUT ********
 handle_info(Frame,#state{transport_status=TS} = State) when (is_record(Frame,audio_frame) or is_list(Frame)) and TS =/= inservice ->
     {noreply,State};
@@ -299,7 +309,7 @@ handle_info({send_lost,video,Seqs},#state{transport_status=inservice,peer={IP,Po
 handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},%yxw down audio
             #state{transport_status=_TS,peer={IP,Port},in_audio=BaseRTP,l_srtp=Crypto,socket=Socket} = ST)
             when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
-      io:format("d"),
+%      io:format("d"),
 	BaseRTP2 = inc_timecode_fixed(BaseRTP#base_rtp{codec=Codec,marker=Marker},Samples),
 	{OutBin,NewBase} = if Crypto==undefined ->
 							{BaseRTP3, RTP} = compose_rtp(BaseRTP2,Body),
@@ -313,17 +323,43 @@ handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},%y
 							{<<RTP/binary,Digest/binary>>, BaseRTP3}
 					   end,
 	send_udp(Socket,IP,Port,OutBin),
-	{noreply, ST#state{in_audio=NewBase}};
+	{noreply, ST#state{in_audio=NewBase,stats=down_udp_stats(ST#state.stats,OutBin)}};
 
 %% ******** RTP RECEIVE ********
 %
 % pcmu audio frame and comfortable_noise received.
-%
-handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =_Bin},
+%YXW
+handle_info({udp,_Socket,Addr,Port,<<_Num:3,_:5, Len1:8,Len2:8,Len3:8, 2:2,_:6,_Mark:1,Codec:7,_InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
+			#state{}=ST) when ?IS_RTP(Codec) andalso (4+Len1+Len2+Len3 == size(Bin)) ->   %first packet from mobile
+    <<_:32, Bin1:Len1/binary,Bin2:Len2/binary,Bin3:Len3/binary>> = Bin,			
+    UdpMsg1 = {udp,_Socket,Addr,Port,Bin1},
+    UdpMsg2 = {udp,_Socket,Addr,Port,Bin2},
+    UdpMsg3 = {udp,_Socket,Addr,Port,Bin3},
+%        io:format("*~p ~p",[InSeq2,InSeq1]),
+    {_,ST0} = handle_info(UdpMsg3,ST),
+    {_,ST1} = handle_info(UdpMsg2,ST0),
+    handle_info(UdpMsg1,ST1);
+
+handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,_InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
+			#state{}=ST) when ?IS_RTP(Codec) andalso (2+Len1+Len2 == size(Bin)) ->   %first packet from mobile
+    <<_:16, Bin0/binary>> = Bin,			
+    if size(Bin0) =/= Len1+Len2 ->
+        io:format("rtp: udp length is invalid Len1:~p Len2:~p Bin0 size:~p~n",[Len1,Len2,size(Bin0)]),
+        {noreply,ST};
+    true->
+        {Bin1,Bin2= <<2:2,_:6,_:1,_:7,_InSeq2:16,_:32,_:32,_/binary>>} = split_binary(Bin0,Len1),
+        UdpMsg1 = {udp,_Socket,Addr,Port,Bin1},
+        UdpMsg2 = {udp,_Socket,Addr,Port,Bin2},
+%        io:format("*~p ~p",[InSeq2,InSeq1]),
+        {_,ST1} = handle_info(UdpMsg2,ST),
+        handle_info(UdpMsg1,ST1)
+    end;
+
+handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{sess=Sess, r_base=#base_info{seq=undefined,ssrc=undefined}=Remote0,r_srtp=Cryp,mobile=true}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->   %first packet from mobile
+			when ?IS_RTP(Codec) ->   %first packet from mobile
 	Peer = trans:check_peer(ST#state.peer,{Addr,Port}),
-	llog1(ST,"rtp:mobile stun_locked",[]),
+	llog1(ST,"rtp:mobile stun_locked SSRC:~p",[SSRC]),
 	rtp_report(ST#state.report_to,Sess,{stun_locked,Sess}),
 	send_media(ST#state.out_media,{stun_locked,self()}),
 					
@@ -331,37 +367,37 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 			  true -> 960 end,
 	AParams = [ST#state.out_media,Mark,Codec,{0,InSeq},Samples,SSRC,Cryp=undefined],
-	decryp_and_send_audio(AParams,UdpMsg),
-	start_rtcp(ST#state.in_audio,ST#state.in_video,Remote,ST#state.vr_base),
-	{noreply,ST#state{peer=Peer,r_base=Remote}};
+	ST1=decryp_and_send_audio(ST,AParams,UdpMsg),
+	start_rtcp(ST1#state.in_audio,ST1#state.in_video,Remote,ST1#state.vr_base),
+	{noreply,ST1#state{peer=Peer,r_base=Remote,stats=up_udp_stats(ST1#state.stats,Bin)}};
 
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> },
 			#state{r_base=#base_info{seq=undefined,ssrc=SSRC}=Remote0,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS -> %first packet from pc
+			when ?IS_RTP(Codec) -> %first packet from pc
 	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq},
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 			  true -> 960 end,
 	AParams = [ST#state.out_media,Mark,Codec,{0,InSeq},Samples,SSRC,Cryp],
-	decryp_and_send_audio(AParams,UdpMsg),
-	{noreply,ST#state{r_base=Remote#base_info{pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1}}};
+	ST1=decryp_and_send_audio(ST,AParams,UdpMsg),
+	{noreply,ST1#state{r_base=Remote#base_info{pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1}}};
 
-handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,_:1,Codec:7,InSeq:16,_:32,SSRC:32,_/binary>> =_Bin},
-			#state{r_base=R_base=#base_info{pkts_rcvd=PktR,cumu_rcvd=CumuR,seq=LastSeq,ssrc=SSRC},transport_status=inservice,peer={Addr,Port}}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS -> %rtppacket from mobile or pc yxw
+handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,_:1,Codec:7,InSeq:16,_:32,SSRC:32,_/binary>> =Bin},
+			#state{r_base=R_base=#base_info{pkts_rcvd=PktR,cumu_rcvd=CumuR,seq=LastSeq,ssrc=SSRC},transport_status=inservice,peer={_Addr1,_Port1}}=ST)
+			when ?IS_RTP(Codec) -> %rtppacket from mobile or pc yxw
 %    io:format("u"),
     case judge_bad_seq(LastSeq,InSeq) of
     {backward,_} -> 
-         llog1(ST,"rtp receive backward packet inseq:~p lastseq:~p",[InSeq,LastSeq]),
+%         llog1(ST,"rtp receive backward packet inseq:~p lastseq:~p",[InSeq,LastSeq]),
         {noreply, ST};
     {forward,N} ->
-        NewST=ST#state{r_base=R_base#base_info{pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1}},
+        NewST=ST#state{peer={Addr,Port},r_base=R_base#base_info{pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1},stats=up_udp_stats(ST#state.stats,Bin)},
         handle_forward_packet(UdpMsg,NewST , N)
     end;
 
 % this is not used following
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =_Bin},
 			#state{r_base=#base_info{roc=LastROC,seq=LastSeq,timecode=LastTs,ssrc=SSRC}=Remote,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
-			when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS -> %rtppacket from mobile or pc
+			when ?IS_RTP(Codec) -> %rtppacket from mobile or pc
 	Now = now(),
 	#base_info{interarrival_jitter=IAJitter,previous_ts=PreTS}=Remote,
 	#base_info{pkts_rcvd=PktR,pkts_lost=PktL,cumu_lost=CumuL,lost_seqs=_LastLost, cumu_rcvd=CumuR}=Remote,
@@ -370,8 +406,8 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 	if InSeq==ExpectSeq ->
 	      % Aparams: {ExpectROC,InSeq},SSRC,Cryp used for decryp, Mark, TS-LastTS(Samples0) seems not used by rrp,
 		AParams = [ST#state.out_media,Mark,Codec,{ExpectROC,InSeq},TS-LastTs,SSRC,Cryp],
-		decryp_and_send_audio(AParams,UdpMsg),
-		{noreply,ST#state{r_base=Remote#base_info{pln=Codec,roc=ExpectROC,seq=ExpectSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2,pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1}}};
+		ST1=decryp_and_send_audio(ST,AParams,UdpMsg),
+		{noreply,ST1#state{r_base=Remote#base_info{pln=Codec,roc=ExpectROC,seq=ExpectSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2,pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1}}};
 	true ->
 		case judge_bad_seq(LastSeq,InSeq) of
 			{forward,N} ->
@@ -381,7 +417,7 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 				Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 						  true -> 960 end,
 				AParams = [ST#state.out_media,Mark,Codec,{ROC,InSeq},Samples,SSRC,Cryp],
-				decryp_and_send_audio(AParams,UdpMsg),
+				decryp_and_send_audio(ST,AParams,UdpMsg),
 				{noreply,ST#state{r_base=Remote#base_info{pln=Codec,roc=ROC,seq=InSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2,pkts_rcvd=PktR+1,pkts_lost=PktL+(N-1), cumu_lost=CumuL+(N-1),cumu_rcvd=CumuR+1}}};
 			{backward,_} ->
                           llog1(ST,"rtp receive backward packet inseq:~p lastseq:~p",[InSeq,LastSeq]),
@@ -470,8 +506,8 @@ handle_info({udp,_,_,_,<<2:2,_:6,Mark:1,?VP8:7,InSeq:16,TS:32,SSRC:32,_/binary>>
 handle_info(Udp={udp, _Socket, Addr, Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,_SSRC:32,_/binary>>},
 	#state{mobile=true,peer_rtcp_addr=undefined}=ST) when ?is_rtcp(PT) -> %mobile
        handle_info(Udp,ST#state{peer_rtcp_addr={Addr,Port}});
-handle_info({udp, _Socket, Addr, Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,_SSRC:32,_/binary>> =Bin},
-	#state{socket=_Socket,mobile=true,vp8=Vcdc,bw=BWE,peer_rtcp_addr={Addr, Port}}=ST) when ?is_rtcp(PT) -> %mobile
+handle_info({udp, _Socket, _Addr, _Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,_SSRC:32,_/binary>> =Bin},
+	#state{mobile=true,vp8=Vcdc,bw=BWE,peer_rtcp_addr={_, _}}=ST) when ?is_rtcp(PT) -> %mobile
 	Now = now(),
 	Parsed = rtcp:parse(Bin),
 	{Rbase2,VRbase2} = update_sr_timecode(Now,Parsed,{ST#state.r_base,ST#state.vr_base}),
@@ -489,7 +525,7 @@ handle_info({udp, _Socket, Addr, Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,_SSRC:32,_
 	end;
 
 handle_info({udp, _Socket, _Addr, _Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,SSRC:32,_/binary>> =Bin},
-	#state{socket=_Socket,r_srtcp=#cryp{method=Method, e_k=Key,e_s=Salt,a_k=A_k},vp8=Vcdc,bw=BWE}=ST) when PT==?RTCP_SR;PT==?RTCP_RR ->
+	#state{r_srtcp=#cryp{method=Method, e_k=Key,e_s=Salt,a_k=A_k},vp8=Vcdc,bw=BWE}=ST) when PT==?RTCP_SR;PT==?RTCP_RR ->
 	Now = now(),
 	ISize = size(Bin) - ?RTCPHEADLENGTH - srtcp_digest_length(Method) - ?RTCPEIDXLENGTH,
 	<<Head:?RTCPHEADLENGTH/binary,Info:ISize/binary,EIdx:?RTCPEIDXLENGTH/binary,Digest/binary>> = Bin,
@@ -703,7 +739,8 @@ handle_info({dtls, key_material, #srtp_params{protection_profile_name=PPN,
 % ******** bad message, socket received *******
 %
 handle_info({udp, _Socket, _Addr, _Port, _Bin},ST=#state{transport_status=_TranStatus}) ->
-	%%io:format("rtp bad msg from ~p ~p~n~p~n",[Addr,Port,Bin]),
+	llog1(ST,"rtp bad msg from ~p ~p ~p~n",[_Addr,_Port,_Bin]),
+%	io:format("b"),
 %	if TranStatus == inservice-> 	llog1(ST,"rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]);
 %	   true-> void
 %	end,
@@ -726,25 +763,36 @@ handle_forward_packet(UdpMsg={udp,_Socket,_,_,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,
 	IAJitter2 = compute_interarrival_jitter(codec_factor(Codec),IAJitter,{TS,Now},PreTS),
 	{ExpectROC,ExpectSeq} = get_expect_seq(LastROC,LastSeq),
 	AParams = [ST#state.out_media,Mark,Codec,{ExpectROC,InSeq},TS-LastTs,SSRC,Cryp],
-	decryp_and_send_audio(AParams,UdpMsg),
-	NewST = ST#state{r_base=Remote#base_info{pln=Codec,roc=ExpectROC,seq=ExpectSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2}},
+	ST1=decryp_and_send_audio(ST,AParams,UdpMsg),
+	NewST = ST1#state{r_base=Remote#base_info{pln=Codec,roc=ExpectROC,seq=ExpectSeq,timecode=TS,previous_ts={TS,Now},interarrival_jitter=IAJitter2}},
 	NewST1 = judge_if_send_buffers(NewST),
 	{noreply,NewST1};
-handle_forward_packet(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,_:1,_:7,InSeq:16,_:32,SSRC:32,_/binary>> =_Bin},
-			#state{buffers=Bufs,r_base=#base_info{roc=LastROC,seq=LastSeq,ssrc=SSRC},transport_status=inservice,peer={Addr,Port}}=ST,N) ->  %% insert to buffers
+handle_forward_packet(UdpMsg={udp,_Socket,_,_,<<2:2,_:6,_:1,_:7,InSeq:16,_:32,SSRC:32,_/binary>> =_Bin},
+			#state{rtcp_sck=Socket,peer_rtcp_addr=RtcpPeer,in_audio=InAudio,buffers=Bufs,r_base=#base_info{roc=LastROC,seq=LastSeq,ssrc=SSRC},transport_status=inservice,peer={_,_}}=ST,N) ->  %% insert to buffers
 %    llog1(ST,"rtp handle_forward_packet N:~p lastseq:~p inseq:~p buflen:~p insert2buffer",[N,LastSeq,InSeq,length(Bufs)]),
+%    io:format("r"),
     {_,ROC,_} = count_up_to_seq(InSeq,{LastROC,LastSeq}),
     NewST=ST#state{buffers=lists:ukeymerge(1,Bufs,[{{ROC,InSeq},UdpMsg}])},
-    if N<10 ->
-        {_ExpectROC,ExpectSeq} = get_expect_seq(LastROC,LastSeq),
-        LostSeqs = make_lost_seqs(ExpectSeq,[SEQ||{{_,SEQ},_} <- NewST#state.buffers]),%yxw
-        case length(LostSeqs)>0  of
-        	true -> self() ! {send_nack,0,audio,LostSeqs};
-        	_ -> pass
+    case RtcpPeer of
+    {IP,Port}->
+        if N<10 ->
+            {_ExpectROC,ExpectSeq} = get_expect_seq(LastROC,LastSeq),
+            LostSeqs = make_lost_seqs(ExpectSeq,[SEQ||{{_,SEQ},_} <- NewST#state.buffers]),%yxw
+            case length(LostSeqs)>0  of
+            	true ->
+            	    {_NRBase1,Head,SR} = make_rtcp(now(),InAudio,ST#state.r_base),
+                     NACK = make_rtcp_nack(InAudio,ST#state.r_base,LostSeqs),
+                     Body = <<SR/binary,NACK/binary>>,
+                     send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>),
+            	    io:format("#~p",[LostSeqs]),
+            	    llog1(ST, " rtp send nack lostseqs:~s,buffers:~s",[LostSeqs,[SEQ||{{_,SEQ},_} <- NewST#state.buffers]]);
+    %        	    self() ! {send_nack,0,audio,LostSeqs};
+            	_ -> pass
+            end;
+        true-> void
         end;
-    true-> void
+    _-> void
     end,
-    
     {noreply,judge_overflow(NewST)}.
 
 judge_overflow(ST=#state{buffers=Buffers}) when length(Buffers) >= ?AUDIO_JITTERLENGTH-> 
@@ -757,13 +805,13 @@ do_trans_one_packet({{ROC,_},UdpMsg={udp,_Socket,_,_,<<2:2,_:6,Mark:1,Codec:7,In
 			  true -> 960 end,
 %    io:format("*"),
     AParams = [ST#state.out_media,Mark,Codec,{ROC,InSeq},Samples,SSRC,Cryp],
-    decryp_and_send_audio(AParams,UdpMsg),
+    ST1=decryp_and_send_audio(ST,AParams,UdpMsg),
     {forward,N} = judge_bad_seq(LastSeq,InSeq),
     #base_info{pkts_lost=PktL,cumu_lost=CumuL}=Remote,
-    ST#state{r_base=Remote#base_info{pln=Codec,roc=ROC,seq=InSeq,timecode=TS,pkts_lost=PktL+(N-1), cumu_lost=CumuL+(N-1)}}.
+    ST1#state{r_base=Remote#base_info{pln=Codec,roc=ROC,seq=InSeq,timecode=TS,pkts_lost=PktL+(N-1), cumu_lost=CumuL+(N-1)}}.
 
 do_trans_all_buffers(ST=#state{buffers=[]})-> 
-    io:format("a"),
+%    io:format("a"),
     ST;
 do_trans_all_buffers(ST=#state{buffers=[H|T]})->
     NewST = do_trans_one_packet(H, ST#state{buffers=T}),
@@ -1272,18 +1320,21 @@ count_up_to_seq(N,InSeq,{LastROC,LastSeq}) ->
 	count_up_to_seq(N+1,InSeq,{ROC,Seq}).
 
  %it seems that rrp don't use Samples0 except isac
-decryp_and_send_audio([OutMedia,Mark,Codec,{ROC,InSeq},Samples0,SSRC,Cryp], {udp,_Socket,Addr,Port,Bin}) ->
+decryp_and_send_audio(ST=#state{mon_pids=Mons},[OutMedia,Mark,Codec,{ROC,InSeq},Samples0,SSRC,Cryp], {udp,_Socket,Addr,Port,Bin}) ->
 	Marker = if Mark==1 -> true; true -> false end,
 	Samples = if Samples0 < 0 -> Samples0 + 16#100000000; true -> Samples0 end,
 	case get_media_frame(SSRC,ROC,InSeq,Cryp,Bin) of
 		{ok,Body} ->
 			Frame = #audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples,addr=Addr,port=Port},
-			send_media(OutMedia, Frame);
+			send_media(OutMedia, Frame),
+			[send_media(MonPid,Frame)||MonPid<-Mons, is_pid(MonPid)],
+			NewStats=up2rrp_stats(ST#state.stats,Bin),
+			ST#state{stats=NewStats};
 		bad_digest ->
 			%%io:format("~p audio ~p bad_digest.~n",[self(),SSRC]),
-			pass
-	end,
-	ok.
+			ST
+
+	end.
 
 % ----------------------------------
 get_expect_seq(LastROC,65535) ->
@@ -1382,8 +1433,7 @@ get_media_frame(SSRC,ROC,Seq,#cryp{method=Method,e_k=Key,e_s=Salt,a_k=A_k},Bin) 
 
 % ----------------------------------
 %% Compose one RTP-packet from whole Data
-compose_rtp(#base_rtp{roc=ROC, seq=Sequence, marker=Marker,codec=Codec,
-                      packets=Packets, bytes=Bytes}=Base, Data) ->
+compose_rtp(#base_rtp{roc=ROC, seq=Sequence, marker=Marker,codec=Codec,packets=Packets, bytes=Bytes}=Base, Data) ->
 	if Marker -> M = 1; true -> M = 0 end,
 	Pack = make_rtp_pack(Base, M, Codec, Data),
 	{NewROC,NewSeq} = get_expect_seq(ROC,Sequence),
@@ -1595,15 +1645,33 @@ send_media(undefined,_) ->
 
 %
 % ----------------------------------
-llog1(#state{phinfo=Phinfo},F,P)->
+llog1(#state{r_base=#base_info{seq=LastSeq,ssrc=SSRC},phinfo=Phinfo,peer=Peer,peer_rtcp_addr=Rtcp_peer},F,P)->
     Cid = proplists:get_value(cid, Phinfo,""),
     Phone=proplists:get_value(phone,Phinfo,""),
-    llog("cid:~s phone:~s"++F, [Cid,Phone|P]).
+    llog("rtp cid:~s phone:~s ip:~s rtcp_peer:~s ssrc:~s lastseq:~s "++F, [Cid,Phone,Peer,Rtcp_peer,SSRC,LastSeq |P]).
 llog(F,P) ->
     llog:log(F,P).
 %    void.
 
-
+up_udp_stats(#packet_stats{up_udppkts=Uup1,up_udpbytes=Uub1,up_rrppkts=_Urp1,up_rrpbytes=_Urb1}=Stats,Bin)-> 
+    Stats#packet_stats{up_udppkts=Uup1+1,up_udpbytes=Uub1+size(Bin)}.
+up2rrp_stats(#packet_stats{up_rrppkts=Urp1,up_rrpbytes=Urb1}=Stats,Bin)-> 
+    Stats#packet_stats{up_rrppkts=Urp1+1,up_rrpbytes=Urb1+size(Bin)}.
+down_rrp_stats(Stats=#packet_stats{down_rrppkts=Drp1,down_rrpbytes=Drb1},Bin)->
+    Stats#packet_stats{down_rrppkts=Drp1+1,down_rrpbytes=Drb1+size(Bin)}.
+down_udp_stats(Stats=#packet_stats{down_udppkts=Dup1,down_udpbytes=Dub1},Bin)->
+    Stats#packet_stats{down_udppkts=Dup1+1,down_udpbytes=Dub1+size(Bin)}.
+stats_log(ST=#state{stats=Stats=#packet_stats{up_udppkts=Uup1,last_up_udppkts=Uup0,up_udpbytes=Uub1,last_up_udpbytes=Uub0,      
+                       down_udppkts=Dup1,last_down_udppkts=Dup0,down_udpbytes=Dub1,last_down_udpbytes=Dub0,
+                       up_rrppkts=Urp1,last_up_rrppkts=Urp0,up_rrpbytes=Urb1,last_up_rrpbytes=Urb0,
+                       down_rrppkts=Drp1,last_down_rrppkts=Drp0,down_rrpbytes=Drb1,last_down_rrpbytes=Drb0}})->
+    llog1(ST, "rtp:rcv ~ppkts ~ppps ~pB ~pbps udpsent:~ppkts ~ppbs ~pB ~pbps torrp:~ppkts ~pps ~pB ~pbps fromrrp: ~ppkts ~ppbs ~pB ~pbps ",
+                            [Uup1,Uup1-Uup0,Uub1,8*(Uub1-Uub0),Dup1,Dup1-Dup0,Dub1,8*(Dub1-Dub0),Urp1,8*(Urp1-Urp0),Urb1,8*(Urb1-Urb0),Drp1,Drp1-Drp0,Drb1,Drb0]),                      
+%    llog1(ST, "rtp:rcv ~ppkts ~ppps ~pB ~pbps udpsent:~ppkts ~ppbs ~pB ~pbps",
+%                            [Uup1,Uup1-Uup0,Uub1,8*(Uub1-Uub0),Dup1,Dup1-Dup0,Dub1,8*(Dub1-Dub0)]),                      
+    ST#state{stats=Stats#packet_stats{last_up_udppkts=Uup1,last_up_udpbytes=Uub1,last_down_udppkts=Dup1,last_down_udpbytes=Dub1,
+                                            last_up_rrppkts=Urp1,last_up_rrpbytes=Urb1,last_down_rrppkts=Drp1,last_down_rrpbytes=Drb1}}.                        
+                                
 show_tc_ts(?iCNG,{LastTS,PrevTC},{TS,Now}) ->
 	Diffms = timer:now_diff(Now,PrevTC) div 1000,
 	io:format("| [~pn@~p]~n",[(TS-LastTS) div 16, Diffms]),

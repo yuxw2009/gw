@@ -2,7 +2,7 @@
 -compile(export_all).
 %-export([start/0, get_count/0, get_node/0]).
 -define(BASE_DIR, "/home/wcg/run/").
--define(EBIN_DIR, "/home/wcg/gw_git0/ebin/").
+-define(EBIN_DIR, "/home/wcg/run/gw_test_copy1/ebin/").
 
 -record(st,{last_packets=[],
                    status=working,

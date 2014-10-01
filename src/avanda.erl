@@ -252,7 +252,8 @@ make_rnd_dword() ->
 	integer_to_list(getrandom()).
 
 getrandom() ->
-	1234567.
+      {_,M,N}=erlang:now(), 
+      (M rem 1000)*1000+ (N div 1000).
 %	my_server:call(rtp_sup,random32).
 
 fetchorig(#session_desc{originator=Origin}) ->

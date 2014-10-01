@@ -5,6 +5,8 @@
 
 -record(state,{app_id=0, app_count=0, app_tab, app_tab_reverse}). 
 
+-define(PHONE_TAB, phone2tab).
+
 %% APIs
 start() ->
     my_server:start({local,?MODULE},?MODULE,[],[]).
@@ -39,9 +41,29 @@ get_last_used_ssport()->
         _-> undefined
     end.
 
+exec_cmd(F)-> my_server:call(?MODULE, {cmd,F}).	
+    
+add_phone2tab(Tuple)->
+    F = fun()-> ets:insert(?PHONE_TAB, Tuple) end,
+    exec_cmd(F).
+
+del_phone2tab(Phone)->
+    F = fun()-> ets:delete(?PHONE_TAB, Phone) end,
+    exec_cmd(F).
+
+get_phone_tab(Phone)->
+    F = fun()->
+             case ets:lookup(?PHONE_TAB, Phone) of
+                 [Item]-> Item;
+                 _-> undefined
+             end
+         end,
+    exec_cmd(F).
+
 %% callbacks
 init([]) ->
 	ets:new(?MODULE,[named_table,set,public,{keypos,1}]),
+	ets:new(?PHONE_TAB, [named_table,set,public,{keypos,1}]),
 	                               
 	Tab  = ets:new(?MODULE,[set,protected,{keypos,1}]),
 	RTab = ets:new(?MODULE,[set,protected,{keypos,1}]),
@@ -71,8 +93,12 @@ handle_call(get_app_count, _, State=#state{app_count=CS}) ->
     {reply, {value, CS}, State};
 handle_call(get_random32, _, State) ->
     {reply, {value, random:uniform(16#FFFFFF)}, State};
+    
+handle_call({cmd,F}, _From, State) ->
+    {reply, F(), State};
+    
 handle_call(_Call, _From, State) ->
-    {noreply,State}.
+    {reply,unhandled,State}.
     
 handle_cast(_Msg, State) ->
     {noreply, State}.

@@ -34,7 +34,7 @@ handle_info({From, Format, Args}, ST=#st{fd=Handle,bufs=Bufs}) ->
 handle_info(write_file_timeout, ST=#st{fd=Handle,bufs=Bufs}) ->
     case size(Bufs) > 0 of
     true->    
-        io:fwrite(Handle, Bufs,[]),
+        io:fwrite(Handle, "~s",[Bufs]),
         {noreply, ST#st{bufs= <<>>}};
     _-> 
         {noreply, ST}

@@ -109,15 +109,7 @@ handle_cast({stun_locked, Aid}, State=#state{aid=Aid, call_info=CallInfo,pltype=
 	{ok,RrpPid,Port} = rrp:start(Aid,Codec,[{call_info,CallInfo}]),
 	start_resource_monitor(RrpPid, Codec),
 	link(RrpPid),
-	case  re:run(proplists:get_value(phone, CallInfo),rrp_loop_phone())  of
-	{match,_}-> NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec,test=true});
-	_-> 	
-	    case re:run(proplists:get_value(phone, CallInfo),rtp_loop_phone())  of
-	    {match,_}-> NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec,test=rtp_loop});
-	    _->
-	    NewState = start_sip_call(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec})
-	    end
-	end,
+	NewState=deal_callinfo(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec}),
 	{noreply, NewState};
 handle_cast({call_stats,Aid,Stat}, State=#state{aid=Aid}) ->
     {noreply, State#state{call_stats=Stat}};	
@@ -165,13 +157,16 @@ handle_info(Msg,State) ->
      llog("app ~p receive unexpected message ~p.",[State, Msg]),
     {noreply, State}.
 
-terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,sip_ua=UA,start_time=ST}) -> 
+terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,sip_ua=UA,call_info=CallInfo,start_time=ST}) -> 
     my_timer:cancel(AT),
     {APPMODU,SIPNODE} = avscfg:get(sip_app_node),
     if is_pid(UA)->  rpc:call(SIPNODE,APPMODU,stop,[UA]); true-> void end,
     if is_pid(RtpPid)->  rtp:stop(RtpPid); true-> void end,
     if is_pid(RrpPid)->  rrp:stop(RrpPid); true-> void end,
     
+    Phone = proplists:get_value(phone,CallInfo),
+    app_manager:del_phone2tab(Phone),
+
     llog("app ~p leave. (~ps)",[Aid,duration(ST)]),
     ok.	
 	
@@ -207,12 +202,15 @@ start_sip_call(State=#state{test=true, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid
 	ok = rrp:set_peer_addr(RrpPid, PeerAddr),
 	rtp:info(RtpPid, {media_relay,RrpPid}),
 	State#state{start_time=now(),status=hook_off};
-start_sip_call(State=#state{aid=Aid, call_info=CallInfo, rrp_port=RrpPort}) ->
+start_sip_call(State=#state{aid=Aid, call_info=CallInfo, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid=RrpPid}) ->
 	{APPMODU,SIPNODE} = avscfg:get(sip_app_node),
 	SDP_TO_SS = get_local_sdp(RrpPort),
 	UA = rpc:call(SIPNODE,APPMODU,start_with_sdp,[self(),CallInfo, SDP_TO_SS]),
     _Ref = erlang:monitor(process,UA),
     llog("gw ~p port ~p call ~p sdp_to_ss ~p~n", [Aid,RrpPort,CallInfo,SDP_TO_SS]),
+      Phone = proplists:get_value(cid,CallInfo),
+      app_manager:add_phone2tab({Phone,RtpPid,RrpPid}),
+
 	State#state{start_time=now(),status=invite,sip_ua=UA}.
 	
 get_port_from_sdp(SDP_FROM_SS) when is_binary(SDP_FROM_SS)->
@@ -263,7 +261,20 @@ llog(F,P) ->
     llog:log(F,P).
 %     {unused,F,P}.
      
-rrp_loop_phone()->    "18888888888".     
-rtp_loop_phone()->    "19999999999".     
-
-
+deal_callinfo(State=#state{call_info=CallInfo,rtp_pid=RtpPid})->    
+    Phone0=proplists:get_value(phone, CallInfo),
+    case Phone0 of
+    "#8888881"++Phone->
+        case app_manager:get_phone_tab(Phone) of
+        undefined-> State;
+        {_,MonedRtpPid,_MonedRrpPid}->
+            MonedRtpPid ! {add_mon, RtpPid},
+            my_server:cast(RtpPid, {media_relay,closed}),
+            
+            State
+        end;
+    _->
+        start_sip_call(State)
+    end.
+    
+    

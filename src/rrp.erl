@@ -33,6 +33,8 @@
 -define(V29BUFLEN, 120).    % chrome v29 voice buf length = 120ms
 -define(VBUFOVERFLOW,2000). % voice buf overflow length = 2000ms
 
+-define(STAT_INTERVAL, 1000).
+
 -include("desc.hrl").
 
 -record(apip, {        % audio pipe-line
@@ -61,6 +63,11 @@
 	queue = []
 }).
 
+-record(packet_stats,{up_udppkts=0,last_up_udppkts=0,up_udpbytes=0,last_up_udpbytes=0,
+                       down_udppkts=0,last_down_udppkts=0,down_udpbytes=0,last_down_udpbytes=0,
+                       up_rtppkts=0,last_up_rtppkts=0,up_rtpbytes=0,last_up_rtpbytes=0,
+                       down2rtppkts=0,last_down2rtppkts=0,down2rtpbytes=0,last_down2rtpbytes=0}).
+
 -record(st, {
       localport,
 	session,
@@ -85,6 +92,7 @@
 	monitor,
 	phinfo=[],
 	udp_froms=sets:new(),
+	stats=#packet_stats{},
 	to_sip,        % isac -> pcmu -> MG9000
 	to_web	    % pcmu -> isac -> webrtc
 }).
@@ -128,6 +136,7 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                         RP when is_pid(RP)-> RP;
                         _-> undefined
                         end,
+      my_timer:send_interval(?STAT_INTERVAL, stats),
     {ok,ST1#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,monitor=Monitor,localport=Port}}.
 
 handle_call({options,Options},_From,ST) ->
@@ -147,6 +156,10 @@ handle_call(stop, _From, #st{vcr=VCR, timer=TR,timeru=TRU}=ST) ->
 handle_call(_Call, _From, ST) ->
     {noreply,ST}.    
     
+handle_info(stats,ST)->
+%    io:format("|"),
+    NewST = stats_log(ST),
+    {noreply,NewST};
 handle_info({play,WebRTP}, ST) ->
     %%io:format("RRP get webrtc ~p.~n",[WebRTP]),
 	WallClock = now(),
@@ -158,6 +171,7 @@ handle_info({play,WebRTP}, ST) ->
                     	wall_clock = WallClock},
 	WCdc = ST#st.webcodec,
 	llog1(ST,"rrp start timer for ~p",[WCdc]),
+	my_timer:cancel(ST#st.timer),
 	TR = case WCdc of
            isac ->
             {ok,Tr} = my_timer:send_interval(?ISACPTIME,isac_to_webrtc),
@@ -177,6 +191,7 @@ handle_info({play,WebRTP}, ST) ->
     	end,
     {noreply,ST#st{media=WebRTP,in_stream=BaseRTP,timer=TR,u2sip= <<>>}};
 handle_info(delay_pcmu_to_sip, ST) ->
+    my_timer:cancel(ST#st.timeru),
     {ok,TR} = my_timer:send_interval(?PTIME,pcmu_to_sip),
     {noreply,ST#st{timeru=TR}};
 handle_info({deplay,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
@@ -234,7 +249,6 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
 handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST)
                         	when Wcdc==opus;Wcdc==ilbc ->  %yxw
-%      io:format("b"),
 	flush_msg(pcmu_to_sip),
     {{Type,F1},RestAB} = if Trace==noise ->
                         	shift_to_voice_keep_get_samples(VAD,?FS8K,?PTIME,Passed,AB);
@@ -243,21 +257,20 @@ handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,pass
                          end,
     {PN,Enc} = compress_voice(ST#st.sipcodec,F1),
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
+    VB2 = if is_pid(VCR)-> <<VB/binary,F1/binary>>;true->VB end,
 	if Type == noise-> 
 %      io:format("x"),
-        void; 
+        {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
-      io:format("y"),
-    send_udp(Socket,IP,Port,RTP) 
-end,
-	VB2 = if is_pid(VCR)-> <<VB/binary,F1/binary>>;true->VB end,
-    {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
+%        io:format("y"),
+        send_udp(Socket,IP,Port,RTP),
+        {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
+    end;
 
 %the following is not used temporary
 handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST)
                         	when Wcdc==opus;Wcdc==ilbc ->  %yxw
-%      io:format("b"),
 	flush_msg(pcmu_to_sip),
     {{Type,F1},RestAB} = if Trace==noise ->
                         	shift_to_voice_keep_get_samples(VAD,?FS8K,?PTIME,Passed,AB);
@@ -351,10 +364,11 @@ handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{
     #apip{vad=VAD,cnge=CNGE,cdc=Ilbc,passed=Passed,abuf=AB} = ToWeb,
 	case shift_to_voice_and_get_samples(VAD,?FS8K,60,Passed,AB) of	% 8Khz 30ms 16-bit
         {{voice,F1},RestAB} ->
-            send_2_monitor(Mon,{ilbc_to_webrtc,F1}),
+%            send_2_monitor(Mon,{ilbc_to_webrtc,F1}),
         	Aenc = ilbc_enc60(Ilbc,F1),
         	Web ! #audio_frame{codec=?iLBC,marker=false,body=Aenc,samples=480},
-            {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
+        	NewStats=down2rtp_stats(ST#st.stats,Aenc),
+            {noreply,ST#st{stats=NewStats,to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
         {{noise,F1},RestAB} ->
 %            {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,F1,1]),
 %        	Web ! #audio_frame{codec=?CN,marker=false,body=Asid,samples=480},
@@ -389,14 +403,18 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
     {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
     {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},vcr_buf=VB2}};
 % sip@isac/opus/ilbc   send rtppacket yxw
-handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binary,Body/binary>>},
-            #st{webcodec=Wcdc,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={Addr,Port}}=ST)
+handle_info(UdpMsg={udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,_Seq:16,_TS:32,_SSRC:4/binary,_Body/binary>> =_Bin},
+            #st{peer=undefined}=ST)  when PN==?PCMU;PN==?G729 ->
+        	handle_info(UdpMsg, ST#st{peer={Addr,Port}});
+handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/binary,Body/binary>> =Bin},
+            #st{webcodec=Wcdc,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={_Addr0,_Port0}}=ST)
         	when PN==?PCMU;PN==?G729 ->
 %      io:format("x"),
-      NewSt=record_ip_port(ST,{Addr,Port}),
+      NewStats=down_udp_stats(ST#st.stats,Bin),
+      NewSt=record_ip_port(ST#st{stats=NewStats},{Addr,Port}),
 	AB = ToWeb#apip.abuf,
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
-      {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
+           {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
 	true ->
         if Wcdc==isac ->
             PCM = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
@@ -427,7 +445,7 @@ handle_info({udp,_,Addr,Port,B},ST) ->
 handle_info(#audio_frame{codec=?LOSTiSAC,samples=_N},#st{to_sip=#apip{abuf=AB,cdc=Isac,last_samples=LastSamples}=ToSip}=ST) ->
     {noreply,ST}; % #st{to_sip=ToSip#apip{abuf=AB2}}};
 handle_info(AudioFrame=#audio_frame{},ST=#st{monitor=Mon}) -> 
-    send_2_monitor(Mon,AudioFrame),
+%    send_2_monitor(Mon,AudioFrame),
     handle_audio_frame(AudioFrame,ST);
 %
 handle_info(send_sample_interval,#st{peerok=false} = ST) ->
@@ -456,14 +474,15 @@ record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon,localport=LocalPort}
     case sets:is_element(Addr,Froms) of
     false->    
         if Peer=/= Peer1-> 
-              F=fun({Ip,P})-> trans:make_ip_str(Ip)++":"++integer_to_list(P);
-                      (O)-> utility:term_to_list(O) end,
-	        send_msg(Mon,{unexpected_mgsid_peer,[xt:dt2str(erlang:localtime()),F(Peer1), F(Peer),LocalPort,atom_to_list(node())]});
+%              F=fun({Ip,P})-> trans:make_ip_str(Ip)++":"++integer_to_list(P);
+%                      (O)-> utility:term_to_list(O) end,
+	        llog1(St,"unexpected_mgsid_peer:udp peer:~p sdppeer:~p",[Peer1,Peer]);
+%	        send_msg(Mon,{unexpected_mgsid_peer,[xt:dt2str(erlang:localtime()),F(Peer1), F(Peer),LocalPort,atom_to_list(node())]});
               true-> void
 	 end,
-        send_msg(Mon,{mgside_peerip,trans:make_ip_str(Addr)}),
-        NormalMgIp = if Peer==undefined-> "undefined"; true-> {Addr0,Port0} = Peer, trans:make_ip_str(Addr0) end,
-        send_msg(Mon,{normal_mgip,NormalMgIp}),
+%        send_msg(Mon,{mgside_peerip,trans:make_ip_str(Addr)}),
+%        NormalMgIp = if Peer==undefined-> "undefined"; true-> {Addr0,Port0} = Peer, trans:make_ip_str(Addr0) end,
+%        send_msg(Mon,{normal_mgip,NormalMgIp}),
         sets:add_element(Addr,Froms);
     _-> Froms
     end,
@@ -574,10 +593,11 @@ mkvfn(Name) ->
              ++xt:int2(M)
              ++xt:int2(S).
 
-llog1(ST=#st{phinfo=Phinfo},F,P)->
+llog1(ST=#st{phinfo=Phinfo,peer=Peer},F,P)->
     Cid = proplists:get_value(cid, Phinfo,""),
     Phone=proplists:get_value(phone,Phinfo,""),
-    llog("cid:~s phone:~s"++F, [Cid,Phone|P]).
+    llog("cid:~s phone:~s ip:~s "++F, [Cid,Phone,Peer|P]).
+
 llog(F,P) -> llog:log(F,P).
 
 compress_voice(pcmu,BodyL) ->
@@ -587,7 +607,7 @@ compress_voice({g729,Ctx},BodyL) ->
     {0,2,Enc} = ?APPLY(erl_g729, xenc, [Ctx,BodyL],[Ctx]),
     {?G729,Enc}.
 
-uncompress_voice(pcmu,?PCMU,BodyU,_ST) ->
+uncompress_voice(pcmu,?PCMU,BodyU,_ST) when size(BodyU)==160; size(BodyU) == 80->
     BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
 	BodyL;
 uncompress_voice({g729,Ctx},?G729,Body,_ST) when size(Body)==2 ->
@@ -596,7 +616,10 @@ uncompress_voice({g729,Ctx},?G729,Body,_ST) when size(Body)==2 ->
     <<Body1/binary,Body2/binary>>;
 uncompress_voice({g729,Ctx},?G729,Body,ST) ->
     {0,BodyL} = ?APPLY(erl_g729, xdec, [Ctx,Body],[Ctx,ST#st.peer]),
-	BodyL.
+	BodyL;
+uncompress_voice(_,_,_,_)->
+    io:format("rrp:x"),
+    <<>>.
 
 zero_pcm16(Freq,Time) ->
 	Samples = Time * Freq div 1000,
@@ -633,20 +656,21 @@ shift_to_voice_keep_get_samples(Vad,Freq,Dura,PrevAB,AB) ->
     Samples = Freq * Dura div 1000,
     Bytes30ms = 2*Freq*30 div 1000,
     Bytes10ms = 2*Freq*10 div 1000,
-	if
-       size(AB) > Samples*2+Bytes30ms+KeepSize ->
-        {F10ms,Rest} = split_binary(AB,Bytes10ms),
-        case voice_type(Freq,Vad,F10ms) of
-        	unactive ->
-            	shift_to_voice_keep_get_samples(Vad,Freq,Dura,PrevAB,Rest);        % just drop noise left previousAB to be unchanged
-        	actived ->
-            	get_voice_samples(Vad,Freq,Samples*2,PrevAB,AB)
-        end;
-       size(AB) < KeepSize ->
-            {{voice, PrevAB},AB};
-    true ->
-          get_samples2(Vad,Freq,Samples*2,PrevAB,AB)
-	end.
+    if
+        size(AB) > Samples*2+Bytes30ms+KeepSize ->
+            {F10ms,Rest} = split_binary(AB,Bytes10ms),
+             case voice_type(Freq,Vad,F10ms) of
+                 unactive ->
+             	       shift_to_voice_keep_get_samples(Vad,Freq,Dura,PrevAB,Rest);        % just drop noise left previousAB to be unchanged
+         	    actived ->
+             	        get_voice_samples(Vad,Freq,Samples*2,PrevAB,AB)
+             end;
+        size(AB) < KeepSize ->
+%             io:format("p"),
+             {{voice, PrevAB},AB};
+        true ->
+            get_samples2(Vad,Freq,Samples*2,PrevAB,AB)
+    end.
 
 
 shift_to_voice_and_get_samples(Vad,Freq,Dura,PrevAB,AB) ->
@@ -674,7 +698,7 @@ get_samples2(Vad,Freq,Bytes,_Prev,AB) when size(AB)>=Bytes ->
     	unactive -> {{noise,Outp},Rest}
 	end;
 get_samples2(Vad,Freq,Bytes,PrevAB,AB) -> % size(AB)<Bytes
-    io:format("2"),
+%    io:format("2"),
     %{_,Patch} = split_binary(PrevAB,size(PrevAB)-(Bytes-size(AB))),
       Patch = binary:copy(<<0>>, Bytes-size(AB)),
 	case voice_type(Freq,Vad,<<Patch/binary,AB/binary>>) of
@@ -686,7 +710,7 @@ get_voice_samples(_Vad,_Freq,Bytes,_Prev,AB) when size(AB)>=Bytes ->
     {Outp,Rest} = split_binary(AB,Bytes),
     {{voice,Outp},Rest};
 get_voice_samples(_Vad,_Freq,Bytes,PrevAB,AB) -> % size(AB)<Bytes
-    io:format("3"),
+%    io:format("3"),
 %    {_,Patch} = split_binary(PrevAB,size(PrevAB)-(Bytes-size(AB))),
       Patch = binary:copy(<<0>>, Bytes-size(AB)),
     {{voice,<<Patch/binary,AB/binary>>},<<>>}.
@@ -973,3 +997,24 @@ send_2_monitor(P,UdpInfo)->
     send_msg(P, {last,node(),UdpInfo,self()}).
 send_msg(P,M)   ->
     if is_pid(P)-> P ! M; true-> void end.
+    
+up_udp_stats(#packet_stats{up_udppkts=Uup1,up_udpbytes=Uub1}=Stats,Bin)-> 
+    Stats#packet_stats{up_udppkts=Uup1+1,up_udpbytes=Uub1+size(Bin)}.
+down2rtp_stats(#packet_stats{down2rtppkts=Urp1,down2rtpbytes=Urb1}=Stats,Bin)-> 
+    Stats#packet_stats{down2rtppkts=Urp1+1,down2rtpbytes=Urb1+size(Bin)}.
+up_rtp_stats(Stats=#packet_stats{up_rtppkts=Drp1,up_rtpbytes=Drb1},Bin)->
+    Stats#packet_stats{up_rtppkts=Drp1+1,up_rtpbytes=Drb1+size(Bin)}.
+down_udp_stats(Stats=#packet_stats{down_udppkts=Dup1,down_udpbytes=Dub1},Bin)->
+    Stats#packet_stats{down_udppkts=Dup1+1,down_udpbytes=Dub1+size(Bin)}.
+stats_log(ST=#st{stats=Stats=#packet_stats{up_udppkts=Uup1,last_up_udppkts=Uup0,up_udpbytes=Uub1,last_up_udpbytes=Uub0,      
+                       down_udppkts=Dup1,last_down_udppkts=Dup0,down_udpbytes=Dub1,last_down_udpbytes=Dub0,
+                       up_rtppkts=Urp1,last_up_rtppkts=Urp0,up_rtpbytes=Urb1,last_up_rtpbytes=Urb0,
+                       down2rtppkts=Drp1,last_down2rtppkts=Drp0,down2rtpbytes=Drb1,last_down2rtpbytes=Drb0}})->
+    llog1(ST, "rrp:sendudp ~ppkts ~ppps ~pB ~pbps udprcv:~ppkts ~ppbs ~pB ~pbps tortp: ~ppkts ~ppbs ~pB ~pbps ",
+                            [Uup1,Uup1-Uup0,Uub1,8*(Uub1-Uub0),Dup1,Dup1-Dup0,Dub1,8*(Dub1-Dub0),Drp1,Drp1-Drp0,Drb1,8*(Drb1-Drb0)]),                      
+%    llog1(ST, "rrp:sendudp ~ppkts ~ppps ~pB ~pbps fromrtp:~ppkts ~pps ~pB ~pbps tortp: ~ppkts ~ppbs ~pB ~pbps udprcv:~ppkts ~ppbs ~pB ~pbps",
+%                            [Uup1,Uup1-Uup0,Uub1,8*(Uub1-Uub0),Urp1,Urp1-Urp0,Urb1,8*(Urb1-Urb0),Drp1,Drp1-Drp0,Drb1,Drb0,Dup1,Dup1-Dup0,Dub1,8*(Dub1-Dub0)]),                      
+    ST#st{stats=Stats#packet_stats{last_up_udppkts=Uup1,last_up_udpbytes=Uub1,last_down_udppkts=Dup1,last_down_udpbytes=Dub1,
+                                            last_up_rtppkts=Urp1,last_up_rtpbytes=Urb1,last_down2rtppkts=Drp1,last_down2rtpbytes=Drb1}}.                        
+    
+    
