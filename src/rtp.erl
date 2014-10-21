@@ -330,7 +330,7 @@ handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},%y
 % pcmu audio frame and comfortable_noise received.
 %YXW
 handle_info({udp,_Socket,Addr,Port,<<_Num:3,_:5, Len1:8,Len2:8,Len3:8, 2:2,_:6,_Mark:1,Codec:7,_InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
-			#state{}=ST) when ?IS_RTP(Codec) andalso (4+Len1+Len2+Len3 == size(Bin)) ->   %first packet from mobile
+			#state{}=ST) when ?IS_RTP(Codec) andalso (4+Len1+Len2+Len3 == size(Bin)) -> 
     <<_:32, Bin1:Len1/binary,Bin2:Len2/binary,Bin3:Len3/binary>> = Bin,			
     UdpMsg1 = {udp,_Socket,Addr,Port,Bin1},
     UdpMsg2 = {udp,_Socket,Addr,Port,Bin2},
@@ -341,7 +341,7 @@ handle_info({udp,_Socket,Addr,Port,<<_Num:3,_:5, Len1:8,Len2:8,Len3:8, 2:2,_:6,_
     handle_info(UdpMsg1,ST1);
 
 handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,_InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
-			#state{}=ST) when ?IS_RTP(Codec) andalso (2+Len1+Len2 == size(Bin)) ->   %first packet from mobile
+			#state{}=ST) when ?IS_RTP(Codec) andalso (2+Len1+Len2 == size(Bin)) ->   
     <<_:16, Bin0/binary>> = Bin,			
     if size(Bin0) =/= Len1+Len2 ->
         io:format("rtp: udp length is invalid Len1:~p Len2:~p Bin0 size:~p~n",[Len1,Len2,size(Bin0)]),
@@ -1030,7 +1030,7 @@ notify_video_pli(RTCPElmts,InMedia) ->
 		[] -> pass;
 		_  -> InMedia ! {video_pli,self()}
 	end.
-
+%yxw
 notify_lost_seqs(_,RTCPElmts,{#base_rtp{ssrc=_Audio},undefined}) ->
     	case [{X#rtcp_pl.ms,X#rtcp_pl.nack}||X<-RTCPElmts,is_record(X,rtcp_pl),X#rtcp_pl.nack=/=[]] of
       SendLosts=[_|_]->
@@ -1588,8 +1588,16 @@ try_port(Begin, End, From, Port) ->
 		{error, _} ->
 			try_port(Begin, End, From, Port+1)
 	end.
+
+try_port_pair(Begin, End)->
+	case gen_udp:open(443, [binary, {active, true}, {recbuf, 4096}]) of
+		{ok,Sock1} ->
+		    {ok,443,Sock1,Sock1};
+		{error, _} ->
+			try_port_pair1(Begin, End)
+	end.
 	
-try_port_pair(Begin, End) ->
+try_port_pair1(Begin, End) ->
     From =   case app_manager:get_last_used_webport() of
         undefined-> Begin;
         {ok, From1}-> From1

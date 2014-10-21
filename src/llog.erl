@@ -5,14 +5,14 @@
 -define(BakLog, "./wrtclog.bak").
 
 -define(LOGMAXSIZE, 20000000).
--define(BUFMAXSIZE, 2000*1000).
+-define(BUFMAXSIZE, 400*1000).
 -record(st,{fd,bufs= <<>>}).
 
 init([]) ->
 	{ok, Handle} = file:open(?SysLog, [append]),
 	io:fwrite(Handle, ts() ++ " llog start.\n", []),
 	timer:send_interval(60000,check_file),		% 1 minute
-	timer:send_interval(10000,write_file_timeout),		% 10s write once
+	timer:send_interval(2000,write_file_timeout),		% 10s write once
 	{ok, #st{fd=Handle}}.
 
 recre()-> ?MODULE ! recreate_file.

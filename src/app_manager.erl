@@ -3,7 +3,7 @@
 -export([start/0, register_app/1, lookup_app_pid/1, get_app_count/0, get_random32/0]).
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2]).
 
--record(state,{app_id=0, app_count=0, app_tab, app_tab_reverse}). 
+-record(state,{app_id=0, app_count=0, app_tab, app_tab_reverse,ssrc_id=10000}). 
 
 -define(PHONE_TAB, phone2tab).
 
