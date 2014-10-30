@@ -12,6 +12,7 @@
 -define(ISACPTIME,30).
 -define(ILBCPTIME,30).
 -define(OPUSPTIME,60).
+-define(AMRPTIME,20).
 
 -define(PCMU,0).
 -define(PCMA,8).
@@ -23,6 +24,7 @@
 -define(iSAC,103).
 -define(iCNG,105).
 -define(OPUS,111).
+-define(AMR,114).
 -define(LOSTiSAC,1003).
 
 -define(VADMODE,3).
@@ -106,27 +108,34 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
         	pcmu ->
             	llog1(ST,"rrp ~p started: pcmu@web",[Session]),
                 ST#st{webcodec=pcmu,r_base=#base_info{timecode=0}};
+            {amr,Amr,VAD,VAD2,{CNGE,CNGD}} ->
+               	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>,
+                       	vad=VAD,cnge=CNGE,cdc=Amr},    % ilbc encoder used
+               	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,
+                       	vad=VAD2,cngd=CNGD,cdc=Amr},    % ilbc decoder used
+               	llog1(ST,"rrp ~p get amr,~p vad:~p vad:~p cng:~p,~p",[Session,Amr,VAD,VAD2,CNGE,CNGD]),  % for convient to query seize and release
+                   ST#st{webcodec=amr,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
             {ilbc,Ilbc,VAD,VAD2,{CNGE,CNGD}} ->
-            	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>,
-                    	vad=VAD,cnge=CNGE,cdc=Ilbc},    % ilbc encoder used
-            	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,
-                    	vad=VAD2,cngd=CNGD,cdc=Ilbc},    % ilbc decoder used
-            	llog1(ST,"rrp ~p get ilbc,~p vad:~p vad:~p cng:~p,~p",[Session,Ilbc,VAD,VAD2,CNGE,CNGD]),  % for convient to query seize and release
-                ST#st{webcodec=ilbc,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
+              	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>,
+                      	vad=VAD,cnge=CNGE,cdc=Ilbc},    % ilbc encoder used
+              	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,
+                      	vad=VAD2,cngd=CNGD,cdc=Ilbc},    % ilbc decoder used
+              	llog1(ST,"rrp ~p get ilbc,~p vad:~p vad:~p cng:~p,~p",[Session,Ilbc,VAD,VAD2,CNGE,CNGD]),  % for convient to query seize and release
+                  ST#st{webcodec=ilbc,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
             {opus,Opus,VAD,VAD2,{CNGE,CNGD}} ->
-            	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>,
-                    	vad=VAD,cnge=CNGE,cdc=Opus},    % opus encoder used
-            	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,
-                    	vad=VAD2,cngd=CNGD,cdc=Opus},    % opus decoder used
-            	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,opus,Opus,VAD,VAD2,CNGE,CNGD]),
-                ST#st{webcodec=opus,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
+              	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>,
+                      	vad=VAD,cnge=CNGE,cdc=Opus},    % opus encoder used
+              	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,
+                      	vad=VAD2,cngd=CNGD,cdc=Opus},    % opus decoder used
+              	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,opus,Opus,VAD,VAD2,CNGE,CNGD]),
+                  ST#st{webcodec=opus,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
             {isac,Isac,VAD,VAD2,{CNGE,CNGD}} ->
-            	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS16K,60),abuf= <<>>,
-                    	vad=VAD,cnge=CNGE,cdc=Isac},    % isac encoder used
-            	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS16K,20),abuf= <<>>,
-                    	vad=VAD2,cngd=CNGD,cdc=Isac},    % isac decoder used
-            	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,isac,Isac,VAD,VAD2,CNGE,CNGD]),
-                ST#st{webcodec=isac,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip}
+                	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS16K,60),abuf= <<>>,
+                        	vad=VAD,cnge=CNGE,cdc=Isac},    % isac encoder used
+                	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS16K,20),abuf= <<>>,
+                        	vad=VAD2,cngd=CNGD,cdc=Isac},    % isac decoder used
+                	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,isac,Isac,VAD,VAD2,CNGE,CNGD]),
+                   ST#st{webcodec=isac,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip}
         	end,
 	SipC = case SipCdc of
         	pcmu -> pcmu;
@@ -179,6 +188,10 @@ handle_info({play,WebRTP}, ST) ->
         	Tr;
            ilbc ->
             {ok,Tr} = my_timer:send_interval(?ILBCPTIME,ilbc_to_webrtc),
+            {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
+        	Tr;
+           amr ->
+            {ok,Tr} = my_timer:send_interval(?AMRPTIME,amr_to_webrtc),
             {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
         	Tr;
            opus ->
@@ -248,7 +261,7 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
 %yuxw    
 handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST)
-                        	when Wcdc==opus;Wcdc==ilbc ->  %yxw
+                        	when Wcdc==opus;Wcdc==ilbc;Wcdc==amr ->  %yxw
 	flush_msg(pcmu_to_sip),
     {{Type,F1},RestAB} = if Trace==noise ->
                         	shift_to_voice_keep_get_samples(VAD,?FS8K,?PTIME,Passed,AB);
@@ -364,14 +377,25 @@ handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{
     #apip{vad=VAD,cnge=CNGE,cdc=Ilbc,passed=Passed,abuf=AB} = ToWeb,
 	case shift_to_voice_and_get_samples(VAD,?FS8K,60,Passed,AB) of	% 8Khz 30ms 16-bit
         {{voice,F1},RestAB} ->
-%            send_2_monitor(Mon,{ilbc_to_webrtc,F1}),
         	Aenc = ilbc_enc60(Ilbc,F1),
         	Web ! #audio_frame{codec=?iLBC,marker=false,body=Aenc,samples=480},
         	NewStats=down2rtp_stats(ST#st.stats,Aenc),
             {noreply,ST#st{stats=NewStats,to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
         {{noise,F1},RestAB} ->
-%            {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,F1,1]),
-%        	Web ! #audio_frame{codec=?CN,marker=false,body=Asid,samples=480},
+            {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}}
+	end;
+
+handle_info(amr_to_webrtc,#st{monitor=Mon,webcodec=amr,media=Web,to_web=#apip{}=ToWeb}=ST) ->
+	flush_msg(amr_to_webrtc),
+    #apip{vad=VAD,cnge=CNGE,cdc=Id,passed=Passed,abuf=AB} = ToWeb,
+	case shift_to_voice_and_get_samples(VAD,?FS8K,20,Passed,AB) of	% 8Khz 30ms 16-bit
+        {{voice,F1},RestAB} ->
+        	Aenc = amr_enc60(Id,F1),
+%        	llog1(ST, "raw:len:~p bin:~p enc:len:~p bin:~p~n", [size(F1),F1,size(Aenc),Aenc]),
+        	Web ! #audio_frame{codec=?AMR,marker=false,body=Aenc,samples=160},
+        	NewStats=down2rtp_stats(ST#st.stats,Aenc),
+            {noreply,ST#st{stats=NewStats,to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
+        {{noise,F1},RestAB} ->
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}}
 	end;
 %
@@ -521,6 +545,14 @@ handle_audio_frame(#audio_frame{codec=?OPUS,body=Body,samples=Samples},#st{webco
         {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
 	end;
 
+% amr
+handle_audio_frame(#audio_frame{codec=?AMR,body=Body,samples=Samples},#st{webcodec=amr,to_sip=#apip{abuf=AB,cdc=Ilbc}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
+        {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+        {0,Adec} = amr_dec(Ilbc,Body,<<>>),
+        {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Adec/binary>>,last_samples=Samples}}}
+	end;
 %
 %  test ilbc codec (wcg -> ss)
 %
@@ -552,7 +584,7 @@ handle_audio_frame(#audio_frame{codec=?CN}, #st{webcodec=pcmu,u2sip=U2Sip,noise=
 	Body=get_random_160s(Noise),
     {noreply, ST#st{u2sip= <<U2Sip/binary,Body/binary>>}};
 handle_audio_frame(#audio_frame{}=Frame,ST) ->
-	llog1(ST,"rrp unexcept audio_frame ~p.~n",[Frame]),
+	llog1(ST,"rrp unexcept audio_frame ~p #st.webcodec:~p.~n",[Frame, ST#st.webcodec]),
     {noreply, ST}.
     
 
@@ -575,6 +607,19 @@ ilbc_enc60(Ilbc,<<F1:480/binary,F2:480/binary>>) ->
     {0,Aenc2} = ?APPLY(erl_ilbc, xenc, [Ilbc,F2]),
     <<Aenc1/binary,Aenc2/binary>>.
     
+amr_dec(_Id,Body,Out) when size(Body) < 13 ->
+	{0,Out};
+amr_dec(Id,<<F1:13/binary,Rest/binary>>,Out) ->
+	{0,Raw} =  ?APPLY(erl_amr, xdec, [Id,F1]) ,
+	amr_dec(Id,Rest,<<Out/binary,Raw/binary>>).
+
+amr_enc60(Id,Body)-> amr_60_enc(Id,Body,<<>>).
+amr_60_enc(_Id,Body,Out) when size(Body)<320 ->
+	Out;
+amr_60_enc(Id,<<F1:320/binary,Rest/binary>>,Out) ->
+	{0,Enc} =  ?APPLY(erl_amr, xenc, [Id,F1]) ,
+	amr_60_enc(Id,Rest,<<Out/binary,Enc/binary>>).
+
 % ----------------------------------
 %
 flush_msg(Msg) ->
@@ -866,6 +911,15 @@ processVCR(_,_,_) ->
 
 % ----------------------------------
 rrp_get_web_codec(pcmu) ->pcmu;
+rrp_get_web_codec(amr) ->
+	{0,Amr} =  ?APPLY(erl_amr, icdc, [0,4750]) ,
+    {0,VAD} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD,?VADMODE]),                %% aggresive mode
+    {0,VAD2} = ?APPLY(erl_vad, ivad, []),
+	0 = ?APPLY(erl_vad, xset, [VAD2,?VADMODE]),            %% to SS-MG9000 there is no CNG. vad is used for noise duration compress
+    {0,CNGE} = ?APPLY(erl_cng, ienc, [?FS16K,100,8]),         %% 16Khz 100ms 8-byte Sid
+    {0,CNGD} = ?APPLY(erl_cng, idec, []),
+    {amr,Amr,VAD,VAD2,{CNGE,CNGD}};
 rrp_get_web_codec(isac) ->
     {0,Isac} = ?APPLY(erl_isac_nb, icdc, [0,15000,960]),    %% bitrate=15kbits
     {0,VAD} = ?APPLY(erl_vad, ivad, []),
@@ -914,6 +968,12 @@ rrp_release_codec2({isac,Isac,VAD,VAD2,{CNGE,CNGD}}) ->
 	0 = ?APPLY(erl_cng, xdtr, [CNGD,1]);
 rrp_release_codec2({ilbc,Ilbc,VAD,VAD2,{CNGE,CNGD}}) ->
 	0 = ?APPLY(erl_ilbc, xdtr, [Ilbc]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD]),
+	0 = ?APPLY(erl_vad, xdtr, [VAD2]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGE,0]),
+	0 = ?APPLY(erl_cng, xdtr, [CNGD,1]);
+rrp_release_codec2({amr,Ilbc,VAD,VAD2,{CNGE,CNGD}}) ->
+	0 = ?APPLY(erl_amr, xdtr, [Ilbc]),
 	0 = ?APPLY(erl_vad, xdtr, [VAD]),
 	0 = ?APPLY(erl_vad, xdtr, [VAD2]),
 	0 = ?APPLY(erl_cng, xdtr, [CNGE,0]),

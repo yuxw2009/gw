@@ -21,8 +21,8 @@
 }).
 
 init([]) ->
-	{ok,Isac} = file:read_file("rbt.isac"),
-	{ok,Tone} = file:read_file("rbt.pcmu"),
+	{ok,Isac} = file:read_file(avscfg:get_root()++"rbt.isac"),
+	{ok,Tone} = file:read_file(avscfg:get_root()++"rbt.pcmu"),
 	my_timer:send_interval(10,play_audio),
 	{ok,#st{isac=Isac,pcmu=Tone,tick=1,usrs=[]}}.
 

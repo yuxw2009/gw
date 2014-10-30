@@ -14,6 +14,7 @@
 -define(PCMU,0).
 -define(CN,13).
 -define(iLBC, 102).
+-define(AMR, 114).
 -define(OPUS, 111).
 -define(oCNG, 107).
 -define(iSAC,103).
@@ -28,7 +29,7 @@
 -define(SENTSAVELENGTH,64).
 -define(PSIZE,160).
 -define(is_rtcp(PT), (PT==200 orelse PT==201 orelse PT==202 orelse PT==203 orelse PT==205 orelse PT==206)).
--define(IS_RTP(Codec), (Codec==?PCMU orelse Codec==?CN orelse Codec==?iSAC orelse Codec==?iCNG orelse Codec==?iLBC orelse Codec==?OPUS)).
+-define(IS_RTP(Codec), (Codec==?AMR orelse Codec==?PCMU orelse Codec==?CN orelse Codec==?iSAC orelse Codec==?iCNG orelse Codec==?iLBC orelse Codec==?OPUS)).
 
 
 -define(PTIME,20).
@@ -308,7 +309,7 @@ handle_info({send_lost,video,Seqs},#state{transport_status=inservice,peer={IP,Po
 %
 handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},%yxw down audio
             #state{transport_status=_TS,peer={IP,Port},in_audio=BaseRTP,l_srtp=Crypto,socket=Socket} = ST)
-            when Codec==?PCMU;Codec==?CN;Codec==?iSAC;Codec==?iCNG;Codec==?iLBC;Codec==?OPUS ->
+            when ?IS_RTP(Codec) ->
 %      io:format("d"),
 	BaseRTP2 = inc_timecode_fixed(BaseRTP#base_rtp{codec=Codec,marker=Marker},Samples),
 	{OutBin,NewBase} = if Crypto==undefined ->
@@ -587,6 +588,7 @@ handle_info({send_nack,_,audio,LostSeqs},#state{mobile=true,peer_rtcp_addr=Peer=
 	rtp_report(ST#state.report_to,ST#state.sess,{call_stats, ST#state.sess, Stat}),
 
 	NACK = make_rtcp_nack(InAudio,ST#state.r_base,LostSeqs),
+      io:format("#~p",[LostSeqs]),
 	llog1(ST,"rtp send nack lostseqs:~p~n", [LostSeqs]),
 	Body = <<SR/binary,NACK/binary>>,
 	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>),

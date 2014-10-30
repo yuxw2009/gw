@@ -1,8 +1,7 @@
 -module(wcgsmon).
 -compile(export_all).
 %-export([start/0, get_count/0, get_node/0]).
--define(BASE_DIR, "/home/wcg/run/").
--define(EBIN_DIR, "/home/wcg/run/gw_test_copy1/ebin/").
+-define(EBIN_DIR, "/home/gw_git/ebin/").
 
 -record(st,{last_packets=[],
                    status=working,
@@ -78,21 +77,15 @@ stop_monitor(Node)->   send( {stop_monitor,Node}).
 
 
 %%------------------------------------------------------------------------------------------------------
-add_monitor(WcgName) when is_atom(WcgName)->  add_monitor(atom_to_list(WcgName));
-add_monitor(WcgName)->    add_monitor(WcgName,?BASE_DIR++WcgName).
 add_monitor(WcgName,BaseDir)->    send({add_monitor,WcgName,BaseDir}).
 
 
 start0(Wcgs) ->
-      NodeDirs=[start_wcg(Wcg)||Wcg<-Wcgs],
+      NodeDirs=[start_wcg(Wcg,Dir)||{Wcg,Dir}<-Wcgs],
       case whereis(?MODULE) of
       	undefined->	register(?MODULE, spawn(fun() -> init(NodeDirs) end));
       	_-> void
       end.
-
-start_wcg(WcgName) when is_atom(WcgName)-> start_wcg(atom_to_list(WcgName));
-start_wcg(WcgName) when is_list(WcgName)->  start_wcg(WcgName,?BASE_DIR++WcgName);
-start_wcg({WcgName, Base_dir})-> start_wcg(WcgName,Base_dir).    
 
 start_wcg(Wcg,WorkPath) when is_atom(Wcg)-> start_wcg(atom_to_list(Wcg),WorkPath);
 start_wcg(Wcg,WorkPath) when is_list(Wcg)->
