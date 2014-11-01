@@ -5,6 +5,8 @@
 #define MAXSTREAM 7
 #define SAMPLES 160
 #define LSAMPLES 80
+#define Linear_SAMPLE10 160
+#define Linear_SAMPLE20 320
 
 static ERL_NIF_TERM x(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -144,10 +146,47 @@ static ERL_NIF_TERM phn(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return enif_make_tuple2(env, enif_make_int(env,res), rbin);
 }
 
+static ERL_NIF_TERM mix_2_linear(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+	ErlNifBinary sigA,sigB;
+	WebRtc_Word16 *outbuf;
+	ERL_NIF_TERM rbin;
+	uint16_t i;
+	int32_t sum;
+	uint8_t max1,max2;
+	int16_t res = 0;
+	WebRtc_Word16 * wava;
+	WebRtc_Word16 * wavb;
+	
+	max1 = linear_to_ulaw(32767);
+    max2 = linear_to_ulaw(-32768);
+
+    if (!enif_inspect_binary(env, argv[0], &sigA) || (sigA.size != Linear_SAMPLE10 && sigA.size != Linear_SAMPLE20))
+      return enif_make_int(env,1);
+    if (!enif_inspect_binary(env, argv[1], &sigB) || (sigB.size != Linear_SAMPLE10 && sigA.size != Linear_SAMPLE20))
+      return enif_make_int(env,2);
+    if(sigA.size != sigB.size)
+	return enif_make_tuple3(env,enif_make_int(env,3),enif_make_int(env,sigA.size),enif_make_int(env,sigB.size));
+    
+    outbuf = (WebRtc_Word16 *)enif_make_new_binary(env, sigA.size*2, &rbin);
+
+    wava = (WebRtc_Word16 *)(sigA.data);
+    wavb = (WebRtc_Word16 *)(sigB.data);
+    for (i = 0; i < sigA.size; i++) {
+      sum = (int32_t)wava[i] + (int32_t)wavb[i];
+      if (sum > 32767) sum = 32767;
+      else if (sum < -32768) sum = -32767;
+      outbuf[i] = sum;
+    }
+    
+  return enif_make_tuple2(env, enif_make_int(env,res), rbin);
+}
+
 static ErlNifFunc erl_amix_funcs[] =
 {
     {"x",  1, x},
     {"lx", 1, lx},
+    {"mix_2_linear", 2, mix_2_linear},
     {"phn",2, phn}
 };
 

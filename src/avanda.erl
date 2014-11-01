@@ -16,26 +16,19 @@ processNATIVE(R_Addrs,R_Port,PhNo) when is_list(R_Addrs),is_integer(R_Port),is_l
 	processNATIVE2({R_Addr,R_Port},PhNo).
 
 processNATIVE2({R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_list(PhNo) ->
-    Sdp={_PLN,_Codec,_Params,PLType}=
-    case proplists:get_value(codec, PhNo) of
-    "12"-> {114,114,[0,4750],amr};
-    "11"->  {102,102,[30],ilbc};
-    Type-> 
-        io:format("unknown mobile webrtc type:~p~n", [Type]),
-        {103,103,[0,24000,480],isac}
-    end,
+    PLType = avscfg:get(web_codec),
 %	{PLN,Codec,Params} = {103,103,[0,24000,480]},
 %	{PLN,Codec,Params} = {0,0,[]},
-	{L_SSRC,L_CName} = makessrc(),
-	Media = whereis(rbt),
-	R_Options= [{media,Media}],
-	L_Options= [{media,Media},
-	           {key_strategy, undefined},
-	           {ssrc,[L_SSRC,L_CName]},
-	           {sdp,Sdp}],
-			   
-	{value, Aid, LPort} = w2p:start({mobile,R_Options}, L_Options, PhNo,PLType, {R_Addr,R_Port}),
-	{successful,Aid,{avscfg:get(mhost_ip),LPort}}.
+    {L_SSRC,L_CName} = makessrc(),
+    Media = whereis(rbt),
+    R_Options= [{media,Media}],
+    L_Options= [{media,Media},
+               {key_strategy, undefined},
+               {ssrc,[L_SSRC,L_CName]}],
+    		   
+    {value, Aid, LPort} = w2p:start({mobile,R_Options}, L_Options, PhNo,PLType, {R_Addr,R_Port}),
+    ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
+    {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}.
 
 stopNATIVE(Orig) ->
 %	io:format("58.37 kill ~p~n",[Orig]),
@@ -46,6 +39,7 @@ getNATIVE(Orig) when is_integer(Orig) ->
 	{value, Status,_Stats} = w2p:get_call_status(Orig),
 	{ok,Status}.
 
+atom_upper(Atom)->   list_to_atom(string:to_upper(atom_to_list(Atom))).
 get_waddr(Addrs) ->
 	Ads = [{inet_parse:address(X),X}||X<-Addrs],
 %	hd([Ad||{{ok,{A,_,_,_}},Ad}<-Ads,A=/=192]).

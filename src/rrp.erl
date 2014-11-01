@@ -100,10 +100,13 @@
 }).
 
 init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
-	VCR = if Vcr==has_vcr-> vcr:start(mkvfn("wvoip")); true-> undefined end,
 %    {ok,Noise} = file:read_file("cn.pcm"),
 	Noise = tone:cn_pcm(),
-	ST=#st{phinfo=proplists:get_value(call_info,Options,[]),vcr=Vcr,noise=Noise},
+	Phinfo=proplists:get_value(call_info,Options,[]),
+    Phone = proplists:get_value(phone, Phinfo),
+    UUID = proplists:get_value(cid, Phinfo),
+	VCR = if Vcr==has_vcr-> vcr:start(mkvfn(UUID++"_"++Phone)); true-> undefined end,
+	ST=#st{phinfo=Phinfo,vcr=VCR,noise=Noise},
 	ST1 = case WebCdc of
         	pcmu ->
             	llog1(ST,"rrp ~p started: pcmu@web",[Session]),
@@ -129,6 +132,8 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                       	vad=VAD2,cngd=CNGD,cdc=Opus},    % opus decoder used
               	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,opus,Opus,VAD,VAD2,CNGE,CNGD]),
                   ST#st{webcodec=opus,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
+            undefined->
+                ST;
             {isac,Isac,VAD,VAD2,{CNGE,CNGD}} ->
                 	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS16K,60),abuf= <<>>,
                         	vad=VAD,cnge=CNGE,cdc=Isac},    % isac encoder used
@@ -898,8 +903,11 @@ processRPE(Ev,_,_,_,Info)->    % not handled
 %	llog1(ST,"dtmf packet unhandled EV:~p  Info:~p~n.",[Ev, Info]),
 	Ev.
 
-processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=320 ->
-    {Sig1,Rest}=split_binary(Vbuf,320),
+processVCR(VCR,Vbuf,PCM) when is_pid(VCR) ->    %linear
+	VCR ! #audio_frame{codec=?LINEAR,body=PCM,samples=?PSIZE},
+    {ok,Vbuf};
+processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=160 ->
+    {Sig1,Rest}=split_binary(Vbuf,160),
     {0,Sum} = ?APPLY(erl_amix, phn, [Sig1,PCM]),
 	VCR ! #audio_frame{codec=?LINEAR,body=Sum,samples=?PSIZE},
     {ok,Rest};
@@ -996,7 +1004,7 @@ rrp_get_sip_codec() ->
 start(Session, Codec,Options) ->
     {SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE} = avscfg:get(ss_udp_range),
     {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE),
-    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,no_vcr,Port,Options],[]),
+    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,has_vcr,Port,Options],[]),
 	gen_udp:controlling_process(Socket, Pid),
     {ok,Pid,Port}.
 
