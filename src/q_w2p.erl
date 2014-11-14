@@ -1,4 +1,4 @@
--module(w2p).
+-module(q_w2p).
 
 -export([start/5, stop/1, get_call_status/1, dial/2, peek/1]).
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2]).
@@ -32,6 +32,13 @@
                 }).
 
 %% APIs
+start_qcall(Phinfo)->
+%    io:format("start_qcall~n"),
+    {ok, Pid} = my_server:start(?MODULE,[qcall,Phinfo],[]),
+    {value, Aid, Port} = get_aid_port_pair(Pid),
+    {value, Aid, Port}.	
+    
+
 start(Options1, Options2, PhInfo,PLType, CandidateAddr) ->
     {ok, Pid} = my_server:start(?MODULE,[Options1, Options2, PhInfo,PLType, CandidateAddr],[]),
     {value, Aid, Port} = get_aid_port_pair(Pid),
@@ -56,7 +63,23 @@ dial(AppId, Num) ->
 		_ ->
 		    pass
 	end.
-	
+
+start_record_rrp(AppId,Params)->
+    case app_manager:lookup_app_pid(AppId) of
+	    {value, AppPid} ->
+		    my_server:cast(AppPid, {start_record_rrp,Params});
+		_ ->
+		    pass
+	end.
+
+stop_record_rrp(AppId)->
+    case app_manager:lookup_app_pid(AppId) of
+	    {value, AppPid} ->
+		    my_server:call(AppPid, stop_record_rrp);
+		_ ->
+		    pass
+	end.
+
 peek(AppId) ->
     case app_manager:lookup_app_pid(AppId) of
 	    {value, AppPid} ->
@@ -66,6 +89,13 @@ peek(AppId) ->
 	end. 
 	
 %% callbacks
+init([qcall, PhInfo]) ->
+	{value, Aid}  = app_manager:register_app(self()),
+%	io:format("q_w2p init~n"),
+	llog("app ~p started qcall phinfo ~p",[Aid,PhInfo]),
+	
+	my_server:cast(self(), {stun_locked, Aid}),
+	{ok, #state{aid=Aid, status=idle, call_info=PhInfo, pltype=avscfg:get(web_codec)}};
 init([{mobile,Options1}, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
 	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{phinfo,PhInfo},{pltype,PLType},{report_to, self()}|Options1]), 
@@ -90,6 +120,9 @@ init([Options1, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{ok, #state{aid=Aid, status=idle, alive_tref=ATef,
 	            call_info=PhInfo, rtp_pid=RtpPid, rtp_port=RtpPort,pltype=PLType}}.
 	
+handle_call(stop_record_rrp, _From, State=#state{rrp_pid=RrpPid}) ->
+    RrpPid ! stop_record_rrp,
+    {reply, ok, State#state{}};
 handle_call(get_call_status, _From, State=#state{status=Status,call_stats=Stats,alive_count=AC}) ->
     {reply, {value, Status, Stats}, State#state{alive_count=AC+1}};
 handle_call(get_aid_port_pair, _From, State=#state{aid=Aid,rtp_port=RtpPort}) ->
@@ -99,8 +132,11 @@ handle_call(peek_internal, _From, State) ->
 handle_call(_Call, _From, State) ->
     {noreply,State}.
 
+handle_cast({start_record_rrp, Params},State=#state{rrp_pid=RrpPid, aid = Appid,call_info=Phinfo}) ->
+	RrpPid ! {start_record_rrp,Params},
+	{noreply,State};
 handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
-	RrpPid ! {send_phone_event,Nu,9,160*7},
+	RrpPid ! {send_phone_event,Nu,5,160*6},
 	{noreply,State};
 handle_cast({stun_locked, Aid}, State=#state{aid=Aid, call_info=CallInfo,pltype=PLType}) ->
     llog("rtp ~p stun locked.pltype:~p",[Aid,PLType]),
@@ -118,10 +154,17 @@ handle_cast(stop, State=#state{aid=Aid}) ->
     {stop,normal,State};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	
-handle_info({callee_status, Status},State=#state{rtp_pid=RtpPid,rrp_pid=RrpPid}) ->
+handle_info({callee_status, Status},State=#state{rrp_pid=RrpPid,call_info=PhInfo}) ->
     if 
-	    Status == ring -> 
-			rtp:info(RtpPid, {media_relay,RrpPid}),
+%	    Status == ring -> 
+%	        RrpPid ! {play,undefined},
+%              Qno = proplists:get_value(qno,PhInfo,""),
+%              Fn = rrp:mkvfn("qq"++Qno++"_"++proplists:get_value(cid,PhInfo,"")),
+%              start_recording(State,[Fn]);
+	    Status == hook_off -> 
+	        RrpPid ! {play,undefined},
+	        start_talk_process(State),
+%			rtp:info(RtpPid, {media_relay,RrpPid}),
 			my_timer:send_after(?TALKTIMEOUT,timeover);
         true -> 
 		    ok 
@@ -174,6 +217,9 @@ terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,si
 get_aid_port_pair(Pid) ->	
     my_server:call(Pid, get_aid_port_pair).	
 		
+acquire_codec(undefined) ->
+	SipCdc = rrp:rrp_get_sip_codec(),
+	{undefined,SipCdc};
 acquire_codec(Codec) ->
     WebCdc = rrp:rrp_get_web_codec(Codec),
 	SipCdc = rrp:rrp_get_sip_codec(),
@@ -181,6 +227,7 @@ acquire_codec(Codec) ->
 	
 release_codec(undefined) -> void;
 release_codec(Codec) ->
+%    io:format("q_w2p:release_codec~n"),
     llog("codec released ~p~n",[Codec]),
     rrp:rrp_release_codec(Codec).
 	
@@ -261,29 +308,124 @@ llog(F,P) ->
     llog:log(F,P).
 %     {unused,F,P}.
      
-deal_callinfo(State=#state{call_info=CallInfo,rtp_pid=RtpPid})->    
-    Phone0=proplists:get_value(phone, CallInfo),
-    case Phone0 of
-    "#8888881"++Phone->
-        case app_manager:get_phone_tab(Phone) of
-        undefined-> State;
-        {_,MonedRtpPid,_MonedRrpPid}->
-            MonedRtpPid ! {add_mon, RtpPid},
-            my_server:cast(RtpPid, {media_relay,closed}),
-            
-            State
-        end;
-    "#8888882"++Phone->
-        case app_manager:get_phone_tab(Phone) of
-        undefined-> State;
-        {_,_MonedRtpPid,MonedRrpPid}->
-            MonedRrpPid ! {play, RtpPid},
-            my_server:cast(RtpPid, {media_relay,closed}),
-            
-            State
-        end;
-    _->
-        start_sip_call(State)
+deal_callinfo(State)->    
+        start_sip_call(State).    
+
+start_talk_process(State=#state{})->
+	M = fun()-> start_talk_process1(State)	    end,
+	spawn(M).
+
+start_talk_process1(State=#state{call_info=PhInfo,aid=Aid})->
+    StartTime = calendar:local_time(),
+    random:seed(erlang:now()),
+    Qno = proplists:get_value(qno,PhInfo,""),
+    DelayBase=8000,
+    Delay_qq = DelayBase + (random:uniform(4)-1)*1000,
+%    io:format("start_talk_process1:enter waiting ~ps...~n",[Delay_qq]),
+    delay(Delay_qq),
+%    io:format("start_talk_process1:dial: ~p~n", [Qno]),
+    dial_qno(State,Qno),
+%    io:format("start_talk_process1:dial: ~p~n", ["#"]),
+    dial_qno(State,"#"),
+    Delay_4_base =3000,
+    Delay_4 = Delay_4_base+ (random:uniform(3)-1)*1000,
+    delay(Delay_4),
+%    io:format("start_talk_process1:dial: ~p~n", ["4"]),
+    dial_qno(State,"4"),
+    delay(3000),
+%    io:format("start_talk_process1:dial: ~p~n", ["5"]),
+    dial_qno(State,"5"),
+    Fn = rrp:mkvfn("qq"++Qno++"_"++proplists:get_value(cid,PhInfo,"")),
+    start_recording(State,[Fn]),
+%    io:format("start_talk_process1:start_recording~n"),
+    delay(4000),
+%    io:format("start_talk_process1:stop_recording~n"),
+    stop_recording(State),
+    delay(500),
+    % recognize the code
+    Self=self(),
+    spawn(fun()-> recognize("./vcr/"++Fn++".pcm", Self) end),
+    receive
+        {ok, RecDs}-> 
+            io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]),
+            dial_auth_code(State,RecDs);
+        R-> 
+            io:format("Qno ~p recognize failed!",[Qno]),
+            void
+    after 10000->
+            io:format("Qno ~p recognize tmeout",[Qno])
+    end,
+    Delay_last = 1000*(1+random:uniform(4)),
+    delay(Delay_last), 
+    %case recognize("./vcr/"++Fn++".pcm") of   
+    %    R=[D1,D2,D3,D4]->  dial_qno(State,R);
+    %    _->  %10s timeout
+    %        dial_qno(State,"4"),
+    %        delay(3000),
+    %        dial_qno(State,"5"),
+    %        delay(3000),
+    %        start_recording(State,[Fn]),
+    %        delay(4000),
+    %        stop_recording(State),
+    %        delay(1000),
+    %        R1=[_,_,_,_]=recognize("./vcr/"++Fn++".pcm"),
+    %        dial_qno(State,R1)
+    %    end,
+    EndTime = calendar:local_time(),
+    Diff=calendar:datetime_to_gregorian_seconds(EndTime)-calendar:datetime_to_gregorian_seconds(StartTime),
+    io:format("start_talk_process1:stopVOIP talking ~p~n",[Diff]),
+    q_wkr:stopVOIP(Aid).
+    
+recognize0(Fn0,TalkPid)->
+    {ok,Pwd}=file:get_cwd(),
+    Fn=Pwd++"/"++Fn0,
+    os:cmd("cp \""++Fn++"\" " ++ "DialNumReco03/test.pcm"),
+    R = os:cmd("DialNumReco03/HViteComm"),
+    Result=
+        case re:run(R, "d([0-9])\n", [global,{capture,all_but_first,list}]) of
+        {match,Match}->        {ok,lists:flatten(Match)};
+        _-> failed
+        end,
+    TalkPid ! Result.
+     
+recognize(Fn0,TalkPid)->
+    {ok,Pwd}=file:get_cwd(),
+    Fn=Pwd++"/"++Fn0,
+    R = os:cmd("DialNumReco03/HViteComm "++Fn),
+    Result=
+        case re:run(R, "d([0-9])\n", [global,{capture,all_but_first,list}]) of
+        {match,Match}->        {ok,lists:flatten(Match)};
+        _-> failed
+        end,
+    TalkPid ! Result.
+     
+    
+stop_recording(#state{aid=AppId})->
+    q_wkr:stop_recording(AppId).
+    
+start_recording(#state{aid=AppId},Params)->
+    q_wkr:start_record_rrp(AppId,Params).
+
+dial_qno(State=#state{aid=Appid},[])-> 
+    State;
+dial_qno(State=#state{aid=Appid},[H|Rest])-> 
+    delay(200),
+    Rand=random:uniform(10)*100,
+    delay(Rand),
+    q_wkr:eventVOIP(Appid, {dial,H}),
+    dial_qno(State,Rest).
+
+dial_auth_code(State=#state{aid=Appid},[])->  State;
+dial_auth_code(State=#state{aid=Appid},[H|Rest])-> 
+    delay(900),
+    Rand=random:uniform(10)*50,
+    delay(Rand),
+    q_wkr:eventVOIP(Appid, {dial,H}),
+    dial_auth_code(State,Rest).
+
+delay(T)->
+    receive
+         w20_timeout-> void
+    after T->  ok
     end.
-    
-    
+        

@@ -35,6 +35,17 @@ handle_info(Msg, ST) ->
 	io:format("unkn ~p  ",[Msg]),
 	{noreply,ST}.
 
+handle_call(stop,_From,#st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
+	ok = save_ivf_frame_count(FH,FC,Bgn),
+	file:close(FH),
+	file:close(AH),
+	if AC==0-> file:delete(?DIR++Name++".pcm");
+	true -> pass end,
+	if FC==0-> file:delete(?DIR++Name++".ivf");
+	true -> pass end,
+%	io:format("vcr ~p stopped @~p video and ~p audio.~n",[Name,FC,AC]),
+	{stop,normal,ok,[]}.
+
 handle_cast(stop,#st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
 	ok = save_ivf_frame_count(FH,FC,Bgn),
 	file:close(FH),
@@ -77,5 +88,5 @@ start(Name) ->
 	Pid.
 	
 stop(Pid) when is_pid(Pid) ->
-	my_server:cast(Pid,stop);
+	my_server:call(Pid,stop);
 stop(_) -> ok.
