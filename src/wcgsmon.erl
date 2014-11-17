@@ -3,6 +3,7 @@
 %-export([start/0, get_count/0, get_node/0]).
 -define(EBIN_DIR, "/home/gw_git/ebin/").
 
+-record(qcall_reslt,{totals=0,oks=0,fails=0,fail_qnos=[]}).
 -record(st,{last_packets=[],
                    status=working,
 			count=0,
@@ -10,7 +11,8 @@
 			unexpected_mgsid_peer=[],
 			normal_mgip=sets:new(),
 			codec_st=up,
-			ccalls=[]
+			ccalls=[],
+			qcall_result=#qcall_reslt{}
 			}).
 
 start()->
@@ -173,6 +175,13 @@ loop(NodeDirs,St=#st{count=Count,last_packets=LP,mgside_peerip=MgIps,unexpected_
 	                loop(NodeDirs,St#st{ ccalls=NewCcalls});
 	              true-> loop(NodeDirs,St)
 	          end;
+	      {call,Act,From}->
+                {Res,State1} = Act(St),
+                From ! {ok,Res},
+	          loop(NodeDirs,State1);
+	      {cast,Act,From}->
+                State1 = Act(St),
+	          loop(NodeDirs,State1);
 	      _Other->
 	          io:format("."),
 	          loop(NodeDirs,St)
@@ -203,4 +212,40 @@ llog(F,P) ->
 	end,
 	llog ! {self(), F, P}.
 
+qcall_ok()->
+    Act = fun(State=#st{qcall_result=QR=#qcall_reslt{totals=Tts,oks=Oks}})-> 
+                State#st{qcall_result=QR#qcall_reslt{totals=Tts+1,oks=Oks+1}}
+                end,
+    cast(Act).
+
+qcall_fail()->
+    Act = fun(State=#st{qcall_result=QR=#qcall_reslt{totals=Tts,fails=Fs}})-> 
+                State#st{qcall_result=QR#qcall_reslt{totals=Tts+1,fails=Fs+1}}
+                end,
+    cast(Act).
+                    
+qcall_show()->
+    Act = fun(State=#st{qcall_result=QR})-> 
+                {QR, State}
+                end,
+    call(Act).
+
+cast(Act) ->
+    case whereis(?MODULE) of
+    Pid when is_pid(Pid)->
+        Pid ! {cast,Act,self()};
+    _-> void
+    end.
+	
+call(Act) ->
+    case whereis(?MODULE) of
+    Pid when is_pid(Pid)->
+        Pid ! {call,Act,self()},
+        receive
+            {ok,Res}-> Res;
+            Oth-> Oth
+        after 2000-> timeout
+        end;
+    _-> void
+    end.
 

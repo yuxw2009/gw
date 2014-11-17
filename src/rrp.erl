@@ -927,8 +927,8 @@ processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=size(PCM) ->
     {Sig1,Rest}=split_binary(Vbuf,size(PCM)),
     Sum=mix2(Sig1,PCM),
 	VCR ! #audio_frame{codec=?LINEAR,body=Sum,samples=?PSIZE},
-	VCR ! #audio_frame{codec=?LINEAR,body=Rest,samples=?PSIZE},
-    {ok,<<>>};
+%	VCR ! #audio_frame{codec=?LINEAR,body=Rest,samples=?PSIZE},
+    {ok,Rest};
     
 processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=160 ->
     {Sig1,Rest}=split_binary(Vbuf,160),
@@ -1050,7 +1050,7 @@ rrp_get_sip_codec() ->
 start(Session, Codec,Options) ->
     {SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE} = avscfg:get(ss_udp_range),
     {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE),
-    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,has_vcr,Port,Options],[]),
+    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,no_vcr,Port,Options],[]),
 	gen_udp:controlling_process(Socket, Pid),
     {ok,Pid,Port}.
 

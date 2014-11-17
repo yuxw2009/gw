@@ -347,9 +347,12 @@ start_talk_process1(State=#state{call_info=PhInfo,aid=Aid})->
     spawn(fun()-> recognize("./vcr/"++Fn++".pcm", Self) end),
     receive
         {ok, RecDs}-> 
-            io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]),
-            dial_auth_code(State,RecDs);
+            dial_auth_code(State,RecDs),
+            wcgsmon:qcall_ok(),
+            file:delete("./vcr/"++Fn++".pcm"),
+            io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]);
         R-> 
+            wcgsmon:qcall_fail(),
             io:format("Qno ~p recognize failed!",[Qno]),
             void
     after 10000->
