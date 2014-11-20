@@ -153,7 +153,7 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                         RP when is_pid(RP)-> RP;
                         _-> undefined
                         end,
-      my_timer:send_interval(?STAT_INTERVAL, stats),
+%      my_timer:send_interval(?STAT_INTERVAL, stats),
     {ok,ST1#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,monitor=Monitor,localport=Port}}.
 
 handle_call({options,Options},_From,ST) ->

@@ -30,6 +30,29 @@ processNATIVE2({R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_
     ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
     {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}.
 
+processP2p_ringing(Op_sessionId) when is_integer(Op_sessionId) ->
+	w2p:p2p_tp_ringing(Op_sessionId). % play ring_back_tone to op, and return ok or {failed,_Reason}
+
+processP2p_answer(Op_sessionId,Addr={_Ip,_port}) when is_integer(Op_sessionId) ->
+	% get rtp/rtcp port w2p:start(),
+	% return {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}
+    {L_SSRC,L_CName} = makessrc(),
+    case w2p:get_rtp_pid(Op_sessionId) of
+    OpRtpPid when is_pid(OpRtpPid)->
+        PLType = avscfg:get(web_codec),
+        Options=[{media,OpRtpPid},{outmedia,OpRtpPid},{pltype,PLType},{addr,Addr}],
+        {value, Aid, LPort} = w2p:start_p2p_answer([{peer_p2p_aid, Op_sessionId},{ssrc,[L_SSRC,L_CName]}|Options],Options),
+        w2p:set_peer_aid_eachother(Op_sessionId,Aid),
+        ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
+        {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles};
+    R={failed,Reason}-> R
+    end.
+        
+
+processP2p_reject(Op_sessionId) when is_integer(Op_sessionId) ->
+    % play busy tone to op user which appid is op_sessionId
+    todo.
+
 stopNATIVE(Orig) ->
 %	io:format("58.37 kill ~p~n",[Orig]),
 	w2p:stop(Orig),
@@ -39,6 +62,9 @@ getNATIVE(Orig) when is_integer(Orig) ->
 	{value, Status,_Stats} = w2p:get_call_status(Orig),
 	{ok,Status}.
 
+set_call_type(Sid,Type)->
+    w2p:set_call_type(Sid,Type).
+    
 atom_upper(Atom)->   list_to_atom(string:to_upper(atom_to_list(Atom))).
 get_waddr(Addrs) ->
 	Ads = [{inet_parse:address(X),X}||X<-Addrs],

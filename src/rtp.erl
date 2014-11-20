@@ -112,7 +112,7 @@ init([Session,{Sock1,Sock2},Options]) ->
 	ReportTo = proplists:get_value(report_to,Options),
 	Media = proplists:get_value(media,Options),
       Pltype = proplists:get_value(pltype, Options),
-      Phinfo = proplists:get_value(phinfo, Options),
+      Phinfo = proplists:get_value(phinfo, Options,[]),
       
 
       my_timer:send_interval(?STAT_INTERVAL, stats),
@@ -362,6 +362,7 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 	Peer = trans:check_peer(ST#state.peer,{Addr,Port}),
 	llog1(ST,"rtp:mobile stun_locked SSRC:~p",[SSRC]),
 	rtp_report(ST#state.report_to,Sess,{stun_locked,Sess}),
+	rtp:info(ST#state.out_media, {media_relay,self()}),
 	send_media(ST#state.out_media,{stun_locked,self()}),
 					
 	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq,ssrc=SSRC,pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1},
@@ -759,7 +760,7 @@ handle_info(Msg,ST) ->
   %% send out directly
 handle_forward_packet(UdpMsg={udp,_Socket,_,_,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =_Bin},
 			#state{r_base=#base_info{roc=LastROC,seq=LastSeq,timecode=LastTs,ssrc=SSRC}=Remote,r_srtp=Cryp,transport_status=inservice}=ST,1) ->
-    io:format("."),
+%    io:format("."),
 	Now = now(),
 	#base_info{interarrival_jitter=IAJitter,previous_ts=PreTS}=Remote,
 	IAJitter2 = compute_interarrival_jitter(codec_factor(Codec),IAJitter,{TS,Now},PreTS),
@@ -1453,6 +1454,7 @@ make_rtp_pack(#base_rtp{seq = Sequence,
   Padding = 0,
   Extension = 0,
   CSRC = 0,
+%  llog("compose_rtp:~p",[{Version, Padding, Extension, CSRC, Marker, PayloadType, Sequence, Timestamp, SSRC}]),
   <<Version:2, Padding:1, Extension:1, CSRC:4, Marker:1, PayloadType:7, Sequence:16, Timestamp:32, SSRC:32, Payload/binary>>.
 
 minisec(Micro) ->

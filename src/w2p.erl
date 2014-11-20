@@ -8,6 +8,7 @@
 
 -define(ALIVE_TIME,30000).
 -define(TALKTIMEOUT,6000000*2).
+-define(P2P_OK_WAITTIME,5000).
 
 -define(PCMU,0).
 -define(PCMA,8).
@@ -15,9 +16,12 @@
 -define(CNU,13).
 
 -record(state, {aid,
+                p2p_peer_aid,
+                call_type,    % p2p_call, real_call, maybe_p2p_call
+                p2pok_waittimer,
                 codec,
 				test = fasle,
-                call_info,
+                call_info=[],
 				call_stats=[],
                 status,  %% idle | invite | ring ...				
                 rtp_pid,
@@ -32,14 +36,22 @@
                 }).
 
 %% APIs
+start_p2p_answer(L_Options,R_Options)->
+    {ok, Pid} = my_server:start(?MODULE,[{p2p_answer, L_Options,R_Options}],[]),
+    {value, Aid, Port} = get_aid_port_pair(Pid),
+    {value, Aid, Port}.	
+    
 start(Options1, Options2, PhInfo,PLType, CandidateAddr) ->
     {ok, Pid} = my_server:start(?MODULE,[Options1, Options2, PhInfo,PLType, CandidateAddr],[]),
     {value, Aid, Port} = get_aid_port_pair(Pid),
     {value, Aid, Port}.	
 	
 stop(AppId) ->
-    {value, AppPid} = app_manager:lookup_app_pid(AppId),
-	my_server:cast(AppPid, stop).
+    case  app_manager:lookup_app_pid(AppId) of
+    {value, AppPid}->
+        my_server:cast(AppPid, stop);
+    _-> void
+    end.
 
 get_call_status(AppId) ->
     case app_manager:lookup_app_pid(AppId) of
@@ -66,6 +78,20 @@ peek(AppId) ->
 	end. 
 	
 %% callbacks
+init([{p2p_answer,L_Options,R_Options}]) ->
+	{value, Aid}  = app_manager:register_app(self()),
+	PLType = proplists:get_value(pltype,L_Options),
+	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  R_Options), 
+	link(RtpPid),
+	rtp:info(RtpPid,{add_stream,audio,L_Options}),
+	Media = proplists:get_value(media, L_Options),
+%	rtp:info(Media, {media_relay,RtpPid}),  don't media_relay this time, because rtp base_rtp is not ready,must call this when stun_locked
+	CandidateAddr=proplists:get_value(addr,L_Options),
+	PeerAid = proplists:get_value(peer_p2p_aid, L_Options),
+	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
+	{ok, ATef} = my_timer:send_interval(?ALIVE_TIME, alive_timer),
+	llog("p2p_answer: appid ~p started rpt_port ~p PlType ~p", [Aid,RtpPort, PLType]),
+	{ok, #state{aid=Aid, status=p2p_answer, alive_tref=ATef, rtp_pid=RtpPid, rtp_port=RtpPort,pltype=PLType}};
 init([{mobile,Options1}, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
 	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{phinfo,PhInfo},{pltype,PLType},{report_to, self()}|Options1]), 
@@ -89,7 +115,10 @@ init([Options1, Options2, PhInfo, PLType, CandidateAddr]) ->
 	                               [Aid,RtpPid, RtpPort,PhInfo, PLType]),
 	{ok, #state{aid=Aid, status=idle, alive_tref=ATef,
 	            call_info=PhInfo, rtp_pid=RtpPid, rtp_port=RtpPort,pltype=PLType}}.
-	
+
+handle_call({act,Act}, _, State) ->
+    {Res,State1} = Act(State),
+    {reply,Res,State1};
 handle_call(get_call_status, _From, State=#state{status=Status,call_stats=Stats,alive_count=AC}) ->
     {reply, {value, Status, Stats}, State#state{alive_count=AC+1}};
 handle_call(get_aid_port_pair, _From, State=#state{aid=Aid,rtp_port=RtpPort}) ->
@@ -102,15 +131,30 @@ handle_call(_Call, _From, State) ->
 handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
 	RrpPid ! {send_phone_event,Nu,9,160*7},
 	{noreply,State};
-handle_cast({stun_locked, Aid}, State=#state{aid=Aid, call_info=CallInfo,pltype=PLType}) ->
-    llog("rtp ~p stun locked.pltype:~p",[Aid,PLType]),
-    
-	Codec = acquire_codec(PLType),
-	{ok,RrpPid,Port} = rrp:start(Aid,Codec,[{call_info,CallInfo}]),
-	start_resource_monitor(RrpPid, Codec),
-	link(RrpPid),
-	NewState=deal_callinfo(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec}),
-	{noreply, NewState};
+handle_cast({stun_locked, Aid}, State0=#state{status=p2p_answer}) ->
+    {noreply, State0};
+handle_cast({stun_locked, Aid}, State0=#state{aid=Aid0, call_info=CallInfo,pltype=PLType0,call_type=CallType}) ->
+    llog("rtp ~p stun locked.pltype:~p call_type:~p",[Aid0,PLType0, CallType]),
+    Act = fun(State)->    
+                #state{aid=Aid, call_info=CallInfo,pltype=PLType}=State,
+                Codec = acquire_codec(PLType),
+                {ok,RrpPid,Port} = rrp:start(Aid,Codec,[{call_info,CallInfo}]),
+                start_resource_monitor(RrpPid, Codec),
+                link(RrpPid),
+                NewState=deal_callinfo(State#state{rrp_pid=RrpPid, rrp_port=Port,codec=Codec}),
+                NewState
+            end,
+    NewState = 
+        if CallType == p2p_call->
+            no_sipcall,
+            State0;
+        CallType == maybe_p2p_call ->
+            {ok,P2pOk_waitT}=my_timer:send_after(?P2P_OK_WAITTIME, {act,Act}),
+            llog("stun_locked p2p_call: ~p", [P2pOk_waitT]),
+            State0#state{p2pok_waittimer=P2pOk_waitT};
+        true->  Act(State0)
+        end,
+    {noreply, NewState};
 handle_cast({call_stats,Aid,Stat}, State=#state{aid=Aid}) ->
     {noreply, State#state{call_stats=Stat}};	
 handle_cast(stop, State=#state{aid=Aid}) ->
@@ -118,6 +162,9 @@ handle_cast(stop, State=#state{aid=Aid}) ->
     {stop,normal,State};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	
+handle_info({act,Act}, State) ->
+    State1 = Act(State),
+    {noreply,State1};
 handle_info({callee_status, Status},State=#state{rtp_pid=RtpPid,rrp_pid=RrpPid}) ->
     if 
 	    Status == ring -> 
@@ -157,7 +204,7 @@ handle_info(Msg,State) ->
      llog("app ~p receive unexpected message ~p.",[State, Msg]),
     {noreply, State}.
 
-terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,sip_ua=UA,call_info=CallInfo,start_time=ST}) -> 
+terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,sip_ua=UA,call_info=CallInfo,start_time=ST,p2p_peer_aid=PeerAid}) -> 
     my_timer:cancel(AT),
     {APPMODU,SIPNODE} = avscfg:get(sip_app_node),
     if is_pid(UA)->  rpc:call(SIPNODE,APPMODU,stop,[UA]); true-> void end,
@@ -166,6 +213,7 @@ terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,si
     
     Phone = proplists:get_value(phone,CallInfo),
     app_manager:del_phone2tab(Phone),
+    if is_integer(PeerAid)-> avanda:stopNATIVE(PeerAid); true-> void end,
 
     llog("app ~p leave. (~ps)",[Aid,duration(ST)]),
     ok.	
@@ -285,5 +333,48 @@ deal_callinfo(State=#state{call_info=CallInfo,rtp_pid=RtpPid})->
     _->
         start_sip_call(State)
     end.
-    
+
+call_act(AppId,Act)->
+    case app_manager:lookup_app_pid(AppId) of
+    {value, AppPid} ->
+        my_server:call(AppPid, {act,Act});
+    _ ->
+        {failed,no_appid}
+    end.
+
+p2p_tp_ringing(OpAppId)->    
+    set_call_type(OpAppId,p2p_call),
+    Act = fun(State=#state{status=idle, p2pok_waittimer=Tref})->
+                my_timer:cancel(Tref),
+                llog("w2p:p2p_tp_ringing cancel ~p~n", [Tref]),
+                % play ringing back tone
+                
+                {[{status,ok}],State};
+                (State)-> {[{status,failed},{reason,already_tele_calling}],State}
+            end,
+    call_act(OpAppId,Act).
+	
+get_rtp_pid(AppId)->
+    Act = fun(State=#state{rtp_pid=Rtp})->
+                {Rtp,State}
+            end,
+    call_act(AppId,Act).
+
+set_call_type(Sid,Type)->
+    Act = fun(State=#state{})-> 
+                llog("w2p:set_call_type:~p",[Type]),
+                {ok, State#state{call_type=Type}} 
+            end,
+    call_act(Sid,Act).
+
+set_peer_aid(Aid,PeerAid)->
+    Act = fun(State=#state{})-> 
+                llog("w2p:set_peer_aid:~p",[PeerAid]),
+                {ok, State#state{p2p_peer_aid=PeerAid}} 
+            end,
+    call_act(Aid,Act).
+
+set_peer_aid_eachother(Aid1,Aid2)->
+    set_peer_aid(Aid1,Aid2),
+    set_peer_aid(Aid2,Aid1).
     
