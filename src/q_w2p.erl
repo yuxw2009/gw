@@ -350,6 +350,8 @@ start_talk_process1(State=#state{call_info=PhInfo,aid=Aid})->
             dial_auth_code(State,RecDs),
             wcgsmon:qcall_ok(),
             file:delete("./vcr/"++Fn++".pcm"),
+            Delay_last = 1000*(1+random:uniform(4)),
+            delay(Delay_last), 
             io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]);
         R-> 
             wcgsmon:qcall_fail(),
@@ -358,22 +360,6 @@ start_talk_process1(State=#state{call_info=PhInfo,aid=Aid})->
     after 10000->
             io:format("Qno ~p recognize tmeout",[Qno])
     end,
-    Delay_last = 1000*(1+random:uniform(4)),
-    delay(Delay_last), 
-    %case recognize("./vcr/"++Fn++".pcm") of   
-    %    R=[D1,D2,D3,D4]->  dial_qno(State,R);
-    %    _->  %10s timeout
-    %        dial_qno(State,"4"),
-    %        delay(3000),
-    %        dial_qno(State,"5"),
-    %        delay(3000),
-    %        start_recording(State,[Fn]),
-    %        delay(4000),
-    %        stop_recording(State),
-    %        delay(1000),
-    %        R1=[_,_,_,_]=recognize("./vcr/"++Fn++".pcm"),
-    %        dial_qno(State,R1)
-    %    end,
     EndTime = calendar:local_time(),
     Diff=calendar:datetime_to_gregorian_seconds(EndTime)-calendar:datetime_to_gregorian_seconds(StartTime),
     io:format("start_talk_process1:stopVOIP talking ~p~n",[Diff]),
