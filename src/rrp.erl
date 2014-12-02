@@ -90,6 +90,7 @@
 	vcr,
 	newvcr,
 	vcr_buf= <<>>,    % temp store web audio
+	sip_buf= <<>>,    % temp store sip audio
 	timer,
 	timeru,
 	monitor,
@@ -226,6 +227,11 @@ handle_info({deplay,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
 	my_timer:cancel(TR),
 	if TRU=/=undefined -> my_timer:cancel(TRU); true->pass end,
     {noreply,ST#st{peerok=false}};
+handle_info({pause,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
+    %%io:format("RRP leave rtp: ~p.~n",[WebRTP]),
+	my_timer:cancel(TR),
+	if TRU=/=undefined -> my_timer:cancel(TRU); true->pass end,
+    {noreply,ST};
 %
 % send phone event to sip
 %
@@ -398,7 +404,7 @@ handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{
 handle_info(amr_to_webrtc,#st{monitor=Mon,webcodec=amr,media=Web,to_web=#apip{}=ToWeb}=ST) ->
 	flush_msg(amr_to_webrtc),
     #apip{vad=VAD,cnge=CNGE,cdc=Id,passed=Passed,abuf=AB} = ToWeb,
-	case shift_to_voice_and_get_samples(VAD,?FS8K,?AMRPTIME,Passed,AB) of	% 8Khz 60ms 16-bit
+	case shift_to_voice_and_get_samples(VAD,?FS8K,?AMRPTIME,Passed,AB) of	% 8Khz 120ms 16-bit
         {{voice,F1},RestAB} ->
         	Aenc = amr_enc60(Id,F1),
 %        	llog1(ST, "raw:len:~p bin:~p enc:len:~p bin:~p~n", [size(F1),F1,size(Aenc),Aenc]),
@@ -440,7 +446,8 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
 % sip@isac/opus/ilbc   send rtppacket yxw
 handle_info(UdpMsg={udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,_Seq:16,_TS:32,_SSRC:4/binary,_Body/binary>> =_Bin},
             #st{peer=undefined}=ST)  when PN==?PCMU;PN==?G729 ->
-        	handle_info(UdpMsg, ST#st{peer={Addr,Port}});
+            if is_pid(ST#st.vcr)-> ST#st.vcr ! #audio_frame{codec=?LINEAR,body=ST#st.vcr_buf,samples=?PSIZE}; true-> void end,
+        	handle_info(UdpMsg, ST#st{peer={Addr,Port},vcr_buf= <<>>});
 handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/binary,Body/binary>> =Bin},
             #st{webcodec=Wcdc,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={_Addr0,_Port0}}=ST)
         	when PN==?PCMU;PN==?G729 ->
@@ -1050,7 +1057,7 @@ rrp_get_sip_codec() ->
 start(Session, Codec,Options) ->
     {SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE} = avscfg:get(ss_udp_range),
     {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE),
-    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,no_vcr,Port,Options],[]),
+    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,has_vcr,Port,Options],[]),
 	gen_udp:controlling_process(Socket, Pid),
     {ok,Pid,Port}.
 
@@ -1061,7 +1068,7 @@ set_peer_addr(RrpPid, Addr) ->
     my_server:call(RrpPid,{options,Addr}).
     
 try_port(Port) ->
-    {ok,IP4sip} = inet:parse_address(avscfg:get(sip_socket_ip)),
+    {ok,IP4sip} = inet_parse:address(avscfg:get(sip_socket_ip)),
 	case gen_udp:open(Port, [binary, {active, true},{ip,IP4sip}, {recbuf, 4096}]) of
         {ok, Socket} ->
             {Port,Socket};
@@ -1081,7 +1088,7 @@ try_port(Begin, End, From, Port) when Port==From ->
 try_port(Begin, End, From, Port) when Port>End ->
 	try_port(Begin, End, From, Begin);
 try_port(Begin, End, From, Port) ->
-    {ok,IP4sip} = inet:parse_address(avscfg:get(sip_socket_ip)),
+    {ok,IP4sip} = inet_parse:address(avscfg:get(sip_socket_ip)),
 	case gen_udp:open(Port, [binary, {active, true},{ip,IP4sip}, {recbuf, 4096}]) of
         {ok, Socket} ->
 	      app_manager:set_last_used_ssport(Port),

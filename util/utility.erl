@@ -159,4 +159,18 @@ log(Filename, Str, CmdList) ->
     {ok, IODev} = file:open(Filename, [append]),
     io:format(IODev,"~s: "++Str++"~n",[d2s(erlang:localtime())|CmdList]),
     file:close(IODev).
-    
+
+delete_file_before(Fn, Local_time)->
+    F = fun()->
+             case file:read_file_info(Fn) of
+             {ok,T}->
+                 Day=element(5,T),
+                 if Day<Local_time-> file:delete(Fn);            true-> void             end;
+             _-> file_is_open
+             end
+         end,
+    F().
+delete_before_in_dir(Local_time,Dir)->
+    {ok,Fns}=file:list_dir(Dir),
+    Abs = [Dir++"/"++Fn || Fn<-Fns],
+    [delete_file_before(AF,Local_time) || AF<-Abs].

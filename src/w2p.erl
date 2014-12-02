@@ -184,6 +184,21 @@ handle_info({callee_sdp,SDP_FROM_SS},State=#state{aid=Aid,rrp_pid=RrpPid}) ->
     end,
 %	{noreply,State#state{status=hook_off}};	
 	{noreply,State};	
+handle_info({alert,_From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
+            io:format("w2p alert RrpPid:~p RtpPid:~p new_rbt:~p~n",[RrpPid,RtpPid,whereis(new_rbt)]),
+    if is_pid(RrpPid)-> RrpPid ! {pause,RtpPid}; true-> void end,
+    case whereis(new_rbt) of
+    Rbt when is_pid(Rbt)-> Rbt ! {add,RtpPid,self(), 20}; 
+    _-> void 
+    end,
+    {noreply,State};	
+	
+handle_info({alert_over, _From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
+            io:format("w2p alert_over RrpPid:~p RtpPid:~p new_rbt:~p~n",[RrpPid,RtpPid,whereis(new_rbt)]),
+    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
+    if is_pid(RtpPid)-> RtpPid ! {media_relay,RrpPid}; true-> void end,
+    {noreply,State};	
+	
 handle_info({'DOWN', _Ref, process, UA, _Reason},State=#state{aid=Aid,sip_ua=UA})->
     llog("app ~p sip hangup",[Aid]),
 	{stop, normal, State};
@@ -349,8 +364,17 @@ p2p_tp_ringing(OpAppId)->
                 llog("w2p:p2p_tp_ringing cancel ~p~n", [Tref]),
                 % play ringing back tone
                 
-                {[{status,ok}],State};
-                (State)-> {[{status,failed},{reason,already_tele_calling}],State}
+                {ok,State#state{status=ring}};
+                (State)-> {{failed,already_tele_calling},State}
+            end,
+    call_act(OpAppId,Act).
+	
+p2p_tp_answer(OpAppId)->    
+    set_call_type(OpAppId,p2p_call),
+    Act = fun(State=#state{p2pok_waittimer=Tref})->
+                my_timer:cancel(Tref),
+                llog("w2p:p2p_tp_answer cancel ~p~n", [Tref]),
+                {[{status,ok}],State#state{status=hook_off}}
             end,
     call_act(OpAppId,Act).
 	

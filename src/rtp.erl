@@ -555,9 +555,11 @@ handle_info({udp, _Socket, _Addr, _Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,SSRC:32,
 			{noreply,ST}
 	end;
 handle_info({send_sr,_,_},#state{transport_status=TS} = ST) when TS =/= inservice ->
+       io:format("send_sr not inservice~n"),
 	{noreply,ST};
 	
-handle_info({send_sr,Ref1,audio},#state{mobile=true,in_audio=#base_rtp{sr_ref=Ref2}} = ST) when Ref1=/=Ref2 ->
+handle_info({send_sr,Ref1,audio},#state{mobile=true,in_audio=#base_rtp{sr_ref=Ref2}} = ST) when Ref1=/=Ref2 andalso Ref1 =/= undefined ->
+       io:format("send_sr ref not same ~p and ~p~n",[Ref1,Ref2]),
 	{noreply,ST};
 handle_info({send_sr,_,audio},#state{sess=Session, peer_rtcp_addr=Peer,rtcp_sck=Socket,r_base=RcvCtx, in_audio=InAudio,
                                      mobile=true} = ST) ->  % mobile
@@ -570,6 +572,7 @@ handle_info({send_sr,_,audio},#state{sess=Session, peer_rtcp_addr=Peer,rtcp_sck=
 	Stat = calc_rtp_statistics(Peer, RcvCtx, InAudio),
 	
 	rtp_report(ST#state.report_to,Session,{call_stats, Session, Stat}),
+%       io:format("send_sr peer ~p~n",[Peer]),
 	case Peer of
 	{IP,Port}->	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>);
 	_-> void
@@ -1084,7 +1087,7 @@ upd_rcv_bw(#esti{v_target_br=TargetBr,v_br=Br,v_rcvd_seq=PSeq,v_rcvd_pkts=VPRcvd
 
 start_rtcp(#base_rtp{ssrc=InAudio},undefined,#base_info{ssrc=OutAudio},_) ->
 	if InAudio=/=undefined orelse OutAudio=/=undefined ->
-		%%io:format("start audio rtcp.~p ~p~n",[InAudio,OutAudio]),
+		io:format("start audio rtcp.~p ~p~n",[InAudio,OutAudio]),
 		self() ! {send_sr,undefined,audio};
 	true -> pass end;
 start_rtcp(#base_rtp{ssrc=InAudio},#base_rtp{ssrc=InVideo},#base_info{ssrc=OutAudio},#base_info{ssrc=OutVideo}) ->
@@ -1584,7 +1587,7 @@ try_port(_Begin, _End, From, Port) when Port==From ->
 try_port(Begin, End, From, Port) when Port>End ->
 	try_port(Begin, End, From, Begin);
 try_port(Begin, End, From, Port) ->
-    {ok,HostIP} = inet:parse_address(avscfg:get(web_socket_ip)),
+    {ok,HostIP} = inet_parse:address(avscfg:get(web_socket_ip)),
 	case gen_udp:open(Port, [binary, {active, true}, {ip,HostIP}, {recbuf, 8192}]) of
 		{ok, Socket} ->
 		    app_manager:set_last_used_webport(Port),
@@ -1617,14 +1620,14 @@ try_port_pair(Begin, End, From, Port) when Port>End ->
 try_port_pair(Begin, End, From, Port) ->
 	case gen_udp:open(Port, [binary, {active, true}, {recbuf, 4096}]) of
 		{ok,Sock1} ->
-			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
-				{ok,Sock2} ->
+%			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
+%				{ok,Sock2} ->
 				       app_manager:set_last_used_webport(Port),
-					{ok,Port,Sock1,Sock2};
-				{error, _} ->
-					gen_udp:close(Sock1),
-					try_port_pair(Begin, End, From, Port+2)
-			end;
+					{ok,Port,Sock1,Sock1};
+%				{error, _} ->
+%					gen_udp:close(Sock1),
+%					try_port_pair(Begin, End, From, Port+2)
+%			end;
 		{error, _} ->
 			try_port_pair(Begin, End, From, Port+2)
 	end.
@@ -1657,10 +1660,10 @@ send_media(undefined,_) ->
 
 %
 % ----------------------------------
-llog1(#state{r_base=#base_info{seq=LastSeq,ssrc=SSRC},phinfo=Phinfo,peer=Peer,peer_rtcp_addr=Rtcp_peer},F,P)->
+llog1(#state{r_base=#base_info{seq=LastSeq,ssrc=SSRC},phinfo=Phinfo,peer=Peer,peer_rtcp_addr=Rtcp_peer,in_audio=BaseRTP},F,P)->
     Cid = proplists:get_value(cid, Phinfo,""),
     Phone=proplists:get_value(phone,Phinfo,""),
-    llog("rtp cid:~s phone:~s ip:~s rtcp_peer:~s ssrc:~s lastseq:~s "++F, [Cid,Phone,Peer,Rtcp_peer,SSRC,LastSeq |P]).
+    llog("rtp cid:~s phone:~s ip:~s rtcp_peer:~s ssrc:~s lastseq:~s lastsendseq:~s"++F, [Cid,Phone,Peer,Rtcp_peer,SSRC,LastSeq,BaseRTP#base_rtp.seq|P]).
 llog(F,P) ->
     llog:log(F,P).
 %    void.

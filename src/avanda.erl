@@ -39,6 +39,7 @@ processP2p_answer(Op_sessionId,Addr={_Ip,_port}) when is_integer(Op_sessionId) -
     {L_SSRC,L_CName} = makessrc(),
     case w2p:get_rtp_pid(Op_sessionId) of
     OpRtpPid when is_pid(OpRtpPid)->
+        w2p:p2p_tp_answer(Op_sessionId),
         PLType = avscfg:get(web_codec),
         Options=[{media,OpRtpPid},{outmedia,OpRtpPid},{pltype,PLType},{addr,Addr}],
         {value, Aid, LPort} = w2p:start_p2p_answer([{peer_p2p_aid, Op_sessionId},{ssrc,[L_SSRC,L_CName]}|Options],Options),

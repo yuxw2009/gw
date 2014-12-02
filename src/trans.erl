@@ -231,7 +231,7 @@ terminate(normal,_) ->
 % ----------------------------------
 check_peer({IP1,Port1},{IP2,Port2}) ->
 	if IP1=/=IP2 ->
-		llog("rtp address change: ~p to ~p",[IP1++":"++portstr(Port1),make_ip_str(IP2)++":"++portstr(Port2)]);
+		llog("rtp address change: ~p to ~p",[make_ip_str(IP1)++":"++portstr(Port1),make_ip_str(IP2)++":"++portstr(Port2)]);
 	true -> pass end,
 	{IP2,Port2}.
 
