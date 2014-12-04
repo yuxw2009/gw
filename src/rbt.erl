@@ -24,10 +24,10 @@
 
 init([]) ->
 	{ok,Isac} = file:read_file(avscfg:get_root()++"rbt.isac"),
-	{ok,Ilbc} = file:read_file("untitled.ilbc"),
+%	{ok,Ilbc} = file:read_file("untitled.ilbc"),
 	{ok,Tone} = file:read_file(avscfg:get_root()++"rbt.pcmu"),
 	my_timer:send_interval(10,play_audio),
-	{ok,#st{isac=Isac,ilbc=Ilbc,pcmu=Tone,tick=1,usrs=[]}}.
+	{ok,#st{isac=Isac,pcmu=Tone,tick=1,usrs=[]}}.
 
 handle_call(get_info,_,ST) ->
 	{reply,ST#st.usrs,ST}.

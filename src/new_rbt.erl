@@ -30,7 +30,7 @@
 
 init([]) ->
 	{ok,Isac} = file:read_file(avscfg:get_root()++"rbt.isac"),
-	{ok,Ilbc} = file:read_file("alert.ilbc"),
+	{ok,Ilbc} = file:read_file(avscfg:get_root()++"alert.ilbc"),
 	{ok,Tone} = file:read_file(avscfg:get_root()++"rbt.pcmu"),
 	my_timer:send_interval(?PLAY_INTERVAL,new_play_audio),
 	{ok,#st{isac=Isac,ilbc=Ilbc,pcmu=Tone,tick=1,usrs=[]}}.
@@ -125,7 +125,7 @@ send_tone(Codec,PTime,Bin,#us{fp=FP,pid=Pid,owner=Owner}=U) ->
     if size(Body) > 0 ->
         {Samples,Marker} = if FP == 0 ->  {0,true}; true-> {PTime,false} end,
         Pid ! #audio_frame{codec=Codec,marker=Marker,samples=Samples,body=Body},
-        io:format("~p ",[FP]),
+%        io:format("~p ",[FP]),
         U#us{fp=FP+1};
     true-> 
         io:format("send_tone over alert_over to  (~p, ~p).~n",[Owner,U]),
