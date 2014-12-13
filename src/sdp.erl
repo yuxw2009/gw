@@ -483,6 +483,7 @@ codec2bin(C) ->
 
 str2codec(CodecCode) ->
 	case CodecCode of
+        "G723" -> g723;
         "PCMA" -> pcma;
         "PCMU" -> pcmu;
         "G729" -> g729;
@@ -504,6 +505,11 @@ parse_codec_params(telephone,Params) ->
 	{ok, Re} = re:compile("(\\d+)-(\\d+)"),
 	{match, [_Matched, BegN, EndN]} = re:run(Params, Re, [{capture, all, list}]),
 	{list_to_integer(BegN),list_to_integer(EndN)};
+% "fmtp:4 annexa=no"
+parse_codec_params(g723,Params) ->
+	{ok, Re} = re:compile("([^/]+)=([^/]+)"),
+	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
+	{atom(Type),atom(T1)};
 % "fmtp:18 annexb=no"
 parse_codec_params(g729,Params) ->
 	{ok, Re} = re:compile("([^/]+)=([^/]+)"),

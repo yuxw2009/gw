@@ -147,14 +147,14 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                    ST#st{webcodec=isac,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip}
         	end,
 	SipC = case SipCdc of
-        	pcmu -> pcmu;
+        	PCMx when PCMx == pcmu orelse PCMx == pcma -> PCMx;
             {g729,Ctx} -> llog1(ST,"rrp ~p g729=~p @sip.",[Session,Ctx]), {g729,Ctx}
         	end,
       Monitor = case rpc:call(avscfg:get(monitor), wcgsmon,monitor_pid, []) of
                         RP when is_pid(RP)-> RP;
                         _-> undefined
                         end,
-%      my_timer:send_interval(?STAT_INTERVAL, stats),
+      my_timer:send_interval(?STAT_INTERVAL, stats),
     {ok,ST1#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,monitor=Monitor,localport=Port}}.
 
 handle_call({options,Options},_From,ST) ->
@@ -164,7 +164,7 @@ handle_call({options,Options},_From,ST) ->
 	    [A,B,C,D]-> {list_to_integer(A),list_to_integer(B),list_to_integer(C),list_to_integer(D)};
 	    _->IP
 	    end,
-%    io:format("set peer ~p~n",[{IPRecord,Port}]),
+    io:format("set peer ~p~n",[{IPRecord,Port}]),
     {reply,ok,ST#st{peer={IPRecord,Port},peerok=true}};
 handle_call(stop, _From, #st{vcr=VCR, timer=TR,timeru=TRU,newvcr=Nvcr}=ST) ->
 	llog1(ST,"rrtp ~p stopped.",[ST#st.session]),
@@ -180,6 +180,19 @@ handle_info(stats,ST)->
 %    io:format("|"),
     NewST = stats_log(ST),
     {noreply,NewST};
+handle_info({play,undefined}, ST) ->
+	WallClock = now(),
+	Timecode = init_rnd_timecode(),
+	BaseRTP = #base_rtp{ssrc = init_rnd_ssrc(),
+                    	seq = init_rnd_seq(),
+                    	base_timecode = Timecode,
+                    	timecode = Timecode,
+                    	wall_clock = WallClock},
+	WCdc = ST#st.webcodec,
+	llog1(ST,"play ~p",[WCdc]),
+	my_timer:cancel(ST#st.timer),
+      {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
+      {noreply,ST#st{in_stream=BaseRTP,u2sip= <<>>}};
 handle_info({play,WebRTP}, ST) ->
     %%io:format("RRP get webrtc ~p.~n",[WebRTP]),
 	WallClock = now(),
@@ -431,7 +444,7 @@ handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,?PHN:7,Seq:16,TS:32,SSRC:4/b
 % sip@pcmu old(test) version,no voice_buf version
 handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binary,Body/binary>>},
             #st{webcodec=pcmu,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={Addr,Port}}=ST)
-        	when PN==?PCMU;PN==?G729 ->
+        	when PN==?PCMU;PN==?G729;PN==?PCMA ->
       NewSt=record_ip_port(ST,{Addr,Port}),
     {PCMU,PCM} = if PN==?PCMU -> {Body,?APPLY(erl_isac_nb, udec, [Body])};
                  true -> Linear = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
@@ -445,12 +458,12 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
     {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},vcr_buf=VB2}};
 % sip@isac/opus/ilbc   send rtppacket yxw
 handle_info(UdpMsg={udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,_Seq:16,_TS:32,_SSRC:4/binary,_Body/binary>> =_Bin},
-            #st{peer=undefined}=ST)  when PN==?PCMU;PN==?G729 ->
+            #st{peer=undefined}=ST)  when PN==?PCMU;PN==?G729;PN==?PCMA ->
             if is_pid(ST#st.vcr)-> ST#st.vcr ! #audio_frame{codec=?LINEAR,body=ST#st.vcr_buf,samples=?PSIZE}; true-> void end,
         	handle_info(UdpMsg, ST#st{peer={Addr,Port},vcr_buf= <<>>});
 handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/binary,Body/binary>> =Bin},
             #st{webcodec=Wcdc,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={_Addr0,_Port0}}=ST)
-        	when PN==?PCMU;PN==?G729 ->
+        	when PN==?PCMU;PN==?G729;PN==?PCMA ->
 %      io:format("x"),
       NewStats=down_udp_stats(ST#st.stats,Bin),
       NewSt=record_ip_port(ST#st{stats=NewStats},{Addr,Port}),
@@ -512,7 +525,7 @@ handle_info(send_sample_interval,#st{snd_pev=#ev{actived=false},peerok=true,in_s
 handle_info(Msg, ST) ->
 	llog1(ST,"rrp unexcept msg ~p.~n",[Msg]),
     {noreply,ST}.
-
+handle_cast(_,St)-> {noreply,St}.
 terminate(normal,_) ->
 	ok.
 
@@ -669,6 +682,9 @@ llog1(ST=#st{phinfo=Phinfo,peer=Peer},F,P)->
 
 llog(F,P) -> llog:log(F,P).
 
+compress_voice(pcma,BodyL) ->
+	Enc = ?APPLY(erl_isac_nb, uenc, [BodyL]),
+    {?PCMA,tc:pcmMu2A(Enc)};
 compress_voice(pcmu,BodyL) ->
 	Enc = ?APPLY(erl_isac_nb, uenc, [BodyL]),
     {?PCMU,Enc};
@@ -676,6 +692,14 @@ compress_voice({g729,Ctx},BodyL) ->
     {0,2,Enc} = ?APPLY(erl_g729, xenc, [Ctx,BodyL],[Ctx]),
     {?G729,Enc}.
 
+uncompress_voice(pcma,?PCMA,BodyA,_ST) when size(BodyA)==160; size(BodyA) == 80->
+    BodyU=tc:pcmA2Mu(BodyA),
+    BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
+	BodyL;
+uncompress_voice(pcmu,?PCMA,BodyA,_ST)->
+    io:format("*"),
+    BodyU=tc:pcmA2Mu(BodyA),
+    uncompress_voice(pcmu,?PCMU,BodyU,_ST);
 uncompress_voice(pcmu,?PCMU,BodyU,_ST) when size(BodyU)==160; size(BodyU) == 80->
     BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
 	BodyL;
@@ -686,8 +710,8 @@ uncompress_voice({g729,Ctx},?G729,Body,_ST) when size(Body)==2 ->
 uncompress_voice({g729,Ctx},?G729,Body,ST) ->
     {0,BodyL} = ?APPLY(erl_g729, xdec, [Ctx,Body],[Ctx,ST#st.peer]),
 	BodyL;
-uncompress_voice(_,_,_,_)->
-    io:format("rrp:x"),
+uncompress_voice(Type0,Type1,Body,_St)->
+    io:format("Type0:~p,Type1:~p,Bodysize:~p~n",[Type0,Type1,size(Body)]),
     <<>>.
 
 zero_pcm16(Freq,Time) ->
@@ -1019,6 +1043,8 @@ rrp_release_codec2(undefined) ->
 	pass;
 rrp_release_codec2(pcmu) ->
 	pass;
+rrp_release_codec2(pcma) ->
+	pass;
 rrp_release_codec2({g729,Ctx}) ->
 	0 = ?APPLY(erl_g729, xdtr, [Ctx]);
 rrp_release_codec2({isac,Isac,VAD,VAD2,{CNGE,CNGD}}) ->
@@ -1049,6 +1075,7 @@ rrp_release_codec2({opus,Opus,VAD,VAD2,{CNGE,CNGD}}) ->
 rrp_get_sip_codec() ->
 	case avscfg:get(sip_codec) of
     	pcmu -> pcmu;
+    	pcma->pcma;
     	g729 ->
             {0,Ctx} = ?APPLY(erl_g729, icdc, []),
             {g729,Ctx}

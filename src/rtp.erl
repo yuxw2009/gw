@@ -237,7 +237,7 @@ handle_cast({media_relay,Media}, #state{in_media=OldMedia}=State) when is_pid(Me
 	if is_pid(OldMedia) -> OldMedia ! {deplay,self()};
 	true -> ok end,
 	Media ! {play,self()},
-	%%io:format("rtp get media ~p.~n",[Media]),
+	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
 	{noreply, State#state{in_media=Media,out_media=Media}};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	

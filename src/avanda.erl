@@ -30,6 +30,24 @@ processNATIVE2({R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_
     ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
     {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}.
 
+processSipP2pCall(SipInfo)  ->
+    PLType = avscfg:get(web_codec),
+%	{PLN,Codec,Params} = {103,103,[0,24000,480]},
+%	{PLN,Codec,Params} = {0,0,[]},
+    {L_SSRC,L_CName} = makessrc(),
+%    Media = whereis(rbt),
+    R_Options= [],
+    L_Options= [               {key_strategy, undefined},
+               {ssrc,[L_SSRC,L_CName]}],
+    		   
+    {value, Aid, LPort} = w2p:start({sip_call_in,R_Options}, L_Options, SipInfo,PLType, { "192.0.0.1",0}),
+    
+    ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
+    {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}.
+processSipP2pRing(Sid)  ->
+    w2p:sip_p2p_ring(Sid).
+processSipP2pAnswer(Sid)  ->
+    w2p:sip_p2p_answer(Sid).
 processP2p_ringing(Op_sessionId) when is_integer(Op_sessionId) ->
 	w2p:p2p_tp_ringing(Op_sessionId). % play ring_back_tone to op, and return ok or {failed,_Reason}
 

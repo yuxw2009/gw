@@ -23,4 +23,15 @@ start() ->
     application:start(public_key),
     application:start(cypto),
     application:start(ssl),
+    spawn(fun pinging/0),
     ok.
+    
+pinging()->
+    io:format("pinging...~n"),
+    {_,SipNode}=avscfg:get(sip_app_node),
+    net_adm:ping(SipNode),
+    receive
+    impossible-> void
+    after 2*60*1000->
+        pinging()
+    end.    
