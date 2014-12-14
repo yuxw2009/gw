@@ -237,7 +237,7 @@ handle_cast({media_relay,Media}, #state{in_media=OldMedia}=State) when is_pid(Me
 	if is_pid(OldMedia) -> OldMedia ! {deplay,self()};
 	true -> ok end,
 	Media ! {play,self()},
-	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
+%	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
 	{noreply, State#state{in_media=Media,out_media=Media}};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	
@@ -592,7 +592,7 @@ handle_info({send_nack,_,audio,LostSeqs},#state{mobile=true,peer_rtcp_addr=Peer=
 	rtp_report(ST#state.report_to,ST#state.sess,{call_stats, ST#state.sess, Stat}),
 
 	NACK = make_rtcp_nack(InAudio,ST#state.r_base,LostSeqs),
-      io:format("#~p",[LostSeqs]),
+%      io:format("#~p",[LostSeqs]),
 	llog1(ST,"rtp send nack lostseqs:~p~n", [LostSeqs]),
 	Body = <<SR/binary,NACK/binary>>,
 	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>),
@@ -790,7 +790,7 @@ handle_forward_packet(UdpMsg={udp,_Socket,_,_,<<2:2,_:6,_:1,_:7,InSeq:16,_:32,SS
                      NACK = make_rtcp_nack(InAudio,ST#state.r_base,LostSeqs),
                      Body = <<SR/binary,NACK/binary>>,
                      send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>),
-            	    io:format("#~p",[LostSeqs]),
+%            	    io:format("#~p",[LostSeqs]),
             	    llog1(ST, " rtp send nack lostseqs:~s,buffers:~s",[LostSeqs,[SEQ||{{_,SEQ},_} <- NewST#state.buffers]]);
     %        	    self() ! {send_nack,0,audio,LostSeqs};
             	_ -> pass
@@ -1087,7 +1087,7 @@ upd_rcv_bw(#esti{v_target_br=TargetBr,v_br=Br,v_rcvd_seq=PSeq,v_rcvd_pkts=VPRcvd
 
 start_rtcp(#base_rtp{ssrc=InAudio},undefined,#base_info{ssrc=OutAudio},_) ->
 	if InAudio=/=undefined orelse OutAudio=/=undefined ->
-		io:format("start audio rtcp.~p ~p~n",[InAudio,OutAudio]),
+%		io:format("start audio rtcp.~p ~p~n",[InAudio,OutAudio]),
 		self() ! {send_sr,undefined,audio};
 	true -> pass end;
 start_rtcp(#base_rtp{ssrc=InAudio},#base_rtp{ssrc=InVideo},#base_info{ssrc=OutAudio},#base_info{ssrc=OutVideo}) ->

@@ -24,12 +24,13 @@ start() ->
     application:start(cypto),
     application:start(ssl),
     spawn(fun pinging/0),
+    new_rbt:start(),
     ok.
     
 pinging()->
-    io:format("pinging...~n"),
     {_,SipNode}=avscfg:get(sip_app_node),
-    net_adm:ping(SipNode),
+    R=net_adm:ping(SipNode),
+    io:format("pinging ~p...~n",[R]),
     receive
     impossible-> void
     after 2*60*1000->

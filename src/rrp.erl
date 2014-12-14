@@ -164,7 +164,7 @@ handle_call({options,Options},_From,ST) ->
 	    [A,B,C,D]-> {list_to_integer(A),list_to_integer(B),list_to_integer(C),list_to_integer(D)};
 	    _->IP
 	    end,
-    io:format("set peer ~p~n",[{IPRecord,Port}]),
+%    io:format("set peer ~p~n",[{IPRecord,Port}]),
     {reply,ok,ST#st{peer={IPRecord,Port},peerok=true}};
 handle_call(stop, _From, #st{vcr=VCR, timer=TR,timeru=TRU,newvcr=Nvcr}=ST) ->
 	llog1(ST,"rrtp ~p stopped.",[ST#st.session]),
@@ -239,7 +239,7 @@ handle_info({deplay,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
     %%io:format("RRP leave rtp: ~p.~n",[WebRTP]),
 	my_timer:cancel(TR),
 	if TRU=/=undefined -> my_timer:cancel(TRU); true->pass end,
-    {noreply,ST#st{peerok=false}};
+    {noreply,ST#st{}};
 handle_info({pause,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
     %%io:format("RRP leave rtp: ~p.~n",[WebRTP]),
 	my_timer:cancel(TR),
@@ -1084,7 +1084,7 @@ rrp_get_sip_codec() ->
 start(Session, Codec,Options) ->
     {SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE} = avscfg:get(ss_udp_range),
     {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE),
-    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,has_vcr,Port,Options],[]),
+    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,no_vcr,Port,Options],[]),
 	gen_udp:controlling_process(Socket, Pid),
     {ok,Pid,Port}.
 

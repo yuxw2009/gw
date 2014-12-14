@@ -16,7 +16,6 @@
 -define(CNU,13).
 
 -record(state, {aid,
-                locked=false,
                 p2p_peer_aid,
                 call_type,    % p2p_call, real_call, maybe_p2p_call,sip_call_in
                 p2pok_waittimer,
@@ -164,7 +163,7 @@ handle_cast(sip_p2p_ring,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=Rr
     if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
     
     {noreply,State#state{status=ring}};
-handle_cast(sip_p2p_answer,State=#state{call_type=sip_call_in,sip_ua=UA}) ->
+handle_cast(sip_p2p_answer,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
 	UA ! {p2p_answer,self()},
 	{noreply,State#state{status=p2p_answer}};
 handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
@@ -234,7 +233,7 @@ handle_info({alert,_From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
 	
 handle_info({alert_over, _From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
             io:format("w2p alert_over RrpPid:~p RtpPid:~p new_rbt:~p~n",[RrpPid,RtpPid,whereis(new_rbt)]),
-    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
+%    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
     if is_pid(RtpPid)-> 	rtp:info(RtpPid, {media_relay,RrpPid}); true-> void end,
     {noreply,State};	
 	
