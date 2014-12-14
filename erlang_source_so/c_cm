@@ -1,0 +1,35 @@
+cd my_amr/amrnb
+make -f my_make amrnb
+make -f my_make erl_amr
+make -f my_make nif
+cd ../..
+cd webrtc/modules/au*
+cd codecs/ilbc/build
+make compile_sp;make compile; make ilbc;make nif
+cd ../../
+cd isac/main/build
+make compile; make nb;make nif_nb
+cd ../../..
+cd cng/build
+make compile_sp;make compile; make cng;make nif
+cd ../../../../../..
+
+cd res*
+make -f makeresample rs
+make -f makeresample nif
+cd ..
+
+cd webrtc/common_audio/vad/build
+make compile_sp; make compile; make vad; make nif
+cd ../../../..
+cd amix
+make mix;make nif
+cd ..
+
+cp my_amr/amrnb/erl_amr.so _so/.
+cp webrtc/modules/audio_coding/codecs/ilbc/build/erl_ilbc.so  _so/.
+cp webrtc/modules/audio_coding/codecs/cng/build/erl_cng.so  _so/.
+cp webrtc/modules/audio_coding/codecs/isac/main/build/erl_isac_nb.so  _so/.
+cp resample/erl_resample.so  _so/.
+cp webrtc/common_audio/vad/build/erl_vad.so  _so/.
+ls _so -l
