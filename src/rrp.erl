@@ -697,7 +697,7 @@ uncompress_voice(pcma,?PCMA,BodyA,_ST) when size(BodyA)==160; size(BodyA) == 80-
     BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
 	BodyL;
 uncompress_voice(pcmu,?PCMA,BodyA,_ST)->
-    io:format("*"),
+%    io:format("*"),
     BodyU=tc:pcmA2Mu(BodyA),
     uncompress_voice(pcmu,?PCMU,BodyU,_ST);
 uncompress_voice(pcmu,?PCMU,BodyU,_ST) when size(BodyU)==160; size(BodyU) == 80->

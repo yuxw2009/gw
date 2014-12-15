@@ -304,8 +304,9 @@ start_sip_call(State=#state{call_type=sip_call_in,call_info=CallInfos, rrp_port=
     
     SDP_TO_SS = get_local_sdp(RrpPort),
     _Ref = erlang:monitor(process,UA),
+    
     UA ! {p2p_wcg_ack, self(), SDP_TO_SS},
-%    io:format("sip_call_in:  port ~p call ~p sdp_to_ss ~p~n", [RrpPort,CallInfos,SDP_TO_SS]),
+    io:format("start_sip_call sip_call_in:   UA ~p~n", [UA]),
     State#state{start_time=now(),status=ring,sip_ua=UA};
 start_sip_call(State=#state{test=rtp_loop, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid=RrpPid}) ->
 	rtp:info(RtpPid, {media_relay,RtpPid}),
@@ -372,7 +373,8 @@ duration({M1,S1,_}) ->
     end.
 	
 llog(F,P) ->
-    llog:log(F,P).
+%    llog:log(F,P).
+    io:format(F,P).
 %     {unused,F,P}.
      
 deal_callinfo(State=#state{call_info=CallInfo,rtp_pid=RtpPid}) ->    
