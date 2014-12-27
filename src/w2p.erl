@@ -159,8 +159,8 @@ handle_call(_Call, _From, State) ->
 
 handle_cast(sip_p2p_ring,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
     UA ! {p2p_ring_ack,self()},
-%    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
-    if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
+    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
+%    if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
     
     {noreply,State#state{status=ring}};
 handle_cast(sip_p2p_answer,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
@@ -373,8 +373,8 @@ duration({M1,S1,_}) ->
     end.
 	
 llog(F,P) ->
-%    llog:log(F,P).
-    io:format(F,P).
+    llog:log(F,P).
+%    io:format(F,P).
 %     {unused,F,P}.
      
 deal_callinfo(State=#state{call_info=CallInfo,rtp_pid=RtpPid}) ->    
