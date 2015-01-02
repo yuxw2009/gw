@@ -35,8 +35,8 @@ get(wcall_cid) -> "0085268895100";
 get(mhost_ip) -> "58.221.60.121";
 get(mweb_udp_range) -> {55000,57000};
 get(wconf_udp_range) -> {55010,55110};
-get(room_udp_used) -> 7.
-
+get(room_udp_used) -> 7;
+get(_)->undefined.
 get_root()-> "/home/wcg/run/gw_test_copy1/applications/".
 get_node(_)-> node().
 

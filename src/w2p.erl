@@ -240,6 +240,9 @@ handle_info({alert_over, _From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
 handle_info({'DOWN', _Ref, process, UA, _Reason},State=#state{aid=Aid,sip_ua=UA})->
     llog("app ~p sip hangup",[Aid]),
 	{stop, normal, State};
+handle_info(sip_release,State=#state{aid=Aid,sip_ua=UA}) ->
+    llog("app ~p sip_release",[Aid]),
+	{stop, normal, State};
 handle_info(timeover,State=#state{aid=Aid,sip_ua=UA}) ->
     llog("app ~p max talk timeout.",[Aid]),
     {APPMODU,SIPNODE} = avscfg:get(sip_app_node),

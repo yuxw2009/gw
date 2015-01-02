@@ -37,8 +37,8 @@
 -define(ILBCPTIME,30).
 -define(OPUSPTIME,60).
 
--define(AUDIO_JITTERLENGTH, 4).
--define(AUDIO_SENTSAVELENGTH,20).
+-define(AUDIO_JITTERLENGTH, 2).
+%-define(AUDIO_SENTSAVELENGTH,20).
 -define(QUERY_INTERVAL_NUM, max(?AUDIO_JITTERLENGTH div 2, 10)).
 -define(STAT_INTERVAL, 1000).
 
@@ -572,6 +572,7 @@ handle_info({send_sr,_,audio},#state{sess=Session, peer_rtcp_addr=Peer,rtcp_sck=
 	Stat = calc_rtp_statistics(Peer, RcvCtx, InAudio),
 	
 	rtp_report(ST#state.report_to,Session,{call_stats, Session, Stat}),
+	llog1(ST,"rtcp:~p~n",[Stat]),
 %       io:format("send_sr peer ~p~n",[Peer]),
 	case Peer of
 	{IP,Port}->	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>);
@@ -590,6 +591,7 @@ handle_info({send_nack,_,audio,LostSeqs},#state{mobile=true,peer_rtcp_addr=Peer=
 	Stat = calc_rtp_statistics(Peer, ST#state.r_base, InAudio),
 
 	rtp_report(ST#state.report_to,ST#state.sess,{call_stats, ST#state.sess, Stat}),
+	llog1(ST,"rtcp:~p~n",[Stat]),
 
 	NACK = make_rtcp_nack(InAudio,ST#state.r_base,LostSeqs),
 %      io:format("#~p",[LostSeqs]),
@@ -614,6 +616,7 @@ handle_info({send_sr,_,audio},#state{sess=Session, peer={IP,Port}=Peer,socket=So
 	Stat = calc_rtp_statistics(Peer, RcvCtx, InAudio),
 	
 	rtp_report(ST#state.report_to,Session,{call_stats, Session, Stat}),
+	llog1(ST,"rtcp:~p~n",[Stat]),
 	
 	send_udp(Socket, IP, Port, <<Head/binary,RTCP/binary,EIdx/binary,Digest/binary>>),
 %	send_udp(Socket, IP, 60001, <<Head/binary,Body/binary,EIdx/binary,Digest/binary>>),
