@@ -336,19 +336,19 @@ handle_info({udp,_Socket,Addr,Port,<<_Num:3,_:5, Len1:8,Len2:8,Len3:8, 2:2,_:6,_
     UdpMsg1 = {udp,_Socket,Addr,Port,Bin1},
     UdpMsg2 = {udp,_Socket,Addr,Port,Bin2},
     UdpMsg3 = {udp,_Socket,Addr,Port,Bin3},
-%        io:format("*~p ~p",[InSeq2,InSeq1]),
+%        io:format("|***|~n"),
     {_,ST0} = handle_info(UdpMsg3,ST),
     {_,ST1} = handle_info(UdpMsg2,ST0),
     handle_info(UdpMsg1,ST1);
 
-handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,_InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
+handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
 			#state{}=ST) when ?IS_RTP(Codec) andalso (2+Len1+Len2 == size(Bin)) ->   
     <<_:16, Bin0/binary>> = Bin,			
     if size(Bin0) =/= Len1+Len2 ->
         io:format("rtp: udp length is invalid Len1:~p Len2:~p Bin0 size:~p~n",[Len1,Len2,size(Bin0)]),
         {noreply,ST};
     true->
-        {Bin1,Bin2= <<2:2,_:6,_:1,_:7,_InSeq2:16,_:32,_:32,_/binary>>} = split_binary(Bin0,Len1),
+        {Bin1,Bin2= <<2:2,_:6,_:1,_:7,InSeq2:16,_:32,_:32,_/binary>>} = split_binary(Bin0,Len1),
         UdpMsg1 = {udp,_Socket,Addr,Port,Bin1},
         UdpMsg2 = {udp,_Socket,Addr,Port,Bin2},
 %        io:format("*~p ~p",[InSeq2,InSeq1]),
@@ -359,6 +359,7 @@ handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,_InSe
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> =Bin},
 			#state{sess=Sess, r_base=#base_info{seq=undefined,ssrc=undefined}=Remote0,r_srtp=Cryp,mobile=true}=ST)
 			when ?IS_RTP(Codec) ->   %first packet from mobile
+%        io:format("."),
 	Peer = trans:check_peer(ST#state.peer,{Addr,Port}),
 	llog1(ST,"rtp:mobile stun_locked SSRC:~p",[SSRC]),
 	rtp_report(ST#state.report_to,Sess,{stun_locked,Sess}),
@@ -512,6 +513,7 @@ handle_info({udp, _Socket, _Addr, _Port, <<2:2,_P:1,_C:5,PT:8,_LenDW:16,_SSRC:32
 	#state{mobile=true,vp8=Vcdc,bw=BWE,peer_rtcp_addr={_, _}}=ST) when ?is_rtcp(PT) -> %mobile
 	Now = now(),
 	Parsed = rtcp:parse(Bin),
+%        io:format("rec rtcp:~p~n",[Parsed]),
 	{Rbase2,VRbase2} = update_sr_timecode(Now,Parsed,{ST#state.r_base,ST#state.vr_base}),
 	{InAudio1,InVideo2} = update_fb_info(Now,Parsed,{ST#state.in_audio,ST#state.in_video}),
 	InAudio2 = update_avg_rtt(InAudio1),
@@ -573,7 +575,7 @@ handle_info({send_sr,_,audio},#state{sess=Session, peer_rtcp_addr=Peer,rtcp_sck=
 	
 	rtp_report(ST#state.report_to,Session,{call_stats, Session, Stat}),
 	llog1(ST,"rtcp:~p~n",[Stat]),
-%       io:format("send_sr peer ~p~n",[Peer]),
+%       io:format("send rtcp  ~p~n",[rtcp:parse(<<Head/binary,Body/binary>>)]),
 	case Peer of
 	{IP,Port}->	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>);
 	_-> void
@@ -597,6 +599,7 @@ handle_info({send_nack,_,audio,LostSeqs},#state{mobile=true,peer_rtcp_addr=Peer=
 %      io:format("#~p",[LostSeqs]),
 	llog1(ST,"rtp send nack lostseqs:~p~n", [LostSeqs]),
 	Body = <<SR/binary,NACK/binary>>,
+%       io:format("send rtcp  ~p~n",[rtcp:parse(<<Head/binary,Body/binary>>)]),
 	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>),
 	Ref2 = make_ref(),
 	my_timer:send_after(?RTCPINTERVAL, {send_sr,Ref2,audio}),
@@ -793,6 +796,7 @@ handle_forward_packet(UdpMsg={udp,_Socket,_,_,<<2:2,_:6,_:1,_:7,InSeq:16,_:32,SS
                      NACK = make_rtcp_nack(InAudio,ST#state.r_base,LostSeqs),
                      Body = <<SR/binary,NACK/binary>>,
                      send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>),
+%                     io:format("send rtcp  ~p~n",[rtcp:parse(<<Head/binary,Body/binary>>)]),
 %            	    io:format("#~p",[LostSeqs]),
             	    llog1(ST, " rtp send nack lostseqs:~s,buffers:~s",[LostSeqs,[SEQ||{{_,SEQ},_} <- NewST#state.buffers]]);
     %        	    self() ! {send_nack,0,audio,LostSeqs};

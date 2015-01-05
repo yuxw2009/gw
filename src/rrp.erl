@@ -23,6 +23,7 @@
 -define(iLBC,102).
 -define(iSAC,103).
 -define(iCNG,105).
+-define(L16,107).
 -define(OPUS,111).
 -define(AMR,114).
 -define(LOSTiSAC,1003).
@@ -89,6 +90,7 @@
 	noise,
 	vcr,
 	newvcr,
+	rtpvcr,
 	vcr_buf= <<>>,    % temp store web audio
 	sip_buf= <<>>,    % temp store sip audio
 	timer,
@@ -155,6 +157,8 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                         _-> undefined
                         end,
       my_timer:send_interval(?STAT_INTERVAL, stats),
+      self() ! {start_record_rrp,[Phone]},
+      self() ! {start_record_rtp,[UUID]},
     {ok,ST1#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,monitor=Monitor,localport=Port}}.
 
 handle_call({options,Options},_From,ST) ->
@@ -260,8 +264,13 @@ handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
 handle_info({start_record_rrp,[Fn]},#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
     vcr:stop(Nvcr),
-    Nvcr1=vcr:start(Fn),	
+    Nvcr1=vcr:start(mkvfn(Fn)),	
     {noreply,ST#st{newvcr=Nvcr1}};
+handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
+    llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
+    vcr:stop(Nvcr),
+    Nvcr1=vcr:start(mkvfn(Fn)),	
+    {noreply,ST#st{rtpvcr=Nvcr1}};
 handle_info(stop_record_rrp,#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p stop_record_rrp",[ST#st.session]),
     vcr:stop(Nvcr),	
@@ -314,14 +323,16 @@ handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,pass
     {PN,Enc} = compress_voice(ST#st.sipcodec,F1),
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
     VB2 = if is_pid(VCR)-> <<VB/binary,F1/binary>>;true->VB end,
-	if Type == noise-> 
+%	if Type == noise-> 
 %      io:format("x"),
-        {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
-    true-> 
+%        {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
+%    true-> 
 %        io:format("y"),
+%        send_udp(Socket,IP,Port,RTP),
+%        {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
+%    end;
         send_udp(Socket,IP,Port,RTP),
-        {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
-    end;
+        {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
 
 %
 % isac/icng send to webrtc
@@ -506,7 +517,8 @@ handle_info(#audio_frame{codec=?LOSTiSAC,samples=_N},#st{to_sip=#apip{abuf=AB,cd
     {noreply,ST}; % #st{to_sip=ToSip#apip{abuf=AB2}}};
 handle_info(AudioFrame=#audio_frame{},ST=#st{monitor=Mon}) -> 
 %    send_2_monitor(Mon,AudioFrame),
-    handle_audio_frame(AudioFrame,ST);
+    R=handle_audio_frame(AudioFrame,ST),
+    R;
 %
 handle_info(send_sample_interval,#st{peerok=false} = ST) ->
     {noreply,ST};
@@ -549,6 +561,14 @@ record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon,localport=LocalPort}
     end,
     St#st{udp_froms=NewFroms}.
 
+% PCM16
+handle_audio_frame(#audio_frame{codec=?L16,body=Body,samples=Samples},#st{to_sip=#apip{abuf=AB}=ToSip}=ST) ->
+	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
+	  io:format("o"),
+        {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
+	true ->
+        {noreply,ST#st{to_sip=ToSip#apip{abuf= <<AB/binary,Body/binary>>,last_samples=Samples}}}
+	end;
 handle_audio_frame(#audio_frame{codec=?LOSTiSAC,samples=_N},#st{to_sip=#apip{abuf=AB,cdc=Isac,last_samples=LastSamples}=ToSip}=ST) ->
     {noreply,ST}; % #st{to_sip=ToSip#apip{abuf=AB2}}};
 handle_audio_frame(#audio_frame{codec=?iSAC,body=Body,samples=Samples},#st{webcodec=isac,to_sip=#apip{abuf=AB,cdc=Isac}=ToSip}=ST) ->
@@ -585,6 +605,7 @@ handle_audio_frame(#audio_frame{codec=?OPUS,body=Body,samples=Samples},#st{webco
 % amr
 handle_audio_frame(#audio_frame{codec=?AMR,body=Body,samples=Samples},#st{webcodec=amr,to_sip=#apip{abuf=AB,cdc=Ilbc}=ToSip}=ST) ->
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
+	  io:format("o"),
         {noreply,ST#st{to_sip=ToSip#apip{last_samples=Samples}}};
 	true ->
         {0,Adec} = amr_dec(Ilbc,Body,<<>>),
@@ -823,7 +844,7 @@ voice_type(?FS8K,Vad,PCM16) when size(PCM16)==480 ->    % 8Khz 30ms 240samples, 
         {0,0} -> unactive;
         {0,1} -> actived
 	end;
-voice_type(?FS8K,Vad,PCM16) when size(PCM16)==960 ->    % 8Khz 30ms 480samples, iLBC
+voice_type(?FS8K,Vad,PCM16) when size(PCM16)==960 ->    % 8Khz 60ms 480samples, iLBC
     <<D1:480/binary,D2/binary>> = PCM16,
 	case ?APPLY(erl_vad, xprcs, [Vad,D1,?FS8K]) of
         {0,0} ->

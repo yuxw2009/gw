@@ -5,15 +5,16 @@
 -define(PCMU,0).
 -define(iSAC,103).
 -define(iLBC,102).
+-define(L16,107).
 -include("desc.hrl").
 
 -define(PLAY_INTERVAL, 60).
 -define(FREQ, 8000).
+-define(PCM_UNIT_LEN,(2*(?FREQ*?PLAY_INTERVAL div 1000))).
 
 -record(st,{
-	isac,
 	ilbc,
-	pcmu,
+	pcm,
 	tick,		% [0...5]
 	usrs
 }).
@@ -21,62 +22,49 @@
 -record(us,{
 	pid,   % media pid
 	owner, % w2p
-	isac,
 	cdc_type,
 	fp,
 	timelen=0,
+	loop=true,
 	live
 }).
 
-init([]) ->
-	{ok,Isac} = file:read_file(avscfg:get_root()++"rbt.isac"),
-	{ok,Ilbc} = file:read_file(avscfg:get_root()++"alert.ilbc"),
-	{ok,Tone} = file:read_file(avscfg:get_root()++"rbt.pcmu"),
+init([IlbcFn,PcmFn]) ->
+	{ok,Ilbc} = file:read_file(avscfg:get_root()++IlbcFn),
+	{ok,Pcm} = file:read_file(avscfg:get_root()++PcmFn),
 	my_timer:send_interval(?PLAY_INTERVAL,new_play_audio),
-	{ok,#st{isac=Isac,ilbc=Ilbc,pcmu=Tone,tick=1,usrs=[]}}.
+	{ok,#st{ilbc=Ilbc,pcm=Pcm,tick=1,usrs=[]}}.
 
 handle_call(get_info,_,ST) ->
 	{reply,ST#st.usrs,ST}.
 
-handle_info(#audio_frame{owner=Owner,codec=Codec}, #st{usrs=Users}=ST) ->
-	case lists:keysearch(Owner,2,Users) of
-		{value,U1} ->
-			{noreply,ST#st{usrs=lists:keyreplace(Owner,2,Users,U1#us{live=now()})}};
-		false ->
-			U1 = #us{pid=Owner,isac=is_isac(Codec),fp=0,live=now(),cdc_type=Codec},
-			{noreply,ST#st{usrs=[U1|Users]}}
-	end;
-handle_info({add,OutMedia,Owner, Secs}, #st{usrs=Users}=ST) ->
-    io:format("new_rbt (~p) added.~n",[Secs]),
+handle_info({delete,OutMedia}, #st{usrs=Users}=ST) ->
+    io:format("new_rbt (~p) deleted.~n",[OutMedia]),
+    Users1= lists:keydelete(OutMedia,2,Users),
+    {noreply,ST#st{usrs=Users1}};
+handle_info({'DOWN', _Ref, process, OutMedia, _Reason},#st{usrs=Users}=ST)->
+    io:format("new_rbt rec ~p Down,delete it~n",[OutMedia]),
+    {noreply,ST#st{usrs=lists:keydelete(OutMedia,2,Users)}};
+handle_info({add,OutMedia,Owner, Secs,CdcType,Loop}, #st{usrs=Users}=ST) ->
+    io:format("new_rbt (~p) ~p added.~n",[Secs,OutMedia]),
     case lists:keysearch(OutMedia,2,Users) of
     	{value,U1} ->
-    		{noreply,ST#st{usrs=lists:keyreplace(Owner,2,Users,U1#us{live=now(),pid=OutMedia, owner=Owner,timelen=Secs})}};
+    		{noreply,ST#st{usrs=lists:keyreplace(OutMedia,2,Users,U1#us{live=now(),cdc_type=CdcType,pid=OutMedia, owner=Owner,timelen=Secs,loop=Loop})}};
     	false ->
-    		U1 = #us{pid=OutMedia, owner=Owner,timelen=Secs,fp=0,live=now()},
+    	      erlang:monitor(process,OutMedia),
+    		U1 = #us{pid=OutMedia, owner=Owner,timelen=Secs,cdc_type=CdcType,fp=0,live=now(),loop=Loop},
     		{noreply,ST#st{usrs=[U1|Users]}}
     end;
 handle_info(new_play_audio,#st{tick=Tick,usrs=Us}=ST) ->
 	Us2 = kick_out_timeouts(Us),
-	Us3 = new_play_rbt(Tick,ST#st.ilbc,Us2,ST),
+	Us3 = new_play_rbt(Tick,Us2,ST),
 	Us4 = [I||I=#us{}<-Us3],
 	{noreply,ST#st{tick=(Tick+1) rem 6,usrs=Us4}};
-handle_info(play_audio,#st{tick=Tick,usrs=Us}=ST) ->
-	Us2 = kick_out_timeouts(Us),
-	Us3 = play_rbt(Tick,ST#st.isac,ST#st.pcmu,Us2,ST),
-	{noreply,ST#st{tick=(Tick+1) rem 6,usrs=Us3}};
-handle_info({play,_RTP}, ST) ->
-	{noreply,ST};
-handle_info({stun_locked,_RTP}, ST) ->
-	{noreply,ST};
-handle_info({deplay,RTP}, #st{usrs=Us}=ST) ->
-	io:format("deplay ~n"),
-	{noreply,ST#st{usrs=lists:keydelete(RTP,2,Us)}};
 handle_info(Msg,ST) ->
-	io:format("rbt unknow ~p.~n",[Msg]),
+	io:format("new rbt unknow ~p.~n",[Msg]),
 	{noreply,ST}.
 
-handle_cast(stop,#st{isac=UseIsac}) ->
-	io:format("rbt(~p) stopped.~n",[UseIsac]),
+handle_cast(stop,_) ->
 	{stop,command,[]};
 handle_cast(_,St) ->
 	{noreply,St}.
@@ -84,13 +72,6 @@ terminate(_,_) ->
 	ok.
 
 % ----------------------------------
-output_interval(T,Msg) ->
-	my_timer ! {self(),T,Msg}.
-
-is_isac(103) -> true;
-is_isac(102) -> true;
-is_isac(105) -> true;
-is_isac(_) -> false.
 
 kick_out_timeouts(Us) ->
 	Now = now(),
@@ -99,56 +80,51 @@ kick_out_tos(_Now,[],NUs) ->
 	lists:reverse(NUs);
 kick_out_tos(Now,[#us{live=LastT,timelen=TimeLen}=U1|Us],NUs) ->
 	case timer:now_diff(Now,LastT) div 1000 of
-		Dt when Dt>TimeLen*1000 ->		% more than 1000ms
+		Dt when Dt>TimeLen*1000 ->		% more than TimeLen s
 			kick_out_tos(Now,Us,NUs);
 		_ ->
 			kick_out_tos(Now,Us,[U1|NUs])
 	end.
 
-new_play_rbt(Tick,Tone,Us,_)  ->
+new_play_rbt(Tick,Us,ST)  ->
 %	Us1 = [U1||#us{isac=false}=U1<-Us],
       Us1 = Us,
-	lists:map(fun(U) -> send_tone(?iLBC,?PLAY_INTERVAL*8,Tone,U) end,Us1).
-play_rbt(Tick,_,Tone,Us,_) when Tick rem 2 == 0 ->
-	Us1 = [U1||#us{isac=false}=U1<-Us],
-	NewUs = lists:map(fun(U) -> send_tone(?PCMU,160,Tone,U) end,Us1),
-	NewUs++[U1||#us{isac=true}=U1<-Us];
-play_rbt(Tick,Tone,_,Us,ST) when Tick==3 ->
-	IsacUs = [U1||#us{isac=true}=U1<-Us],
-	NewUs = lists:map(fun(U) -> send_tone(?iSAC,960,Tone,U) end,IsacUs),
-	NewUs++[U1||#us{isac=false}=U1<-Us];
-play_rbt(_,_,_,Us,_) ->
-	Us.
-
-send_tone(Codec,PTime,Bin,#us{fp=FP,pid=Pid,owner=Owner}=U) ->
-    Body = get_tone(FP,Bin),
+	lists:map(fun(U) -> send_tone(?PLAY_INTERVAL*8,U,ST) end,Us1).
+send_tone(PTime,#us{fp=FP,pid=Pid,owner=Owner,cdc_type=CdcType,loop=Loop}=U,St) ->
+    Bin = if CdcType == ?L16->  St#st.pcm; true-> st#st.ilbc end,
+    Body = get_tone(CdcType,FP,Bin),
     if size(Body) > 0 ->
         {Samples,Marker} = if FP == 0 ->  {0,true}; true-> {PTime,false} end,
-        Pid ! #audio_frame{codec=Codec,marker=Marker,samples=Samples,body=Body},
+        Pid ! #audio_frame{codec=CdcType,marker=Marker,samples=Samples,body=Body},
 %        io:format("~p ",[FP]),
         U#us{fp=FP+1};
+    Loop->  U#us{fp=0};
     true-> 
         io:format("send_tone over alert_over to  (~p, ~p).~n",[Owner,U]),
         if is_pid(Owner)-> Owner ! {alert_over,self()}; true-> void end,
         undefined
     end.
 
-get_tone(0,<<Size:16,Bin/binary>>) ->
+get_tone(?L16,Fp,Bin) when size(Bin) >= (Fp+1)*?PCM_UNIT_LEN  ->
+      Len1 = (Fp*?PCM_UNIT_LEN),
+	<<_:Len1/binary,Tone:?PCM_UNIT_LEN/binary, _/binary>> = Bin,
+	Tone;
+get_tone(?iLBC,0,<<Size:16,Bin/binary>>) ->
 	<<Tone:Size/binary,_/binary>> = Bin,
 	Tone;
-get_tone(FP,<<Size:16,Bin/binary>>) ->
+get_tone(?iLBC,FP,<<Size:16,Bin/binary>>) ->
 	<<_:Size/binary,Rest/binary>> = Bin,
-	get_tone(FP-1,Rest);
-get_tone(_,<<>>) ->
+	get_tone(?iLBC,FP-1,Rest);
+get_tone(_,_,_) ->
     <<>>.
 % ----------------------------------
-write_tone(pcm2ilbc,Ilbc,Bin,FH,PCM_UNIT_LEN) when size(Bin)>=PCM_UNIT_LEN ->
-    {Outp,Rest} = split_binary(Bin,PCM_UNIT_LEN),
+write_tone(pcm2ilbc,Ilbc,Bin,FH,PcmUnitLen) when size(Bin)>=PcmUnitLen ->
+    {Outp,Rest} = split_binary(Bin,PcmUnitLen),
     EncBin = rrp:ilbc_enc60(Ilbc, Outp),
     Size= size(EncBin),
     Buf = <<Size:16,EncBin/binary>>,
     file:write(FH, Buf),
-    write_tone(pcm2ilbc,Ilbc,Rest,FH,PCM_UNIT_LEN);
+    write_tone(pcm2ilbc,Ilbc,Rest,FH,PcmUnitLen);
 write_tone(pcm2ilbc,Ilbc,Bin,FH,_)->
 %    EncBin = rrp:ilbc_enc60(Ilbc, Bin),
 %    Size= size(EncBin),
@@ -159,9 +135,9 @@ write_tone(pcm2ilbc,Ilbc,Bin,FH,_)->
 make_tone(pcm2ilbc,InFileName,OutFileName) ->
 	{ok,Bin} = file:read_file(InFileName),
 	{ok,FH} = file:open(OutFileName,[write,binary,raw]),
-	PCM_UNIT_LEN = 2*(?FREQ*?PLAY_INTERVAL div 1000),
+	PcmUnitLen = ?PCM_UNIT_LEN,
 	{0,Ilbc} =  ?APPLY(erl_ilbc, icdc, [30]) ,
-	write_tone(pcm2ilbc,Ilbc,Bin,FH, PCM_UNIT_LEN).
+	write_tone(pcm2ilbc,Ilbc,Bin,FH, PcmUnitLen).
 	
 make_tone(isac,FileName) ->
 	{ok,Bin} = file:read_file(FileName),
@@ -207,8 +183,9 @@ transcode_pcm(N,<<F1:640/binary,Rest/binary>>,Bin) ->
 	Size = size(Enc),
 	transcode_pcm(N-1,Rest,<<Bin/binary,Size:16,Enc/binary>>).
 
-start() ->
-    my_server:start({local,new_rbt},?MODULE,[],[]).	
+start() -> start(["alert.ilbc","ringback.pcm"]).
+start([IlbcFn,PcmFn]) ->
+    my_server:start({local,new_rbt},?MODULE,[IlbcFn,PcmFn],[]).	
     
   to_pcm({pcmu,PCMU})-> to_pcm({pcmu,PCMU},<<>>).
   to_pcm({pcmu,PCMU},R) when size(PCMU) <160 ->   R;

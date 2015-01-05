@@ -497,7 +497,8 @@ str2codec(CodecCode) ->
 		"SPEEX"->speex;
 		"GSM"->gsm;
 		"H264"->h264;
-		"opus" -> opus
+		"opus" -> opus;
+		Oth-> list_to_atom(Oth)
     end.
 
 % "fmtp:101 0-11"

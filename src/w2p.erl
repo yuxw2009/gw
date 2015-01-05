@@ -14,6 +14,7 @@
 -define(PCMA,8).
 -define(G729,18).
 -define(CNU,13).
+-define(L16,107).
 
 -record(state, {aid,
                 p2p_peer_aid,
@@ -160,11 +161,14 @@ handle_call(_Call, _From, State) ->
 handle_cast(sip_p2p_ring,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
     UA ! {p2p_ring_ack,self()},
 %    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
-    if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
-    
+    % play ring back tone to sip(rrp)
+    if is_pid(RrpPid)-> RrpPid ! {play,undefined}; true-> void end,
+    play_rbt(RrpPid,?L16),
     {noreply,State#state{status=ring}};
 handle_cast(sip_p2p_answer,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
 	UA ! {p2p_answer,self()},
+	stop_rbt(RrpPid),
+      if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
 	{noreply,State#state{status=p2p_answer}};
 handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
 	RrpPid ! {send_phone_event,Nu,9,160*7},
@@ -226,7 +230,7 @@ handle_info({alert,_From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
             io:format("w2p alert RrpPid:~p RtpPid:~p new_rbt:~p~n",[RrpPid,RtpPid,whereis(new_rbt)]),
     if is_pid(RrpPid)-> RrpPid ! {pause,RtpPid}; true-> void end,
     case whereis(new_rbt) of
-    Rbt when is_pid(Rbt)-> Rbt ! {add,RtpPid,self(), 20}; 
+    Rbt when is_pid(Rbt)-> Rbt ! {add,RtpPid,self(), 20,ilbc,false}; 
     _-> void 
     end,
     {noreply,State};	
@@ -239,9 +243,6 @@ handle_info({alert_over, _From},State=#state{rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
 	
 handle_info({'DOWN', _Ref, process, UA, _Reason},State=#state{aid=Aid,sip_ua=UA})->
     llog("app ~p sip hangup",[Aid]),
-	{stop, normal, State};
-handle_info(sip_release,State=#state{aid=Aid,sip_ua=UA}) ->
-    llog("app ~p sip_release",[Aid]),
 	{stop, normal, State};
 handle_info(timeover,State=#state{aid=Aid,sip_ua=UA}) ->
     llog("app ~p max talk timeout.",[Aid]),
@@ -417,8 +418,8 @@ p2p_tp_ringing(OpAppId)->
     set_call_type(OpAppId,p2p_call),
     Act = fun(State=#state{status=idle, p2pok_waittimer=Tref})->
                 my_timer:cancel(Tref),
-                % play ringing back tone
-                
+                % play ring back tone to caller
+%                play_rbt(RrpPid,?iLBC),
                 {ok,State#state{status=ring}};
                 (State)-> {{failed,already_tele_calling},State}
             end,
@@ -456,4 +457,16 @@ set_peer_aid(Aid,PeerAid)->
 set_peer_aid_eachother(Aid1,Aid2)->
     set_peer_aid(Aid1,Aid2),
     set_peer_aid(Aid2,Aid1).
-    
+
+play_rbt(Pid,CdcType)->
+    case whereis(new_rbt) of
+    Rbt when is_pid(Rbt)-> Rbt ! {add,Pid,self(), 60,CdcType,true}; 
+    _-> void 
+    end.
+stop_rbt(Pid)->
+    case whereis(new_rbt) of
+    Rbt when is_pid(Rbt)-> Rbt ! {delete,Pid}; 
+    _-> void 
+    end.
+
+
