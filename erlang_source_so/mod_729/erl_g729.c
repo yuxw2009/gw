@@ -32,6 +32,7 @@
  *
  */
 
+#include <pthread.h>
 #include "erl_nif.h"
 #include "g729.h"
 
@@ -48,6 +49,8 @@ typedef struct {
 } g729_codec_t;
 
 static g729_codec_t g729[MAXCHNO+1];
+
+static pthread_mutex_t mutex_x = PTHREAD_MUTEX_INITIALIZER;
 
 static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
@@ -67,6 +70,7 @@ static ERL_NIF_TERM icdc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   int i;
 
   res = 1;
+  pthread_mutex_lock(&mutex_x);
   for (i=0;i<=MAXCHNO;i++) {
     if (g729[i].in_use == 0) {
       res = 0;
@@ -76,6 +80,7 @@ static ERL_NIF_TERM icdc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
       break;
     }
   }
+  pthread_mutex_unlock(&mutex_x);
 
   return enif_make_tuple2(env, enif_make_int(env, res), enif_make_int(env, i));
 }
@@ -88,6 +93,7 @@ static ERL_NIF_TERM xdtr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_get_uint(env, argv[0], &no))
     return enif_make_badarg(env);
 
+  pthread_mutex_lock(&mutex_x);
   if (g729[no].in_use == 1) {
     g729[no].in_use = 0;
     g729_release_coder( &(g729[no].ctx.encoder_object));
@@ -95,6 +101,7 @@ static ERL_NIF_TERM xdtr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   }
   else
     res = 1;
+  pthread_mutex_unlock(&mutex_x);
 
   return enif_make_int(env,res);
 }
@@ -114,7 +121,11 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_badarg(env);
   if (!enif_inspect_binary(env, argv[1], &sigIn) || (sigIn.size % 160 != 0))
     return enif_make_badarg(env);
-
+  
+  pthread_mutex_lock(&mutex_x);
+  if(g729[no].in_use == 0) return enif_make_int(env, 1);
+  pthread_mutex_unlock(&mutex_x);
+  
   loops = (int) sigIn.size / 160;
   sigOut = enif_make_new_binary(env, loops * 10, &rbin);
   
@@ -145,6 +156,10 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   if (!enif_inspect_binary(env, argv[1], &enc))
     return enif_make_badarg(env);
 
+  pthread_mutex_lock(&mutex_x);
+  if(g729[no].in_use == 0) return enif_make_int(env, 1);
+  pthread_mutex_unlock(&mutex_x);
+  
   edp = (char *)enc.data;
   ddp = (int16_t *)enif_make_new_binary(env, 320, &rbin);	// 320 bytes (20ms) out always.
 
