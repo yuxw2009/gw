@@ -463,8 +463,7 @@ handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,?PHN:7,Seq:16,TS:32,SSRC:4/b
 	M = if Mark==0 -> false; true-> true end,
 	RPEv2 = processRPE(RPEv,{LastSeq,LastTs},{Seq,TS},M,Info),
 	Random=get_random_160s(ST#st.noise),
-    {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,?APPLY(erl_isac_nb, udec, [Random])),
-    {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},rcv_pev=RPEv2,vcr_buf=VB2}};
+    {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},rcv_pev=RPEv2}};
 % sip@pcmu old(test) version,no voice_buf version
 handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binary,Body/binary>>},
             #st{webcodec=pcmu,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={Addr,Port}}=ST)
@@ -477,9 +476,8 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
 	Frame = #audio_frame{codec = ?PCMU, body = PCMU,samples=?PSIZE},
 	if is_pid(OM) -> OM ! Frame;
 	true -> pass end,
-    {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
     processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
-    {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},vcr_buf=VB2}};
+    {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
 % sip@isac/opus/ilbc   send rtppacket yxw
 handle_info(UdpMsg={udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,_Seq:16,_TS:32,_SSRC:4/binary,_Body/binary>> =_Bin},
             #st{peer=undefined}=ST)  when PN==?PCMU;PN==?G729;PN==?PCMA ->
@@ -507,15 +505,13 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/bina
                 _->  <<0,0,0,0,0,0,0,0,0,0>>
                 end,
             processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
-            {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
-            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},passu=PsU2,vcr_buf=VB2}};
+            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},passu=PsU2}};
         true ->     % ilbc or opus
             PCM0 = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
             PCM=adjust_gain(PCM0),
             Abuf2 = <<AB/binary,PCM/binary>>,
             processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
-            {ok,VB2} = processVCR(ST#st.vcr,ST#st.vcr_buf,PCM),
-            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},vcr_buf=VB2}}
+            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2}}}
         end
     end;
 handle_info({udp,_,Addr,Port,<<2:2,_:6,_:1,PN:7,_:16,_:32,_:4/binary,_/binary>>}, ST) when PN==?CN ->
@@ -994,24 +990,6 @@ processVCR_rrp(_,_,_) ->
 send2_newvcr(VCR,PCM,SID)->
     if is_pid(VCR)-> VCR ! #audio_frame{codec=?LINEAR,body=PCM,stream_id=SID}; true-> void end.
     
-processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=size(PCM) ->
-    {Sig1,Rest}=split_binary(Vbuf,size(PCM)),
-    Sum=mix2(Sig1,PCM),
-	VCR ! #audio_frame{codec=?LINEAR,body=Sum,samples=?PSIZE},
-%	VCR ! #audio_frame{codec=?LINEAR,body=Rest,samples=?PSIZE},
-    {ok,Rest};
-    
-processVCR(VCR,Vbuf,PCM) when is_pid(VCR),size(Vbuf)>=160 ->
-    {Sig1,Rest}=split_binary(Vbuf,160),
-    {0,Sum} = ?APPLY(erl_amix, phn, [Sig1,PCM]),
-	VCR ! #audio_frame{codec=?LINEAR,body=Sum,samples=?PSIZE},
-    {ok,Rest};
-processVCR(VCR,Vbuf,PCM) when is_pid(VCR) ->
-	VCR ! #audio_frame{codec=?LINEAR,body=PCM,samples=?PSIZE},
-    {ok,Vbuf};
-processVCR(_,_,_) ->
-    {ok,<<>>}.
-
 mix2(Bin1,Bin2) when is_binary(Bin1), is_binary(Bin2)->  
     mix2(sample_list(Bin1),sample_list(Bin2),[]).
 mix2([],[],R)->
