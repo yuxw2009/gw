@@ -91,7 +91,7 @@ new_play_rbt(Tick,Us,ST)  ->
       Us1 = Us,
 	lists:map(fun(U) -> send_tone(?PLAY_INTERVAL*8,U,ST) end,Us1).
 send_tone(PTime,#us{fp=FP,pid=Pid,owner=Owner,cdc_type=CdcType,loop=Loop}=U,St) ->
-    Bin = if CdcType == ?L16->  St#st.pcm; true-> st#st.ilbc end,
+    Bin = if CdcType == ?L16->  St#st.pcm; true-> St#st.ilbc end,
     Body = get_tone(CdcType,FP,Bin),
     if size(Body) > 0 ->
         {Samples,Marker} = if FP == 0 ->  {0,true}; true-> {PTime,false} end,

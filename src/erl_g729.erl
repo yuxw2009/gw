@@ -1,6 +1,6 @@
 -module(erl_g729).
 -on_load(load_my_nifs/0).
--export([icdc/0,xdec/2,xenc/2,xdtr/1]).
+-export([icdc/0,xdec/2,xenc/2,xdtr/1,cdcnum/0,pindex/0]).
 
 load_my_nifs() ->
       erlang:load_nif("./erl_g729", 0).
@@ -16,3 +16,7 @@ xenc(_Ctx,_Frame) ->
 	
 xdtr(_Ctx) ->
 	false.
+
+cdcnum()-> false.	
+pindex()-> false.	
+

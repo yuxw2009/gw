@@ -37,6 +37,7 @@ get(mweb_udp_range) -> {55000,57000};
 get(wconf_udp_range) -> {55010,55110};
 get(room_udp_used) -> 7.
 
+get_vcr()->no_vcr.
 get_root()-> "/home/ubuntu/ttt/gw/applications/".
 get_node(_)-> node().
 

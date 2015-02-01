@@ -112,7 +112,7 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
     UUID = proplists:get_value(cid, Phinfo),
 	{VCR,VCR1} = if Vcr==has_vcr-> 
 	           {vcr:start(mkvfn(UUID++"_"++Phone)),new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
-	           true-> undefined end,
+	           true-> {undefined,undefined} end,
 	ST=#st{phinfo=Phinfo,vcr=VCR,noise=Noise,vcr1=VCR1},
 	ST1 = case WebCdc of
         	pcmu ->
@@ -1124,7 +1124,7 @@ rrp_get_sip_codec() ->
 start(Session, Codec,Options) ->
     {SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE} = avscfg:get(ss_udp_range),
     {Port,Socket} = try_port(SS_BEGIN_UDP_RANGE,SS_END_UDP_RANGE),
-    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,has_vcr,Port,Options],[]),
+    {ok,Pid} = my_server:start(?MODULE,[Session,Socket,Codec,avscfg:get_vcr(),Port,Options],[]),
 	gen_udp:controlling_process(Socket, Pid),
     {ok,Pid,Port}.
 

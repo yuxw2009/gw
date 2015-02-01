@@ -1,2 +1,2 @@
 ulimit -n 20480
-erl -name gw_git@14.17.107.196 -setcookie sbxyz -pa ../ebin +K true -s voip 
+erl -name gw@119.29.62.190 -setcookie mlxyz -pa  ../ebin  +K true -s voip 

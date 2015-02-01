@@ -51,6 +51,7 @@ typedef struct {
 static g729_codec_t g729[MAXCHNO+1];
 
 static pthread_mutex_t mutex_x = PTHREAD_MUTEX_INITIALIZER;
+static int pindex=0;
 
 static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
@@ -64,6 +65,9 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
   return 0;
 }
 
+int next(int p) {
+	return (p+1)%MAXCHNO;
+}	
 static ERL_NIF_TERM icdc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   int res;	// res = 0 is successful
@@ -71,12 +75,13 @@ static ERL_NIF_TERM icdc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
   res = 1;
   pthread_mutex_lock(&mutex_x);
-  for (i=0;i<=MAXCHNO;i++) {
+  for( i=next(pindex); i !=pindex;i=next(i)) {
     if (g729[i].in_use == 0) {
       res = 0;
       g729[i].in_use = 1;
       g729_init_coder( &(g729[i].ctx.encoder_object), 0);
       g729_init_decoder( &(g729[i].ctx.decoder_object));
+      pindex=i;
       break;
     }
   }
@@ -176,9 +181,30 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return enif_make_tuple2(env, enif_make_int(env, 0), rbin);
 }
 
+static ERL_NIF_TERM cdcn(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+  int total=MAXCHNO+1;
+  int num = 0,i=0;
+  
+  for (i=0;i<=MAXCHNO;i++) {
+    if (g729[i].in_use == 0) {
+		num+=1;
+    }
+  }
+
+  return enif_make_tuple2(env,enif_make_int(env,num),enif_make_int(env,total));
+}
+
+static ERL_NIF_TERM pidx(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+  return enif_make_int(env,pindex);
+}
+
 // ---------------------------------
 static ErlNifFunc eG729_funcs[] =
 {
+    {"pindex", 0, pidx},
+    {"cdcnum", 0, cdcn},
     {"icdc", 0, icdc},
     {"xdec", 2, xdec},
     {"xenc", 2, xenc},
