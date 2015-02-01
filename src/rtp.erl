@@ -106,8 +106,8 @@
 }).
 
 init([Session,{Sock1,Sock2},Options]) ->
-%	{_Mega,Sec,_Micro} = now(),
-%	BaseWC = {Mega,Sec,0},
+	{Mega,Sec,_Micro} = now(),
+	BaseWC = {Mega,Sec,0},
 	NewState = processOptions(#state{},Options),
 	ReportTo = proplists:get_value(report_to,Options),
 	Media = proplists:get_value(media,Options),
@@ -118,7 +118,7 @@ init([Session,{Sock1,Sock2},Options]) ->
       my_timer:send_interval(?STAT_INTERVAL, stats),
 %	start_buf_timer(Pltype),
 	{ok,NewState#state{out_media=Media,in_media=Media,sess=Session, transport_status=stunning, socket=Sock1,pltype=Pltype,
-	                                                                          phinfo=Phinfo, rtcp_sck=Sock2,vp8=#vp8_cdc{},report_to=ReportTo,mobile=true}};
+	                                                base_wall_clock=BaseWC, phinfo=Phinfo, rtcp_sck=Sock2,vp8=#vp8_cdc{},report_to=ReportTo,mobile=true}};
 init([Session,Socket,Options]) ->
 	{Mega,Sec,_Micro} = now(),
 	BaseWC = {Mega,Sec,0},
@@ -144,12 +144,8 @@ handle_call(get_rtp_statistics, _, #state{peer=Peer, r_base=RcvCtx,in_audio=SndC
 handle_call(stop,_Frome, #state{peer=Peer, r_base=RcvCtx, in_audio=SndCtx, sess=Sess, dtls=DtlsP}=ST) ->
 	if is_pid(ST#state.moni) -> stop_moni(ST#state.moni);
 	true -> ok end,
-	[{ip, IP},
-	 {pr, CumuR}, 
-	 {pl, CumuL}, 
-	 {jitter, AvgIJ}, 
-	 {rtt, AvgRTT}] = calc_rtp_statistics(Peer, RcvCtx, SndCtx),
-	llog1(ST,"rtp session ~p(ip:~p) statistics:{pr:~p;pl:~p;jitter:~p;rtt:~p}~n", [Sess, IP, CumuR, CumuL, AvgIJ, AvgRTT]),
+	Stats = calc_rtp_statistics(Peer, RcvCtx, SndCtx),
+	llog1(ST,"rtp session ~p statistics:~p~n", [Sess,Stats]),
 	if is_pid(DtlsP) -> io:format("shutdown dtls~n"),dtls4srtp:shutdown(DtlsP); true -> pass end,
 	{stop,normal,ok,ST};
 handle_call(_Call, _From, State) ->
@@ -341,14 +337,14 @@ handle_info({udp,_Socket,Addr,Port,<<_Num:3,_:5, Len1:8,Len2:8,Len3:8, 2:2,_:6,_
     {_,ST1} = handle_info(UdpMsg2,ST0),
     handle_info(UdpMsg1,ST1);
 
-handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
+handle_info({udp,_Socket,Addr,Port,<<Len1:8,Len2:8,2:2,_:6,_Mark:1,Codec:7,_InSeq1:16,_TS:32,_SSRC:32,_/binary>> =Bin},
 			#state{}=ST) when ?IS_RTP(Codec) andalso (2+Len1+Len2 == size(Bin)) ->   
     <<_:16, Bin0/binary>> = Bin,			
     if size(Bin0) =/= Len1+Len2 ->
         io:format("rtp: udp length is invalid Len1:~p Len2:~p Bin0 size:~p~n",[Len1,Len2,size(Bin0)]),
         {noreply,ST};
     true->
-        {Bin1,Bin2= <<2:2,_:6,_:1,_:7,InSeq2:16,_:32,_:32,_/binary>>} = split_binary(Bin0,Len1),
+        {Bin1,Bin2= <<2:2,_:6,_:1,_:7,_InSeq2:16,_:32,_:32,_/binary>>} = split_binary(Bin0,Len1),
         UdpMsg1 = {udp,_Socket,Addr,Port,Bin1},
         UdpMsg2 = {udp,_Socket,Addr,Port,Bin2},
 %        io:format("*~p ~p",[InSeq2,InSeq1]),
@@ -385,15 +381,16 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 	{noreply,ST1#state{r_base=Remote#base_info{pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1}}};
 
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,_:1,Codec:7,InSeq:16,_:32,SSRC:32,_/binary>> =Bin},
-			#state{r_base=R_base=#base_info{pkts_rcvd=PktR,cumu_rcvd=CumuR,seq=LastSeq,ssrc=SSRC},transport_status=inservice,peer={_Addr1,_Port1}}=ST)
+			#state{r_base=R_base=#base_info{pkts_rcvd=PktR,cumu_rcvd=CumuR,seq=LastSeq,ssrc=SSRC,bytes_rcvd=Bsrcvd,cumu_over=Pktsover},
+			transport_status=inservice,peer={_Addr1,_Port1}}=ST)
 			when ?IS_RTP(Codec) -> %rtppacket from mobile or pc yxw
-%    io:format("u"),
+    R_base1=R_base#base_info{bytes_rcvd=Bsrcvd+size(Bin)},			
     case judge_bad_seq(LastSeq,InSeq) of
     {backward,_} -> 
 %         llog1(ST,"rtp receive backward packet inseq:~p lastseq:~p",[InSeq,LastSeq]),
-        {noreply, ST};
+        {noreply, ST#state{r_base=R_base1#base_info{cumu_over=Pktsover+1}}};
     {forward,N} ->
-        NewST=ST#state{peer={Addr,Port},r_base=R_base#base_info{pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1},stats=up_udp_stats(ST#state.stats,Bin)},
+        NewST=ST#state{peer={Addr,Port},r_base=R_base1#base_info{pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1},stats=up_udp_stats(ST#state.stats,Bin)},
         handle_forward_packet(UdpMsg,NewST , N)
     end;
 
@@ -574,7 +571,7 @@ handle_info({send_sr,_,audio},#state{sess=Session, peer_rtcp_addr=Peer,rtcp_sck=
 	Stat = calc_rtp_statistics(Peer, RcvCtx, InAudio),
 	
 	rtp_report(ST#state.report_to,Session,{call_stats, Session, Stat}),
-	llog1(ST,"rtcp:~p~n",[Stat]),
+	llog1(ST,"stats:~p~n",[Stat]),
 %       io:format("send rtcp  ~p~n",[rtcp:parse(<<Head/binary,Body/binary>>)]),
 	case Peer of
 	{IP,Port}->	send_udp(Socket, IP, Port, <<Head/binary,Body/binary>>);
@@ -845,7 +842,11 @@ judge_if_send_buffers(ST=#state{r_base=#base_info{seq=LastSeq}, buffers=[H={{_,I
 % ******** socket closed *******
 %
 
-terminate(normal, _) ->
+terminate(normal, #state{base_wall_clock={_,Now0,_},r_base=#base_info{bytes_rcvd=Bsrcvd},in_audio=#base_rtp{packets=Pkts,bytes=Bytes}}) ->
+    {_,Now1,_} = now(),
+    D=Now1-Now0,
+    Sends=Pkts*12+Bytes,
+    io:format("rtp:terminate ~ps rcv ~pB snd ~pB Bps:(~p ~p)~n",[D,Bsrcvd,Sends,Bsrcvd/D,Sends/D]),
 	ok.
 
 % ----------------------------------
@@ -932,10 +933,10 @@ update_sr_timecode(Now,RTCPElmts,{#base_info{ssrc=Audio}=Rbase,#base_info{ssrc=V
 
 update_fb_info(Now,RTCPElmts,{#base_rtp{ssrc=Audio}=InAudio,undefined}) ->
 	{InAudio2,_} = case fetch_source_report(RTCPElmts)  of
-			[#source_report{ssrc=Audio,lost={FLost,_},sr_ts=SRTS,sr_delay=SRDelay}] ->
+			[#source_report{ssrc=Audio,lost={FLost,_},sr_ts=SRTS,sr_delay=SRDelay,jitter=Jitter}] ->
 				%io:format(",t1':~p,t2:~p,delay:~p~n", [SRTS, Now, SRDelay]),
 				Rtt = compute_rtt(Now,SRTS,SRDelay),
-				{InAudio#base_rtp{rtt=Rtt,fraction_lost=FLost},undefined};
+				{InAudio#base_rtp{rtt=Rtt,fraction_lost=FLost,jitter=Jitter},undefined};
 			_ -> {InAudio,undefined}
 		end,
 	{InAudio2,undefined};
@@ -975,20 +976,65 @@ compute_rtt(Now,LastTS,Delay) ->
 	RTT1 = if RTT0 < 0 -> 0; true -> RTT0 end,
 	<<RTT:16,Fra:16>> = <<RTT1:32>>,
 	RTT + Fra / 16#10000.
-
+%yuxw
 calc_rtp_statistics(Peer,
 	                #base_info{pln=Codec,
 		                              cumu_rcvd=CumuR,
 		                              cumu_lost=CumuL,
-		                              avg_ij=AvgIJ}, 
-		            #base_rtp{avg_rtt=AvgRTT}) ->
+		                              avg_ij=AvgIJ,interarrival_jitter=IAJitter,pkts_rcvd=PtsRecv,pkts_lost=PLost}, 
+		            #base_rtp{avg_rtt=AvgRTT,rtt=Rtt,fraction_lost=FLost,jitter=DownJitter}) ->
     IP = case Peer of
     	    {Addr, _Port} -> Addr;
     	    _ -> unknow
     	 end,
     AvgIJms = (AvgIJ / codec_factor(Codec)) * 1.0,
+    Jitter = (IAJitter / codec_factor(Codec)) * 1.0,
 	AvgRTTms = AvgRTT * 1000 * 1.0,
-	[{ip, IP},{pr, CumuR}, {pl, CumuL}, {jitter, AvgIJms}, {rtt, AvgRTTms}].
+	Rttms = Rtt * 1000 * 1.0,
+	Lostrate=if PtsRecv == 0-> 0.0; true-> PLost/(PLost+PtsRecv) end,
+	R1=[{ip, trans:make_ip_str(IP)},{pr, CumuR}, {pl, CumuL}, {avgIJ, AvgIJms},{avgrttms, AvgRTTms},{rttms,Rttms},{jitter, Jitter}, {lostrate,Lostrate},
+	      {down_jitter,DownJitter},{down_lostrate,FLost}
+	],
+	add_descript(R1).
+
+add_descript(R)->
+    Jitter = proplists:get_value(jitter,R,0.0),
+    Rttms= proplists:get_value(rttms,R,0.0),
+    Lostrate=proplists:get_value(lostrate,R,0.0),
+    DownJitter = proplists:get_value(down_jitter,R,0.0),
+    DownLostrate=proplists:get_value(down_lostrate,R,0.0),
+    AllTuples=[eval_level(jitter,Jitter),eval_level(rtt,Rttms),eval_level(lostrate,Lostrate),eval_level(down_jitter,DownJitter),eval_level(down_lostrate,DownLostrate)],
+    BadTuples= [T||T={Level,_,_,_}<-AllTuples, Level>=2],
+    {_,_,Total_eval,_}=lists:max(AllTuples),
+    Detail_eval=string:join([Cs++":"++utility:term_to_list(Value) || {_,Cs,_,Value}<-BadTuples],";"),
+    [{total_eval,Total_eval},{detail_eval,Detail_eval}|R].
+eval_level(Class,Value)-> 
+    Level=position(Value,levels(Class)), 
+    Value1= if Value>1 -> round(Value); true-> round(Value*100)/100 end,
+    {Level,class_chinese(Class),class_eval(Level),Value1}.
+
+levels(down_jitter)-> levels(jitter);
+levels(down_lostrate)->  levels(lostrate);
+levels(jitter)-> [20.0,50.0,80.0,100.0,150];
+levels(rtt)-> [50.0,200.0,350.0,500.0,1500.0];
+levels(lostrate)->    [0.0,0.03,0.06,0.09,0.12].
+position(Itm,UpList)->    position(Itm,UpList,0).
+position(_Itm,[],N)->N;
+position(Itm,[H|_],N) when Itm=<H -> N;
+position(Itm,[_|T],N) -> position(Itm,T,N+1).
+
+class_eval(0)-> "优";
+class_eval(1)-> "良";
+class_eval(2) -> "中";
+class_eval(3) -> "差";
+class_eval(4) -> "很差";
+class_eval(5) -> "极差".
+
+class_chinese(down_jitter)-> "下行抖动";
+class_chinese(down_lostrate)-> "下行丢包";
+class_chinese(jitter)-> "上行抖动";
+class_chinese(rtt)-> "延时";
+class_chinese(lostrate)-> "上行丢包".
 
 estimate_video_level3(OldL,Video,RTCPElmts,#esti{v_snd_eseq=LastESeq,v_snd_pkts=SPkts,v_snd_lost=SPLost,v_snd_remb=SRemb}=BWE) ->
 	{PRcvd,PLost,ESeq} = case fetch_source_report(RTCPElmts)  of

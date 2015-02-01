@@ -104,6 +104,8 @@
 	cumu_lost = 0,
 	lost_seqs = [],
 	pkts_rcvd = 0,
+	bytes_rcvd=0,
+	cumu_over=0,
 	pkts_lost = 0,
 	cumu_rcvd = 0,
 	avg_ij = 0.0,
@@ -131,5 +133,6 @@
 	rtt = 0,
 	fraction_lost = 0.0,
 	avg_rtt = 0.0,
+	jitter=0.0,
 	rtt_count = 0
 }).

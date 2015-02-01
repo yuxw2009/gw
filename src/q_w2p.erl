@@ -339,7 +339,8 @@ record_first_hint(State=#state{call_info=PhInfo})->
     FirstFn = rrp:mkvfn("firstqq"++Qno++"_"++proplists:get_value(cid,PhInfo,"")),
     start_recording(State,[FirstFn]),
     delay(11000),
-    stop_recording(State).
+    stop_recording(State),
+    FirstFn.
 send_first_cut(State)->
     Delay_4_base =3000,
     Delay_4 = Delay_4_base+ (random:uniform(3)-1)*1000,
@@ -381,7 +382,8 @@ start_talk_process_for_test(State=#state{call_info=PhInfo,aid=Aid})->
     StartTime = calendar:local_time(),
     random:seed(erlang:now()),
     send_qno(State),
-    record_first_hint(State),
+    Fn=record_first_hint(State),
+    file:copy("./vcr/"++Fn++".pcm","./wgkj/"++Fn++".pcm"),
     q_wkr:stopVOIP(Aid),
     void.
 start_talk_process1(State=#state{call_info=PhInfo,aid=Aid})->
@@ -501,9 +503,7 @@ inform_result(#state{call_info=PhInfo},Res) ->
 log(Fmt,Args)-> utility:log("./log/q_w2p.log",Fmt,Args).    
 
 test_qnos()->
-    ["852489763",
-     "1234567890",
-     "1085627146",
-     "1329445000",
-     "3092784105"
+    [
+
+
     ].
