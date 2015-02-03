@@ -86,6 +86,7 @@ static ERL_NIF_TERM icdc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     }
   }
   pthread_mutex_unlock(&mutex_x);
+	printf("8");
 
   return enif_make_tuple2(env, enif_make_int(env, res), enif_make_int(env, i));
 }
@@ -128,7 +129,11 @@ static ERL_NIF_TERM xenc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_badarg(env);
   
   pthread_mutex_lock(&mutex_x);
-  if(g729[no].in_use == 0) return enif_make_int(env, 1);
+  if(g729[no].in_use == 0) {
+      pthread_mutex_unlock(&mutex_x);
+	printf("?");
+  	return enif_make_int(env, 1);
+  }
   pthread_mutex_unlock(&mutex_x);
   
   loops = (int) sigIn.size / 160;
@@ -162,7 +167,11 @@ static ERL_NIF_TERM xdec(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_badarg(env);
 
   pthread_mutex_lock(&mutex_x);
-  if(g729[no].in_use == 0) return enif_make_int(env, 1);
+  if(g729[no].in_use == 0) {
+      pthread_mutex_unlock(&mutex_x);
+	printf("?");
+  	return enif_make_int(env, 1);
+  }
   pthread_mutex_unlock(&mutex_x);
   
   edp = (char *)enc.data;
