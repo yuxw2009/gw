@@ -20,12 +20,14 @@
 init([Name]) ->
 	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
-	ok = save_ivf_hdr(FH),
+%	ok = save_ivf_hdr(FH),
+%    io:format("vcr init:~p~n", [Name]),
 	{ok,#st{name=Name,fc=0,fh=FH,ac=0,ah=AH,bgn=now()}}.
 handle_info(#audio_frame{codec=?PCMU,body=Body},#st{ac=AC,ah=FH}=ST) ->
 	save_pcmu_frame(FH,Body),
 	{noreply,ST#st{ac=AC+1}};
 handle_info(#audio_frame{codec=?LINEAR,body=Body},#st{ac=AC,ah=FH}=ST) ->
+%    io:format(" vcr y "),
 	save_pcmu_frame(FH,Body),
 	{noreply,ST#st{ac=AC+1}};
 handle_info({leVeled_vp8,_KF,_Level,EncDat}, #st{fc=FC,fh=FH}=ST) ->
@@ -48,7 +50,7 @@ terminate(normal, #st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
 	true -> pass end,
 	if FC==0-> file:delete(?DIR++Name++".ivf");
 	true -> pass end,
-	io:format("vcr ~p stopped @~p video and ~p audio.~n",[Name,FC,AC]),
+%	io:format("vcr ~p stopped @~p video and ~p audio.~n",[Name,FC,AC]),
 	ok.
 
 % ----------------------------------	

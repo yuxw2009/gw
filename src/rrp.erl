@@ -266,16 +266,18 @@ handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
     {noreply,ST#st{snd_pev=SPEv2}};
 handle_info({start_record_rrp,[Fn]},#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
+%    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
     vcr:stop(Nvcr),
-    Nvcr1=vcr:start(mkvfn(Fn)),	
+    Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{newvcr=Nvcr1}};
 handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
-    llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
+    llog1(ST,"~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
     vcr:stop(Nvcr),
-    Nvcr1=vcr:start(mkvfn(Fn)),	
+    Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{rtpvcr=Nvcr1}};
 handle_info(stop_record_rrp,#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p stop_record_rrp",[ST#st.session]),
+%    io:format("~p stop_record_rrp ~n",[ST#st.session]),
     vcr:stop(Nvcr),	
     {noreply,ST};
 handle_info(pcmu_to_sip,#st{snd_pev=#ev{actived=true}=SPEv,socket=Socket,peer={IP,Port},in_stream=BaseRTP}=ST) ->
@@ -511,12 +513,16 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/bina
             PCM=adjust_gain(PCM0),
             Abuf2 = <<AB/binary,PCM/binary>>,
             processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
-            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2}}}
+            processVCR_rrp(ST#st.vcr,ST#st.vcr_buf,PCM),
+%            io:format("."),
+            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{}}}
         end
     end;
 handle_info({udp,_,Addr,Port,<<2:2,_:6,_:1,PN:7,_:16,_:32,_:4/binary,_/binary>>}, ST) when PN==?CN ->
+%            io:format("*"),
     {noreply,record_ip_port(ST,{Addr,Port})};
 handle_info({udp,_,Addr,Port,B},ST) ->
+%            io:format("#"),
     llog1(ST,"unexcept binary from ~p:~p~n~p~n",[Addr,Port,B]),
     {noreply,record_ip_port(ST,{Addr,Port})};
 %
@@ -548,6 +554,7 @@ handle_info(Msg, ST) ->
     {noreply,ST}.
 handle_cast(_,St)-> {noreply,St}.
 terminate(normal,St =#st{vcr=VCR,newvcr=NVCR,rtpvcr=RVCR}) ->
+%    io:format("rrp terminate~n"),
     vcr:stop(VCR),	
     vcr:stop(NVCR),	
     vcr:stop(RVCR),	
@@ -730,7 +737,7 @@ uncompress_voice(pcma,?PCMA,BodyA,_ST) when size(BodyA)==160; size(BodyA) == 80-
     BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
 	BodyL;
 uncompress_voice(pcmu,?PCMA,BodyA,_ST)->
-    io:format("*"),
+%    io:format("*"),
     BodyU=tc:pcmA2Mu(BodyA),
     uncompress_voice(pcmu,?PCMU,BodyU,_ST);
 uncompress_voice(pcmu,?PCMU,BodyU,_ST) when size(BodyU)==160; size(BodyU) == 80->
@@ -982,9 +989,12 @@ processRPE(Ev,_,_,_,Info)->    % not handled
 processVCR_rrp(VCR,Vbuf,PCM) when is_pid(VCR) ->    %linear
 %    PCM16K = ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]),
 %	VCR ! #audio_frame{codec=?LINEAR,body=PCM16K,samples=?PSIZE},
+%    io:format(" rrp x "),
     	VCR ! #audio_frame{codec=?LINEAR,body=PCM,samples=?PSIZE},
     {ok,Vbuf};
 processVCR_rrp(_,_,_) ->
+%    io:format(" rrp y "),
+
     {ok,<<>>}.
 
 send2_newvcr(VCR,PCM,SID)->
