@@ -266,7 +266,7 @@ handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
     {noreply,ST#st{snd_pev=SPEv2}};
 handle_info({start_record_rrp,[Fn]},#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
-%    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
+    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
     vcr:stop(Nvcr),
     Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{newvcr=Nvcr1}};
@@ -277,7 +277,7 @@ handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
     {noreply,ST#st{rtpvcr=Nvcr1}};
 handle_info(stop_record_rrp,#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p stop_record_rrp",[ST#st.session]),
-%    io:format("~p stop_record_rrp ~n",[ST#st.session]),
+    io:format("~p stop_record_rrp ~n",[ST#st.session]),
     vcr:stop(Nvcr),	
     {noreply,ST};
 handle_info(pcmu_to_sip,#st{snd_pev=#ev{actived=true}=SPEv,socket=Socket,peer={IP,Port},in_stream=BaseRTP}=ST) ->
@@ -515,7 +515,7 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/bina
             processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
             processVCR_rrp(ST#st.vcr,ST#st.vcr_buf,PCM),
 %            io:format("."),
-            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{}}}
+            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2}}}
         end
     end;
 handle_info({udp,_,Addr,Port,<<2:2,_:6,_:1,PN:7,_:16,_:32,_:4/binary,_/binary>>}, ST) when PN==?CN ->
