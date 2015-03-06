@@ -13,6 +13,7 @@
 
 -define(PCMU,0).
 -define(CN,13).
+-define(G729,18).
 -define(iLBC, 102).
 -define(AMR, 114).
 -define(OPUS, 111).
@@ -29,7 +30,7 @@
 -define(SENTSAVELENGTH,64).
 -define(PSIZE,160).
 -define(is_rtcp(PT), (PT==200 orelse PT==201 orelse PT==202 orelse PT==203 orelse PT==205 orelse PT==206)).
--define(IS_RTP(Codec), (Codec==?AMR orelse Codec==?PCMU orelse Codec==?CN orelse Codec==?iSAC orelse Codec==?iCNG orelse Codec==?iLBC orelse Codec==?OPUS)).
+-define(IS_RTP(Codec), (Codec==?AMR orelse Codec==?PCMU orelse Codec==?CN orelse Codec==?iSAC orelse Codec==?iCNG orelse Codec==?iLBC orelse Codec==?OPUS orelse Codec==?G729)).
 
 
 -define(PTIME,20).
@@ -306,7 +307,6 @@ handle_info({send_lost,video,Seqs},#state{transport_status=inservice,peer={IP,Po
 handle_info(#audio_frame{codec=Codec,marker=Marker,body=Body,samples=Samples},%yxw down audio
             #state{transport_status=_TS,peer={IP,Port},in_audio=BaseRTP,l_srtp=Crypto,socket=Socket} = ST)
             when ?IS_RTP(Codec) ->
-%      io:format("d"),
 	BaseRTP2 = inc_timecode_fixed(BaseRTP#base_rtp{codec=Codec,marker=Marker},Samples),
 	{OutBin,NewBase} = if Crypto==undefined ->
 							{BaseRTP3, RTP} = compose_rtp(BaseRTP2,Body),
@@ -846,7 +846,8 @@ terminate(normal, #state{base_wall_clock={_,Now0,_},r_base=#base_info{bytes_rcvd
     {_,Now1,_} = now(),
     D=Now1-Now0,
     Sends=Pkts*12+Bytes,
-    io:format("rtp:terminate ~ps rcv ~pB snd ~pB Bps:(~p ~p)~n",[D,Bsrcvd,Sends,Bsrcvd/D,Sends/D]),
+    {BpsRec,BpsSnd} = if D==0-> {0.0,0.0}; true-> {Bsrcvd/D,Sends/D} end,
+    io:format("rtp:terminate ~ps rcv ~pB snd ~pB Bps:(~p ~p)~n",[D,Bsrcvd,Sends,BpsRec,BpsSnd]),
 	ok.
 
 % ----------------------------------

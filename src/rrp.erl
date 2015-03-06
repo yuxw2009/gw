@@ -139,17 +139,17 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                       	vad=VAD2,cngd=CNGD,cdc=Opus},    % opus decoder used
               	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,opus,Opus,VAD,VAD2,CNGE,CNGD]),
                   ST#st{webcodec=opus,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
-            undefined->
-                ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>}, 
-              	ToSip = undefined,%#apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,cdc=undefined},    
-                ST#st{r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
             {isac,Isac,VAD,VAD2,{CNGE,CNGD}} ->
                 	ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS16K,60),abuf= <<>>,
                         	vad=VAD,cnge=CNGE,cdc=Isac},    % isac encoder used
                 	ToSip = #apip{trace=voice,passed=zero_pcm16(?FS16K,20),abuf= <<>>,
                         	vad=VAD2,cngd=CNGD,cdc=Isac},    % isac decoder used
                 	llog1(ST,"rrp ~p get ~p:~p vad:~p vad:~p cng:~p,~p",[Session,isac,Isac,VAD,VAD2,CNGE,CNGD]),
-                   ST#st{webcodec=isac,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip}
+                   ST#st{webcodec=isac,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip};
+            Other->
+                ToWeb = #apip{trace=voice,noise_deep=0,noise_duration=0,passed=zero_pcm16(?FS8K,60),abuf= <<>>}, 
+              	ToSip = undefined,%#apip{trace=voice,passed=zero_pcm16(?FS8K,20),abuf= <<>>,cdc=undefined},    
+                ST#st{webcodec=Other,r_base=#base_info{timecode=0},to_web=ToWeb,to_sip=ToSip}
         	end,
 	SipC = case SipCdc of
         	PCMx when PCMx == pcmu orelse PCMx == pcma -> PCMx;
@@ -201,7 +201,7 @@ handle_info({play,undefined}, ST) ->
       {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
       {noreply,ST#st{in_stream=BaseRTP,u2sip= <<>>}};
 handle_info({play,WebRTP}, ST) ->
-    %%io:format("RRP get webrtc ~p.~n",[WebRTP]),
+    io:format("RRP get webrtc ~p.~n",[WebRTP]),
 	WallClock = now(),
 	Timecode = init_rnd_timecode(),
 	BaseRTP = #base_rtp{ssrc = init_rnd_ssrc(),
@@ -229,12 +229,12 @@ handle_info({play,WebRTP}, ST) ->
             {ok,Tr} = my_timer:send_interval(?OPUSPTIME,opus_to_webrtc),
             {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
         	Tr;
-           undefined->
-            {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
-            undefined;
            pcmu ->        % pcmu old method
             {ok,Tr} = my_timer:send_interval(?PTIME,send_sample_interval),
-        	Tr
+        	Tr;
+           _->
+            {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
+            undefined
     	end,
     {noreply,ST#st{media=WebRTP,in_stream=BaseRTP,timer=TR,u2sip= <<>>}};
 handle_info(delay_pcmu_to_sip, ST) ->
@@ -457,6 +457,18 @@ handle_info(amr_to_webrtc,#st{monitor=Mon,webcodec=amr,media=Web,to_web=#apip{}=
 %
 % udp received
 %
+handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binary,Body/binary>>},
+            #st{webcodec=g729,media=OM,r_base=#base_info{seq=LastSeq},to_web=ToWeb,passu=PsU,peer={Addr,Port}}=ST)
+        	when PN==?G729 ->
+%      io:format("."),
+      NewSt=record_ip_port(ST,{Addr,Port}),
+
+	Frame = #audio_frame{codec = ?G729, body = Body,samples=?PSIZE},
+	if is_pid(OM) -> OM ! Frame;
+	true -> io:format("p"), pass end,
+%    processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
+    {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
+
 handle_info({udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,?PHN:7,Seq:16,TS:32,SSRC:4/binary,Info:4/binary,_/binary>>},
             #st{media=OM,r_base=#base_info{seq=LastSeq,timecode=LastTs},rcv_pev=RPEv,peer={Addr,Port}}=ST) ->
 %    <<Nu:8,IsEnd:1,_IsRsv:1,Volume:6,Dura:16>> = Info,
@@ -549,8 +561,10 @@ handle_info(send_sample_interval,#st{snd_pev=#ev{actived=false},peerok=true,in_s
     {noreply, ST#st{in_stream = NewBaseRTP,u2sip=Rest}};
 
 %
+handle_info(pcmu_to_sip, ST) when ST#st.webcodec==g729->
+    {noreply,ST};
 handle_info(Msg, ST) ->
-	llog1(ST,"rrp unexcept msg ~p.~n",[Msg]),
+	llog1(ST,"rrp unexcept msg ~p ~p.~n",[Msg,ST#st.webcodec]),
     {noreply,ST}.
 handle_cast(_,St)-> {noreply,St}.
 terminate(normal,St =#st{vcr=VCR,newvcr=NVCR,rtpvcr=RVCR}) ->
@@ -579,6 +593,12 @@ record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon,localport=LocalPort}
     _-> Froms
     end,
     St#st{udp_froms=NewFroms}.
+
+handle_audio_frame(#audio_frame{codec=?G729},#st{peerok=false}=ST) -> {noreply,ST};
+handle_audio_frame(#audio_frame{codec=?G729,body=Body,samples=Samples},#st{snd_pev=#ev{actived=false},peerok=true,in_stream=BaseRTP,socket=Socket,peer={IP,Port}}=ST) ->
+    {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),?G729,Body),
+	send_udp(Socket,IP,Port,RTP),
+    {noreply, ST#st{in_stream = NewBaseRTP}};
 
 % PCM16
 handle_audio_frame(#audio_frame{codec=?L16,body=Body,samples=Samples},#st{to_sip=#apip{abuf=AB}=ToSip}=ST) ->
@@ -1021,6 +1041,7 @@ to_bin([S|T], Bin) ->
     to_bin(T, << Bin/binary,S:16/signed-little>>).
     
 % ----------------------------------
+rrp_get_web_codec(g729) ->g729;
 rrp_get_web_codec(pcmu) ->pcmu;
 rrp_get_web_codec(amr) ->
 	{0,Amr} =  ?APPLY(erl_amr, icdc, [0,4750]) ,
@@ -1067,6 +1088,8 @@ rrp_release_codec({WebCdc,SipCdc}) ->
 	ok.
 
 
+rrp_release_codec2(g729) ->
+	pass;
 rrp_release_codec2(undefined) ->
 	pass;
 rrp_release_codec2(pcmu) ->
