@@ -41,6 +41,7 @@ get_vcr()->no_vcr.
 get_root()-> "/home/ubuntu/ttt/gw/applications/".
 get_node(_)-> node().
 
+get_self_percent()->  0.1.
 
 
 

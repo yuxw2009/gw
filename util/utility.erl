@@ -156,9 +156,27 @@ d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}}) ->
     DateStr ++" "++TimeStr.
 
 log(Filename, Str, CmdList) ->
+    chkfilesize(Filename,5000000),
+    log1(Filename,"~s: "++Str,[d2s(erlang:localtime())|CmdList]).
+
+log1(Filename, Str, CmdList) ->
     {ok, IODev} = file:open(Filename, [append]),
-    io:format(IODev,"~s: "++Str++"~n",[d2s(erlang:localtime())|CmdList]),
+    io:format(IODev,Str++"\r\n", CmdList),
     file:close(IODev).
+
+chkfilesize(Filename,Size) ->
+    case file:read_file_info(Filename) of
+        {ok, Finfo} ->
+            if
+                element(2, Finfo) > Size ->
+                    file:rename(Filename, Filename++llog:ts()++".log");
+                true ->
+                    void
+            end;
+        {error, _} ->
+            void
+    end.
+
 
 delete_file_before(Fn, Local_time)->
     F = fun()->

@@ -61,7 +61,7 @@ terminate(normal, #st{name=Name,ac=AC,ah=AH}) ->
 	file:close(AH),
 	if AC==0-> file:delete(?DIR++Name++".pcm");
 	true -> pass end,
-	io:format("new_vcr ~p stopped ~p audio.~n",[Name,AC]),
+%	io:format("new_vcr ~p stopped ~p audio.~n",[Name,AC]),
 	ok.
 
 % ----------------------------------	

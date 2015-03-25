@@ -201,7 +201,7 @@ handle_info({play,undefined}, ST) ->
       {ok,_} = my_timer:send_after(60,delay_pcmu_to_sip),
       {noreply,ST#st{in_stream=BaseRTP,u2sip= <<>>}};
 handle_info({play,WebRTP}, ST) ->
-    io:format("RRP get webrtc ~p.~n",[WebRTP]),
+    %%io:format("RRP get webrtc ~p.~n",[WebRTP]),
 	WallClock = now(),
 	Timecode = init_rnd_timecode(),
 	BaseRTP = #base_rtp{ssrc = init_rnd_ssrc(),
@@ -266,7 +266,7 @@ handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
     {noreply,ST#st{snd_pev=SPEv2}};
 handle_info({start_record_rrp,[Fn]},#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
-    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
+%    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
     vcr:stop(Nvcr),
     Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{newvcr=Nvcr1}};
@@ -277,7 +277,7 @@ handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
     {noreply,ST#st{rtpvcr=Nvcr1}};
 handle_info(stop_record_rrp,#st{newvcr=Nvcr}=ST) ->
     llog1(ST,"~p stop_record_rrp",[ST#st.session]),
-    io:format("~p stop_record_rrp ~n",[ST#st.session]),
+%    io:format("~p stop_record_rrp ~n",[ST#st.session]),
     vcr:stop(Nvcr),	
     {noreply,ST};
 handle_info(pcmu_to_sip,#st{snd_pev=#ev{actived=true}=SPEv,socket=Socket,peer={IP,Port},in_stream=BaseRTP}=ST) ->
@@ -464,7 +464,8 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,SSRC:4/binar
       NewSt=record_ip_port(ST,{Addr,Port}),
 
 	Frame = #audio_frame{codec = ?G729, body = Body,samples=?PSIZE},
-	if is_pid(OM) -> OM ! Frame;
+	if is_pid(OM) -> 
+	    if (size(Body) >= 10 )-> OM ! Frame; true-> io:format("p~p",[size(Body)]) end;
 	true -> io:format("p"), pass end,
 %    processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
     {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
@@ -567,8 +568,9 @@ handle_info(Msg, ST) ->
 	llog1(ST,"rrp unexcept msg ~p ~p.~n",[Msg,ST#st.webcodec]),
     {noreply,ST}.
 handle_cast(_,St)-> {noreply,St}.
-terminate(normal,St =#st{vcr=VCR,newvcr=NVCR,rtpvcr=RVCR}) ->
+terminate(normal,St =#st{vcr=VCR,newvcr=NVCR,rtpvcr=RVCR,vcr1=Vcr1}) ->
 %    io:format("rrp terminate~n"),
+    vcr:stop(Vcr1),	
     vcr:stop(VCR),	
     vcr:stop(NVCR),	
     vcr:stop(RVCR),	
@@ -760,16 +762,22 @@ uncompress_voice(pcmu,?PCMA,BodyA,_ST)->
 %    io:format("*"),
     BodyU=tc:pcmA2Mu(BodyA),
     uncompress_voice(pcmu,?PCMU,BodyU,_ST);
-uncompress_voice(pcmu,?PCMU,BodyU,_ST) when size(BodyU)==160; size(BodyU) == 80->
+uncompress_voice(pcmu,?PCMU,BodyU,_ST) when size(BodyU) < 80->   <<>>;
+uncompress_voice(pcmu,?PCMU,<<BodyU:80/binary, Rest/binary>>,ST) ->
     BodyL = ?APPLY(erl_isac_nb, udec, [BodyU]),
-	BodyL;
-uncompress_voice({g729,Ctx},?G729,Body,_ST) when size(Body)==2 ->
+    RestPcm=uncompress_voice(pcmu,?PCMU,Rest,ST),
+    <<BodyL/binary,RestPcm/binary>>;
+	
+%uncompress_voice({g729,Ctx},?G729,Body,_ST) when size(Body)==2 ->
+%    {0,<<Body1:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
+%    {0,<<Body2:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
+%    <<Body1/binary,Body2/binary>>;
+uncompress_voice({g729,Ctx},?G729,<<Body:10/binary,Other/binary>>,ST)->
     {0,<<Body1:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
-    {0,<<Body2:160/binary,_/binary>>} = ?APPLY(erl_g729, xdec, [Ctx,Body]),
+    Body2 =uncompress_voice({g729,Ctx},?G729,Other,ST),
     <<Body1/binary,Body2/binary>>;
-uncompress_voice({g729,Ctx},?G729,Body,ST) ->
-    {0,BodyL} = ?APPLY(erl_g729, xdec, [Ctx,Body],[Ctx,ST#st.peer]),
-	BodyL;
+uncompress_voice(Type0,Type1,Body,_St) when size(Body)==2 orelse size(Body)==0->
+    <<>>;
 uncompress_voice(Type0,Type1,Body,_St)->
     io:format("Type0:~p,Type1:~p,Bodysize:~p~n",[Type0,Type1,size(Body)]),
     <<>>.
