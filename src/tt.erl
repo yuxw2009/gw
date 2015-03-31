@@ -81,7 +81,7 @@ a=crypto:0 AES_CM_128_HMAC_SHA1_32 inline:H/n9HFOtjZFyDX2mtLh0wtgSXfPZzZb353aQjL
 ">>.
 	
 'SAMPLE'(Port) -> 
-	Orig = #sdp_o{username = <<"LWORK">>,
+	Orig = #sdp_o{username = <<"VOS3000">>,
 				  sessionid = "1234",
 				  version = "1",
 				  netaddrtype = inet4,

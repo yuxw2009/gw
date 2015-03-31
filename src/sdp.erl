@@ -516,6 +516,10 @@ parse_codec_params(g729,Params) ->
 	{ok, Re} = re:compile("([^/]+)=([^/]+)"),
 	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
 	{atom(Type),atom(T1)};
+parse_codec_params(iLBC,Params) ->
+	{ok, Re} = re:compile("([^/]+)=([^/]+)"),
+	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
+	{atom(Type),atom(T1)};
 % "a=fmtp:111 minptime=10"
 parse_codec_params(opus, Params) ->
 	{ok, Re} = re:compile("([^/]+)=(\\d+)"),

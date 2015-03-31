@@ -342,7 +342,7 @@ get_local_sdp(LPort) ->
     
 'SAMPLE'(Port) -> 
 	HOST = avscfg:get(ip4sip),
-    Orig = #sdp_o{username = <<"LWORK">>,
+    Orig = #sdp_o{username = <<"VOS3000">>,
                   sessionid = "1234",
                   version = "1",
                   netaddrtype = inet4,

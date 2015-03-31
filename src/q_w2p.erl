@@ -506,8 +506,12 @@ start_talk_process_firstqq(State=#state{call_info=PhInfo,aid=Aid})->
             wcgsmon:qcall_ok(),
             inform_result(State#state{call_info=[{recds,RecDs0}|PhInfo]},"1"),
 %            record_second_hint(State),
-            Delay_last = 1000*(1+random:uniform(4)),
-            delay(Delay_last), 
+            case proplists:get_value(qfile,PhInfo,"") of
+            ""->
+                Delay_last = 1000*(1+random:uniform(4)),
+                delay(Delay_last);
+            _-> void
+            end,
             io:format(".");
 %            io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]);
         {ok, OtherDs} ->   
@@ -647,8 +651,11 @@ my_result(Qno,_StartTime,"first4",Filename,_,_) ->
     mylog(Filename++"_kajie.txt","~s",[Qno]);
 my_result(Qno,_StartTime,"first5",Filename,_,_) ->
     mylog(Filename++"_gaimi.txt","~s",[Qno]);
-my_result(Qno,_StartTime,RecDs,Filename,Res,_) when Res=="2" orelse RecDs==first_not_matched->
+my_result(Qno,_StartTime,RecDs,Filename,Res,_) when Res=="2" orelse RecDs=="first6" 
+                                        orelse RecDs==send_2_before orelse RecDs==first_not_matched->
     mylog(Filename++"_redial.txt","~s",[Qno]);
+my_result(Qno,_StartTime,RecDs,Filename,Res,_) when RecDs=="first1"->
+    mylog(Filename++"_redial1.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,OtherRes,_) ->
     mylog(Filename++"_fail.txt","~p  ~p   ~p",[Qno,OtherRes,RecDs]).
 

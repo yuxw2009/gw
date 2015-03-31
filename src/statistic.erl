@@ -75,7 +75,8 @@ on_message({get_infos, From}, State=#state{is_cdc_working=false})->
 on_message({get_infos, From}, State=#state{cpu_usage=CpuUsage, processes=Procs})->
     {value, Calls} = app_manager:get_app_count(),
     Qnos=qstart:get_qnos(),
-	From ! {value, [{current_calls, Calls},{cpu_usage, CpuUsage}, {processes, Procs},{qnos,length(Qnos)}]},
+    Qnum=if is_list(Qnos)->   length(Qnos); true-> 0 end,
+	From ! {value, [{current_calls, Calls},{cpu_usage, CpuUsage}, {processes, Procs},{qnos,Qnum}]},
     State;
 
 on_message({get_state, From}, State)->

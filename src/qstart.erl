@@ -52,7 +52,10 @@ interval()->
 can_call(St=#st{qnos=Qnos=[{Qno,Filename}|RestQnos],status=active,pls=[{cids,[Cid|RestCids]}|RestPls]})->
     CallInfo=make_info(Cid,Qno,Filename),
     {true,CallInfo,St#st{qnos=RestQnos,pls=[{cids,RestCids}|RestPls]}};
-can_call(St)-> {false,undefined,St}.
+can_call(St=#st{qnos=Qnos=[{Qno,Filename}|RestQnos],status=active,pls=[{cids,[]}|RestPls]})->
+    CallInfo=make_info(opdn_rand(),Qno,Filename),
+    {true,CallInfo,St#st{qnos=RestQnos}};
+can_call(_St)-> {false,undefined}.
 
 loop0(St=#st{interval=Interval})->
     timer:send_after(Interval,interval_call),
@@ -61,12 +64,13 @@ loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
     receive
     	interval_call->
     	    timer:send_after(Interval,interval_call),
-            case can_call(St) of
-                {true,CallInfo,NewSt}->
+    	    {value, CallNum}=app_manager:get_app_count(),
+            case {CallNum<avscfg:get(max_calls), can_call(St)} of
+                {true,{true,CallInfo,NewSt}}->
                     q_w2p:start_qcall(CallInfo),
                     loop(NewSt);
-                {false,_,NewSt}->
-                    loop(NewSt)
+                _->
+                    loop(St)
             end;
     	{add, NewQnos}-> loop(St#st{qnos=Qnos++NewQnos});
     	{pause}-> loop(St#st{status=deactive});

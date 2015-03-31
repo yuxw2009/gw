@@ -1,6 +1,7 @@
 -module(q_strategy).
 -compile(export_all).
 
+wq_trafic_stratigy(_)-> can_call;
 wq_trafic_stratigy(Phinfo)->
      {value, Calls} = app_manager:get_app_count(),
 %     MaxCalls = avscfg:get(max_calls),
