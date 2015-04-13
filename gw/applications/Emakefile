@@ -1,0 +1,1 @@
+{["./esrc/*","./util/*"], [{outdir, "ebin"}, {i, "./include"} ]}.

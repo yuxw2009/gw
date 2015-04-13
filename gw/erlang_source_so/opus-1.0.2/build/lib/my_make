@@ -1,0 +1,14 @@
+CC = gcc
+CFLAGS = -fPIC -shared -Wall -DVAR_ARRAYS -DOPUS_BUILD
+INCLUDE = -I /usr/local/lib/erlang/usr/include \
+		  -I ./include \
+		  -I ./src \
+		  -I ./celt
+top_srcdir = .
+INCLUDES = -I$(top_srcdir)/include -I$(top_srcdir)/celt -I$(top_srcdir)/silk -I$(top_srcdir)/silk/float -I$(top_srcdir)/silk/fixed
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDES)
+
+nif:
+	$(CC) -lm $(CFLAGS) libopus.so.0.3.0 erl_opus.o -o erl_opus.so

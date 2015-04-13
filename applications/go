@@ -1,2 +1,0 @@
-ulimit -n 20480
-erl -name gw@119.29.62.190 -setcookie mlxyz -pa  ../ebin  +K true -s voip 

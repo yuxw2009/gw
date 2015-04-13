@@ -1,0 +1,11 @@
+CFLAGS = -fPIC -shared
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include \
+		  -I ../../..
+SOURCES = $(wildcard *.c)
+OBJS = $(wildcard *.o)
+
+erl_video:
+	gcc -fPIC -c $(SOURCES) $(INCLUDE)
+
+nif:
+	gcc $(CFLAGS) $(OBJS) -o erl_video.so

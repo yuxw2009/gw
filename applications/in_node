@@ -1,2 +1,0 @@
-#！ /bin/bash
-erl -setcookie sbxyz -name node_3@14.17.107.196 -remsh $1
