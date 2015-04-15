@@ -1,0 +1,12 @@
+1 账户登录
+req:post /login
+    params: [{acc,Acc},{pwd,Pwd},{time,Time}]   %Pwd:md5(password+time)
+ack: [{status,ok},{uuid,UUID}]  [{status,failed},{reason,Reason}]
+2 上传号码:
+req:post /upload_qno
+     params: [{uuid,UUID},{qno,Qno}]
+ack: [{status,ok},{auth_code,Code}]     [{status,no_money},{jpg,JpgBin}]    [{status,faild},{reason,Reason}]
+3 退出登录
+req:post /logout
+     params: [{uuid,UUID}]
+ack: [{status,ok}]  

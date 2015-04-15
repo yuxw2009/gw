@@ -1,0 +1,74 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8;"/>
+<style>
+video {
+  border:5px solid black;
+  width:320px;
+  height:240px;
+}
+button {
+  font: 18px sans-serif;
+  padding: 8px;
+}
+input {
+  font: 48px;
+  padding: 16px;
+}
+textarea {
+  font-family: monospace;
+  margin: 2px;
+  width:480px;
+  height:40px;
+}
+</style>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="webrtc5.js"></script>
+
+<script type="text/javascript">
+function call_succ() {
+  btn2.disabled = true;
+  btn3.disabled = false;
+}
+
+function call_hookon() {
+  btn2.disabled = false;
+  btn3.disabled = true;
+}
+
+function voip_startcall() {
+  var PhNo = document.getElementById('phno').value;
+
+  voip_webcall(PhNo,call_succ,call_hookon);
+}
+
+function voip_stopcall() {
+  voip_hangup();
+  call_hookon();
+}
+</script>
+</head>
+
+<body>
+<br>
+<input id="phno" type="text" value = "138"/>
+<br>
+<button id="btn1" onclick="getaudio()">GetMedia</button>
+<button id="btn2" onclick="voip_startcall()">Call</button>
+<button id="btn3" onclick="voip_stopcall()">Hang Up</button>
+<br>
+<video id="vid1" style="width:320px;height:240px" autoplay></video>
+<video id="vid2" style="width:320px;height:240px" autoplay></video>
+<br>
+<div id="status"> </div>
+
+<script type="text/javascript">
+btn1.disabled = false;
+btn2.disabled = false;
+btn3.disabled = true;
+
+</script>
+
+</body>
+</html>

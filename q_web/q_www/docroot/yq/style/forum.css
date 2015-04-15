@@ -1,0 +1,70 @@
+#article #forum .menu{ margin:0; padding:15px 0 0; zoom:1; background:#e6e6e6;}
+#article #forum .menu div{float:right; height:30px; line-height:30px; padding:0 10px;cursor:pointer; border-bottom:none; position:relative;}
+#forum .title, #forum .detail_content, #forum .reply_content{height:65px; background:#fff; font-family: "微软雅黑"; outline: none;  width:99%; resize: none; border: 1px solid #D0D0D0; font-size:14px; padding:6px 0 6px 6px;}
+#forum .title:hover, #forum .detail_content:hover, #forum .reply_content:hover {	border: 1px solid #a3d2ed;	border-color: #7BD6F6;	-moz-outline-radius: 8px;-webkit-box-shadow: 0 0 10px rgba(123,214,246,.6);-moz-box-shadow: 0 0 10px rgba(123,214,246,.6);box-shadow: 0 0 10px rgba(123,214,246,.6);}
+#forum .title{ height:23px; margin-top:8px;}
+#forum .detail_content{ height:55px; margin-top:10px;}
+
+/*#article #forum .sendmessage {position: static;}*/
+#forum .pagecontent_img {padding-bottom: 36px; padding-left: 36px; width: auto; height: auto; clear: both;}
+#article #forum .op_content{clear:both; margin-top:0px;}
+#forum .op_content{ padding-bottom:10px;}
+#nav .tab_item li.forum a {background:url(/images/icon.png) no-repeat  left -177px; }
+/*论坛*/
+#forum .modetype{ display: inline-block; padding-right: 10px; padding-bottom: 5px}
+#forum .forum_sums{ color:#999; }
+#forum .history_nav{ padding:10px 0;}
+#forum .history_nav a {color:#666; font-size:13px;}
+.post_and_pgt {margin-top: 5px; margin-bottom: 5px}
+#forum_post{float: left; display:inline-block; height:28px;width:80px; background:url(/images/btn_new.png) left -80px  no-repeat; text-align:center; line-height:30px; font-size:15px; color:#fff;}
+.forum_pgt {text-align: right; }
+.forum_pgt  a, .pg strong{display: inline-block; margin-left: 4px; line-height:28px;  padding: 0 8px; height: 26px; border: 1px solid; border-color: #C2D5E3; background-color: white; background-repeat: no-repeat;
+color: #333; overflow: hidden; text-decoration: none;}
+.forum_pgt  a.gotolist{ background:url(/images/icon.png) no-repeat  left -969px; padding-left:20px; }
+.forum_pgt .pg a.next{ background:url(/images/icon.png) no-repeat  right -1018px; padding-right:20px; }
+#forum .pg_number .current{font-weight: bolder; background: #3d96c2; color: #fff;}
+#forum .mode_tag{ background-position: left -1945px;}
+.forum_box .sea_box{ width:196px;background: #fafafa;}
+.forum_box .sea_box input{ width:180px; background: #fafafa;}
+.forum_nav{ background:url(/images/mybbs_btn.png) left top  no-repeat;   margin-top:15px; height:24px; line-height:24px; padding-left:65px; padding-top:3px; }
+.forum_nav_con{ background:#f2f2f2; height:23px; padding-left: 20px;}
+.forum_nav a{ color:#3e3e3e; font-size:13px;}
+.forum_menu{ background:#f2f2f2; margin-top:20px; padding-bottom: 25px;}
+.forum_menu h3{ padding:0; margin:0; height:27px; line-height:27px; background:#3b5998; color:#fff;  padding-left:10px;}
+.forum_menu ul{ padding-left:10px;}
+.forum_menu li{ font-size:12px; padding-top:10px;}
+.forum_menu li li{ padding-top:0; line-height:25px;  background:url(/images/forum_btn.png) left -41px  no-repeat; padding-left:15px;}
+.forum_menu li li a{ font-size:15px; color:#3d96c2;}
+.forum_menu .current{color:#0000C2;}
+.forum_split{ padding:0 5px;}
+.forum_con_nav{ background:#e6e6e6; height:30px; line-height:30px; margin-bottom:5px; padding:1px 10px; display:none;}
+.forum_con_nav li{ float:left;}
+.forum_con_nav li{ width:80px; text-align:center; cursor: pointer;}
+.forum_con_nav li.curent{ background:#fff; margin-top:2px; border-top-left-radius:5px; border-top-right-radius:5px;}
+.forum_con_nav li.sequence{ float:right; width: 250px; text-align: right;}
+#forum_msg{ border-top:1px solid #ccc; margin-top:15px;}
+#filter_orderby { background: url(/images/arrow.gif) no-repeat 100% 3px; padding-right: 15px; color:#2d2d2d; padding-left:5px;}
+.announcement{ background: url(/images/forum_btn.png) no-repeat left -76px; width:20px; height:26px; display:inline-block; vertical-align:middle; }
+.forum_top{ background: url(/images/forum_btn.png) no-repeat left -139px; width:35px; height:26px; display:inline-block; vertical-align:middle; }
+.overall{ background: url(/images/forum_btn.png) no-repeat left -111px; width:63px; height:26px; display:inline-block; vertical-align:middle; }
+#article #forum .option_content dd.pagecontent{ color:#3d96c2; font-size:13px;}
+#article #forum .option_content dd.pagecontent a{ color:#3d96c2; }
+#forum .forum_foot{ padding-left:60px; color:#999999; font-size:12px;}
+#forum .forum_foot .postby{ color:#3f3f3f;}
+#forum .forum_foot .posttime{ padding:0 10px;}
+#forum .reply_hint{float:right;  background:url(/images/forum_btn.png) no-repeat  left top; width:38px; height:36px; display:inline-block; color:#fff; line-height:36px; text-align:center; }
+.include_attachment, .include_image{ background:url(/images/icon.png) no-repeat  left -298px;margin-left: 10px; display:inline-block; height:17px; padding:2px 0 2px 22px; color:#3294bd; line-height:22px; vertical-align: middle;}
+.include_attachment { background-position: left -320px; }
+#forum_detail{ padding:0 0 20px; border-top:1px solid #ccc; position:relative; margin-top:15px;}
+#forum_detail .forumtop{ position:absolute; right: 66px; top: 10px;}
+#forum_detail h3{ padding:0; margin:0; font-size:15px; padding:10px 0; line-height:25px;}
+#forum_detail .thread_subject{ text-align:left; word-break:break-all;}
+#forum_detail .thread_btns{ float:right;}
+#forum_detail .forum_content{ text-align:left; font-size:13px; padding:0; margin:0;line-height: 25px;word-wrap: break-word;word-wrap: break-word; padding:15px; }
+#forum_detail dt img{ vertical-align: middle; border:1px solid #ccc; padding:1px; border-radius:5px; }
+#forum_detail .floor{ float:right; padding-right:10px; font-weight: 400; }
+#forum_detail .floor em{ font-weight:normal;}
+#forum_detail dl{border: 1px solid #A9CBEE; padding: 0 0 10px 0; margin-bottom:20px;}
+#forum_detail dt{ border-bottom:1px dotted #ccc; padding:10px 10px 5px;; }
+#forum_detail .pagecontent{ padding:10px 10px; line-height:25px; font-size:13px;}
+#forum_detail .postby{ color:#0078B6; padding-right:5px;}

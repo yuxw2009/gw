@@ -1,0 +1,3 @@
+{"src/*",      [{outdir, "ebin/"}, {i, "include/"},{i,"/usr/local/lib/yaws/include"}]}.
+{"utility/*",      [{outdir, "ebin/"}, {i, "include/"},{i,"/usr/local/lib/yaws/include"}]}.
+{"relayer/*",      [{outdir, "ebin/"}, {i, "include/"},{i,"/usr/local/lib/yaws/include"}]}.

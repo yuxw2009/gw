@@ -1,0 +1,44 @@
+﻿@charset "utf-8";
+/* CSS Document */
+body,dl,dd,h3{ margin:0; padding:0; }
+body{ background:url(../images/whsbody_bg.gif) repeat-x #58d6ff; }
+.body_bg{ width:100%;  background:url(../images/whs_loginbody.png) no-repeat center top; }
+.cloud_bg{width:100%;  background:url(../images/cloud_bg.png) no-repeat center bottom; }
+li{ list-style:none; }
+a{ text-decoration:none;outline:none;}
+.clear{ clear:both; padding:10px 0;}
+body { font-family:"微软雅黑"; color:#555555; font-size:14px;}
+#contianer{ width:900px; margin:0 auto ;padding-top: 20px;}
+#contianer ul:after ,#contianer:after , .content:after{content:".";height:0;visibility:hidden; display:block;clear:both; }
+.content{ background:url(../images/whs_bodybg.png) no-repeat right top; min-height:415px;}
+#contianer .logo{ background:url(../images/whs_logo.png) no-repeat left top; height:70px; width:232px; float:left;}
+#contianer .xcy{ background:url(../images/whs_xcy.png) no-repeat left top; height:70px; width:620px; float:right;}
+.content{padding-top:45px;}
+.whs_list{ width:500px; float:left; color:#fff;}
+.whs_login{ width:400px; float:right; position:relative;}
+.whs_list dl{ position:relative; padding-bottom:10px; line-height:25px;}
+.whs_list dd{ padding-left:30px;}
+.whs_list .list_icon{ background:url(../images/whs_icon.png); height:24px; width:24px; display:inline-block; position:absolute; left:0; top:3px; }
+
+#contianer li{ height:70px;float:left; width:365px; position:relative; line-height:65px; }
+#contianer li.userNameTips,#contianer li.passwordTips{ height:30px; line-height:20px; color:#ffd201; padding-left:60px; visibility:hidden;}
+#contianer input{ border:none; height:38px; width:280px; outline:none; font-size:18px; font-family:"微软雅黑"; color:#2c628b; line-height:38px; *margin-top:-28px; *margin-left::-25px; *height:36px; *border:none; }
+#contianer .input_box{ background:url(../images/whs_input.png); width:283px; height:41px; display:inline-block; padding:2px 2px 2px 10px;}
+
+/*#contianer input{ width:230px; height:45px; line-height:45px; font-size:18px;font-family:"微软雅黑"; border:none; background:url(../images/loginbtn.png) no-repeat left -163px; padding-left:10px;outline:none; vertical-align:top;}
+*/
+#contianer a.btn{ background:url(../images/whs_login_btn.png) no-repeat;height:45px;width:165px;display:block; text-align:center; cursor:pointer; border:none;}
+#contianer .submit_con{ width:100px; margin:35px auto 0;}
+#contianer label{ vertical-align:top;}
+#contianer .person, #contianer .comp_icon ,#contianer .pas_tip{background:url(../images/whs_lable.png) no-repeat; width:35px; height:45px; display:inline-block; vertical-align:middle;} 
+#contianer .person{  background-position:-45px 3px;}
+#contianer .comp_icon{ background-position: -95px 3px;}
+#contianer .pas_tip{ background-position: left 3px; }
+#contianer .link{ font-weight:normal; font-family:Verdana, Geneva, sans-serif; clear:both; padding-left:50px; padding-top:3px;}
+#contianer .link a{ color:#6ea3c5; }
+#contianer .at_icon{color:#FFF; font-size: 20px; font-weight: bold; }
+#tips{ position:absolute; top:216px; left:89px; color:red; display:none; font-size:16px;}
+.pssword_tip{ position:absolute; left:49px; top:-1px; font-size:18px; color:#2c628b;}
+.tel{ padding-top:45px;}
+.tel a{ color:#555555}
+.tel dt{ background:url(../images/whs.png) no-repeat left top; width:100%; height:82px; }

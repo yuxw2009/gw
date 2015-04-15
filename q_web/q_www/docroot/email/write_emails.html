@@ -1,0 +1,52 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>管理界面</title>
+<script type="text/javascript" src="ueditor/editor_config.js"></script>
+<script type="text/javascript" src="ueditor/editor_all.js"></script>
+<link rel="stylesheet" type="text/css" href="style/email.css"/>
+</head>
+<body>
+<div id="subContainer">
+<div class="email_opt">
+  <div class="email_opt_con"> <a href="###" class="">发送</a> <a href="###" class="">保存草稿</a> <a href="###" class="">取消</a> </div>
+</div>
+<div class="mail_top writemail_top">
+  <ul>
+    <li class="fw fj">
+      <div class="fT">发件人：</div>
+      <div class="fw sjR" >
+        <div><span class="nui-addr-name">潘刘兵</span><span class="nui-addr-email">&lt;pan.pansly@zte.com.cn&gt;</span></div>
+      </div>
+    </li>
+    <li class="fw sj">
+      <div class="fT">收件人：</div>
+      <div class="nui_ipt">
+        <input  type="text" class="wm_input"  value=""/>
+      </div>
+    </li>
+    <li class="fw cs" style="display:none">
+      <div class="fT">抄送人：</div>
+      <div class="fU">(无)</div>
+    </li>
+    <li class="fw zt">
+      <div class="fT">主&nbsp;&nbsp;&nbsp;题：</div>
+      <div class="nui_ipt">
+        <input  type="text" class="wm_input"  value=""/>
+      </div>
+    </li>
+  </ul>
+  <a href="###" class="upload_attachment">上传附件</a> </div>
+<textarea name="后台取值的key" id="myEditor">输入邮件内容</textarea>
+</div>
+<script type="text/javascript">
+    var editor = new UE.ui.Editor();
+    editor.render("myEditor");
+    //1.2.4以后可以使用一下代码实例化编辑器
+    //UE.getEditor('myEditor')
+</script> 
+<script type="text/javascript" src="../script/jquery-1.7.2.min.js"></script>
+<script type="text/javascript" src="script/tabcommon.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<erl>
+
+-include("snode.hrl").
+
+-define(MaxFileSize, 100000000). % 100M
+-define(MaxPicSize,  1000000).    % 1M
+-define(SvrTimeout,2000).
+
+-define(SVRF,{sfid,?FNODE}).
+
+-define(DIR,fid:dir()).
+
+-record(attach, {
+    properfile,
+    fid,
+    owner,
+    name,
+    length,
+    ts
+}).
+
+-record(upload, {
+    owner,
+    fid,
+    worker,
+    info,
+    tcount,
+    filelength,
+    lengthlimit,
+    filename,
+    fd,
+    lastrans,
+    attachs
+}).
+
+out(A) ->
+	Param = yaws_api:parse_query(A),
+	{Fid,UUID} = {proplists:get_value("fid",Param),list_to_integer(proplists:get_value("uuid",Param))},
+    Result=fid:check(UUID,Fid),
+    AckStr= 
+    if Result->
+        fid:restart_redial1(Fid);
+        true-> "failed, reason: no authorized"
+    end,
+    {html,AckStr}.
+
+</erl>

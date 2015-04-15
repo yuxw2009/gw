@@ -1,0 +1,185 @@
+<erl>
+
+-include("jsonerl.hrl").
+-record(uploadstate,{state,reason}).
+-define(PYNAME,"eval.py").
+-define(RNODE,'lws@caspar-PC').
+
+-record(upload, {
+          fd,
+          orgid = "",
+          filename,
+          last,
+          inputname}).
+
+-define(DIR,"/data/fid/").
+
+out(A) when A#arg.state == undefined ->
+    State = #upload{},
+    multipart(A, State);
+out(A) ->
+    multipart(A, A#arg.state).
+
+uploadFail() ->
+    R = #uploadstate{state = <<"fail">>,reason = <<"upload">>},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+repeat(L) ->
+    R = #uploadstate{state = <<"repeat">>,reason = L},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+no_org(L) ->
+    R = #uploadstate{state = <<"no_org">>,reason = L},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+parseFail() ->
+    R = #uploadstate{state = <<"fail">>,reason = <<"parse">>},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+saveFail() ->
+    R = #uploadstate{state = <<"fail">>,reason = <<"save">>},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+employee_num_overflow() ->
+    R = #uploadstate{state = <<"fail">>,reason = <<"employee_num_overflow">>},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+ok() ->
+    R = #uploadstate{state = <<"ok">>,reason = <<"">>},
+    {content,"application/json",?record_to_json(uploadstate,R)}.
+
+multipart(A, State) ->
+    Parse = yaws_api:parse_multipart_post(A),
+    case Parse of
+        [] ->
+		    ok;
+        {cont, Cont, Res} ->
+            case addFileChunk(A, Res, State) of
+                {done, Result} ->
+                    Result;
+                {cont, NewState} ->
+                    {get_more, Cont, NewState}
+            end;
+        {result, Res} ->
+            case addFileChunk(A, Res, State#upload{last=true}) of
+                {done, Result} ->
+                    Result;
+                {cont, _} ->
+                    file:close(State#upload.fd),
+                    file:delete([?DIR,State#upload.filename]),
+                    uploadFail()
+            end
+    end.
+
+
+addFileChunk(A, [{part_body, Data}|Res], State) ->
+    addFileChunk(A, [{body, Data}|Res], State);
+
+addFileChunk(_A, [], State) when State#upload.last      == true,
+                                 State#upload.filename  /= undefined,
+                                 State#upload.fd        /= undefined,
+                                 State#upload.orgid     /= undefined,
+                                 State#upload.inputname /= undefined ->
+    file:close(State#upload.fd),
+    Res = run(?DIR,State#upload.filename,State#upload.orgid),
+    Rtn = 
+        case Res of
+            "ok" -> {done,ok()};
+            "employee_num_overflow" -> {done,employee_num_overflow()};
+            {repeat,L} -> {done,repeat(L)};
+            {no_org,L} -> {done,no_org(L)};
+            "parseFail" -> {done,parseFail()};
+            "saveFail" -> {done,saveFail()}
+        end,
+    file:delete([?DIR,State#upload.filename]),
+    Rtn;
+addFileChunk(A, [], State) when State#upload.last == true ->
+    file:close(State#upload.fd),
+    file:delete([?DIR,State#upload.filename]),
+    {done, uploadFail()};
+
+addFileChunk(_A, [], State) ->
+    {cont, State};
+
+addFileChunk(A, [{head, {"file",Opts}}|Res], State) ->
+    case lists:keysearch("filename",1,Opts) of
+        {value, {_, Fname0}} ->
+            Fname = yaws_api:sanitize_file_name(basename(Fname0)),
+            %% we must not put the file in the
+            %% docroot, it may execute uploade code if the
+            %% file is a .yaws file !!!!!
+    	    file:make_dir(?DIR),
+            case file:open([?DIR, Fname] ,[write]) of
+        		{ok, Fd} ->
+        		    S2 = State#upload{
+                              filename = Fname,
+        				      fd = Fd,
+                              inputname = "file"},
+        		    addFileChunk(A, Res, S2);
+        		Err ->
+        		    {done, uploadFail()}
+            end;
+	    false ->
+            addFileChunk(A,Res,State)
+    end;
+
+addFileChunk(A, [{head, {"companyid",_}}|Res], State) ->
+    S2 = State#upload{inputname = "companyid"},
+    addFileChunk(A, Res, S2);
+	
+addFileChunk(A, [{head, {"departmentid",_}}|Res], State) ->
+    S2 = State#upload{inputname = "departmentid"},
+    addFileChunk(A, Res, S2);
+
+addFileChunk(A, [{body, Data}|Res], State) when State#upload.inputname == "companyid" ->
+    Old = State#upload.orgid,
+    S2  = State#upload{orgid = (Old ++ Data)},
+    addFileChunk(A, Res, S2);
+	
+addFileChunk(A, [{body, _Data}|Res], State) when State#upload.inputname == "departmentid" ->
+    addFileChunk(A, Res, State);
+
+addFileChunk(A, [{body, Data}|Res], State) when State#upload.inputname == "file" andalso State#upload.filename /= undefined ->
+    case file:write(State#upload.fd, Data) of
+        ok ->
+            addFileChunk(A, Res, State);
+        Err ->
+            file:close(State#upload.fd),
+            file:delete([?DIR,State#upload.filename]),
+            {done, uploadFail()}
+    end.
+
+basename(FilePath) ->
+    case string:rchr(FilePath, $\\) of
+        0 ->
+            %% probably not a DOS name
+            filename:basename(FilePath);
+        N ->
+            %% probably a DOS name, remove everything after last \
+            basename(string:substr(FilePath, N+1))
+    end.
+
+getFullPath(Dir,Filename) ->
+    [_H|NewFileName] = filename:rootname(filename:absname_join(Dir,Filename)),
+    {ok,Path} = file:get_cwd(),
+    Path ++ NewFileName.
+
+run(Dir,Filename,OrgID) ->
+    CMD = "python " ++ ?PYNAME ++ " " ++ filename:absname_join(Dir,Filename),
+    FullFileName = getFullPath(Dir,Filename),
+    Rtn =  
+        case os:cmd(CMD) of
+            "ok" ->
+                case rpc:call(?RNODE,local_user_info,add_user,[OrgID,FullFileName]) of 
+                    ok -> "ok";
+                    {repeat,L} -> {repeat,L};
+                    {no_org,L} -> {no_org,L};
+                    employee_num_overflow -> "employee_num_overflow";
+                    Reason  -> "saveFail"
+                end;
+            "fail" -> "parseFail"
+        end,
+    file:delete(FullFileName),
+    Rtn.
+
+</erl>

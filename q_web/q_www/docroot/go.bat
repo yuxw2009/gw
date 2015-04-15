@@ -1,0 +1,1 @@
+yaws --sname html --conf yaws.conf --erlarg "-setcookie abc"

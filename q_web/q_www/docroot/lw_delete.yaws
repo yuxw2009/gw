@@ -1,0 +1,22 @@
+<erl>
+
+-include("snode.hrl").
+
+
+out(A) -> 
+	Param = yaws_api:parse_post(A),
+    io:format("post: ~p~n",[Param]),
+	try list_to_integer(proplists:get_value("file_id",Param)) of
+      ID ->
+            case rpc:call(?FNODE,fid,req_fsvcs,[{delete_file,ID,[]}]) of
+                {ok,Owner,_} ->
+                    {content, "text/html", rfc4627:encode({obj,[{status,ok},{owner_id,Owner}]})};
+                {error, Reason} ->
+                    {content, "text/html", rfc4627:encode({obj,[{status,failed},{reason,Reason}]})}
+            end
+    catch
+      error:_X ->
+        {content, "text/html", rfc4627:encode({obj,[{status,failed},{reason,syntex_error}]})}
+    end.
+
+</erl>

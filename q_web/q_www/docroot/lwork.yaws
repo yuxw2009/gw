@@ -1,0 +1,23 @@
+<erl>
+    scan(<<"%%", Rest/binary>>, ID, Acc, in, Arg) ->
+        scan(Rest,[],[meta_data:trans(lists:reverse(ID), Arg)|Acc],out, Arg);
+    scan(<<"%%", Rest/binary>>, [], Acc, out, Arg) ->
+        scan(Rest,[],Acc,in, Arg);
+    scan(<<I, Rest/binary>>, ID, Acc, in, Arg) ->
+        scan(Rest, [I|ID], Acc, in, Arg);
+    scan(<<I, Rest/binary>>, [], Acc, out, Arg) ->
+        scan(Rest, [], [I|Acc], out, Arg);
+    scan(<<>>, _, Acc, _, _) ->
+        lists:reverse(Acc).
+
+    scan(Bin, Arg) -> scan(Bin, [], [], out, Arg).
+
+    out(Arg) ->
+        {ok, TemplateBin} = file:read_file("./docroot/lwork.template"),
+        try
+            {html, scan(TemplateBin, Arg)} 
+        catch
+            _:_ ->
+                {redirect_local, "/index.html?auto_login=false"}	
+        end.
+</erl>

@@ -1,0 +1,1 @@
+yaws --sname admin --conf yaws.conf --erlarg "-setcookie hkxyz" 

@@ -1,0 +1,1 @@
+erl -sname wftp -setcookie hkxyz -pa ebin -s fsguard

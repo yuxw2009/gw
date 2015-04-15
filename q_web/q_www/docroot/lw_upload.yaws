@@ -1,0 +1,282 @@
+<erl>
+
+-include("snode.hrl").
+
+-define(MaxFileSize, 100000000). % 100M
+-define(MaxPicSize,  1000000).    % 1M
+-define(SvrTimeout,2000).
+
+-define(SVRF,{sfid,?FNODE}).
+
+-record(attach, {
+    properfile,
+    fid,
+    owner,
+    name,
+    length,
+    ts
+}).
+
+-record(upload, {
+    owner,
+    fid,
+    worker,
+    info,
+    tcount,
+    filelength,
+    lengthlimit,
+    filename,
+    lastrans,
+    attachs
+}).
+
+out(A) when A#arg.state == undefined ->
+	Param = yaws_api:parse_query(A),
+	Limit = case proplists:get_value("size_limit",Param) of
+	        undefined -> ?MaxFileSize;
+			SizeStr -> list_to_integer(SizeStr)
+		end,
+    State = #upload{info=[],attachs=[],lengthlimit=Limit},
+    multipart0(A, State);
+out(A) ->
+    multipart(A, A#arg.state).
+
+multipart0(Arg=#arg{headers=#headers{content_length=CL}}, State) when CL==undefined ->  multipart(Arg, State);
+multipart0(Arg=#arg{headers=#headers{content_length=CL}}, State=#upload{lengthlimit=Limit}) ->
+    case list_to_integer(CL)>Limit of
+        true-> {header, "reason: big_file"};
+        _->  multipart(Arg, State)
+    end.
+multipart(A, State) ->
+    Parse = yaws_api:parse_multipart_post(A),
+%    io:format("parsed: ~p.~n",[Parse]),
+    case Parse of
+        [] ->
+            {content, "application/json",
+                         rfc4627:encode({obj,[{status,failed},{reason,protocal_error}]})};
+        {cont, Cont, Res} ->
+            case addFileChunk(Res, State) of
+                {cont, NewState} ->
+                    {get_more, Cont, NewState};
+                {done,{_,{error,Reason}}} ->
+                    {content, "application/json",
+                             rfc4627:encode({obj,[{status,failed},{reason,Reason}]})}
+            end;
+        {result, Res} ->
+            {done, Result} = addFileChunk(Res, State#upload{lastrans=true}),
+            case saveresult(A, Result) of
+                 {ok,Owner,Desc,Fid,Name,Len,TS} ->
+                            {content, "text/html", 
+                             rfc4627:encode({obj,[{status,ok},
+                                                  {owner_id,Owner},
+                                                  {forwarder_id,Owner},
+                                                  {name,list_to_binary(Name)},
+                                                  {doc_id,Fid},
+                                                  {description,list_to_binary(Desc)},
+                                                  {length,Len},
+                                                  {create_time,list_to_binary(TS)},
+                                                  {forward_time,list_to_binary(TS)}
+                                                  ]})};
+                 {error,Reason} ->
+                            {content, "application/json",
+                             rfc4627:encode({obj,[{status,failed},{reason,Reason}]})}
+            end
+    end.
+
+saveresult(_A, {State, Result}) ->
+    Desc = case lists:keysearch(desc,1,State#upload.info) of
+                {value, {_, Data}} ->
+                    Data;
+                _ ->
+                    ""
+            end,
+    case Result of
+        {ok,[]} ->
+            {error,no_file};
+        {ok, [{true,FID,Owner,FN,LEN,TS}]} ->
+            {ok,Owner,Desc,FID,FN,LEN,TS};
+        {ok, [{false,_FID,_Owner,_FN,_LEN,_TS}]} ->
+            {error,file_big_size};
+        {error, Reason} ->
+            {error,Reason}
+    end.
+
+% ----------------------------------
+
+addFileChunk([], State) when State#upload.lastrans == true,
+                             State#upload.fid == undefined ->
+    FileNames = [{PF,FID,Owner,FN,Len,TS} || #attach{properfile=PF,fid=FID,owner=Owner,name=FN,length=Len,ts=TS} <- State#upload.attachs],
+   case rpc_fsvcs(State#upload.worker,{file_svcs_end,State#upload.owner,get_key(share,State#upload.info,[])}) of
+        {ok,_,_} ->
+            {done, {State, {ok, lists:reverse(FileNames)}}};
+        {error,_} ->
+            {done, {State, {error, file_server_down}}}
+    end;
+
+addFileChunk([], State) when State#upload.lastrans == true ->
+    NewState=addFileDone(State),
+    addFileChunk([],NewState);
+
+addFileChunk([], State) ->
+    {cont, State};
+
+addFileChunk([{head, _}|_] = Msg, State) when State#upload.fid =/= undefined ->
+    NewState=addFileDone(State),
+    addFileChunk(Msg, NewState);
+
+addFileChunk([{head, {"upld", Opts}}|Res], State) ->
+    case lists:keysearch("filename", 1, Opts) of
+        {value, {_, []}} ->     %% no filename specified, no file uploaded
+            addFileChunk(Res, State);
+        {value, {_, Fname0}} ->
+            case rpc_fsvcs(State#upload.worker,{file_upload,Fname0,[{fname,Fname0}]}) of
+                {ok,Wkr,Fid} ->
+                    NewSt=State#upload{
+                                    worker=Wkr,
+                                    fid=Fid,
+                                    owner=get_key(owner,State#upload.info,0),
+                                    filename=Fname0,
+                                    tcount=0,
+                                    filelength=0,
+                                    info=State#upload.info++[{fname,Fname0}]},
+                    addFileChunk(Res, NewSt);
+                {error,_} ->
+                    {done, {State, {error, file_server_down}}}
+            end;
+        false ->
+            {done, {State, {error, protocal_error}}}
+    end;
+
+addFileChunk([{head,{_Name,Opts}},{body,Body}|Res],#upload{info=OI}=State) ->
+    {value,{_,Name}} = lists:keysearch("name",1,Opts),
+    Info = format_info(Name,Body),
+    addFileChunk(Res, State#upload{info=OI++Info});
+
+addFileChunk([{part_body, Data}|Res], State) ->
+    addFileChunk([{body, Data}|Res], State);
+
+addFileChunk([{body, _}|Res], State) when State#upload.fid == undefined ->  % file over size may go here
+    addFileChunk(Res, State);
+
+addFileChunk([{body, Data}|Res], State) when State#upload.fid =/= undefined ->
+    Bin=list_to_binary(Data),
+    Newlen = State#upload.filelength + size(Bin),
+    if
+        Newlen >= State#upload.lengthlimit ->
+            rpc_fsvcs(State#upload.worker,{file_abort,State#upload.fid,[]}),
+            Atta2 = getattach(State),
+            NewAtta = Atta2#attach{properfile=false},
+            NewSt=State#upload{ fid = undefined,
+                                filelength = Newlen,
+                                attachs = [NewAtta | State#upload.attachs]},
+            addFileChunk(Res, NewSt);
+        true ->
+            Tcount=State#upload.tcount+1,
+            case rpc_fsvcs(State#upload.worker,{file_chunk,State#upload.fid,{Tcount,Bin}}) of
+                {ok,_,_} ->
+                    addFileChunk(Res, State#upload{tcount=Tcount,filelength=Newlen});
+                {error,Reason} ->
+                    {done, {State, {error,Reason}}}
+            end
+    end.
+
+addFileDone(State) ->
+    TS=makets(),
+    NewAtth = case rpc_fsvcs(State#upload.worker,{file_done,
+                                                  State#upload.fid,
+                                                  {State#upload.filelength,[{fts,TS}|State#upload.info]}}) of
+            {ok,_,_} ->
+                getattach(State);
+            {error,_Reason} ->
+                Atth2 = getattach(State),
+                Atth2#attach{properfile=false}
+        end,
+    State#upload{fid = undefined, attachs = [NewAtth#attach{ts=TS} | State#upload.attachs]}.
+    
+%%%% -------------------------------
+rpc_fsvcs(undefined,Msg) ->
+    rpc_fsvcs(?SVRF,Msg);
+rpc_fsvcs(Wkr,{CC,ID,Params}) ->
+io:format("snd: ~p ~p~n",[CC,ID]),
+    Ref=make_ref(),
+    Wkr ! {CC,Ref,self(),ID,Params},
+    receive
+        {ok,Ref,Who,Msg} ->
+            {ok,Who,Msg};
+        {error,Ref,Reason} ->
+            {error,Reason}
+    after ?SvrTimeout ->
+        {error, timeout}
+    end.
+
+format_info(Name,Body) ->
+    case list_to_atom(Name) of
+        share ->
+            [{share,fetch_share(Body)}];
+        owner ->
+            [{owner,fetch_uid(Body)}];
+        Key ->
+            [{Key,Body}]
+    end.
+
+fetch_share(Txt) ->
+    Shares=string:tokens(Txt,","),
+    [fetch_uid(UUs)||UUs<-Shares].
+fetch_uid(Str) ->
+    try list_to_integer(Str) of
+        UID -> UID
+    catch
+        error:_X -> 0
+    end.
+
+getattach(State) ->
+    #attach{properfile = true,fid=State#upload.fid,owner=State#upload.owner,
+            name = State#upload.filename,length=State#upload.filelength}.
+
+get_key(Key, KVs, Default) ->
+    case lists:keysearch(Key, 1, KVs) of
+        {value, {_, Val}} ->
+            Val;
+        _ ->
+            Default
+    end.
+        
+% ----------------------------------
+mkprefix(Fid) ->
+    int2str(Fid,6).
+
+divwith(N, S) ->
+    {S div N, S rem N}.
+
+int2str(I, Len) when is_integer(Len) ->
+    int2str(I, Len, "");
+int2str(I, L) when is_list(L) ->
+    int2str(I, length(L)).
+    
+int2str(_, 0, R) ->
+    R;
+int2str(I, Len, R) ->
+    {I2, I1} = divwith(10, I),
+    R2 = integer_to_list(I1) ++ R,
+    int2str(I2, Len-1, R2).
+    
+makets() ->
+    dt2str({date(),time()}).
+
+dt2str({D, T}) ->
+    d2str(D) ++ " " ++ t2str(T).
+
+t2str({H, M, S}) ->
+    int2(H) ++ ":" ++ int2(M) ++ ":" ++ int2(S).
+    
+d2str({Y, M, D}) ->
+    "20"++int2(Y) ++ "-" ++ int2(M) ++ "-" ++ int2(D).
+
+int2(I) ->
+    int2str(I,2).
+int6(I) ->
+    int2str(I,6).
+int8(I) ->
+    int2str(I,8).
+
+</erl>

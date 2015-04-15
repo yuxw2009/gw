@@ -1,0 +1,9 @@
+-record(finfo,{
+	fid,
+	fname,
+	flength,
+	ts,
+	owner,
+	proc,
+	desc
+}).

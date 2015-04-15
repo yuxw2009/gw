@@ -1,0 +1,66 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="/ringo/images/favicon.ico"/>
+<script src="script/jquery-1.6.3.min.js" type="text/javascript"></script> 
+<script src="script/videoPligin.js" type="text/javascript"></script> 
+<script src="script/lworkVideoImport.js" type="text/javascript"></script> 
+<script src="script/p2pdemo2.js" type="text/javascript"></script> 
+<script src="script/webrtc.js" type="text/javascript"></script> 
+<script src="script/restconnection.js" type="text/javascript"></script> 
+<script src="script/restchannel.js" type="text/javascript"></script> 
+<script src="script/createwin.js" type="text/javascript"></script> 
+<script src="script/tipsplugin.js" type="text/javascript"></script> 
+<title>demo</title>
+<style type="text/css">
+  body{ background-color: #252d30; color: #fff;}
+  a{ color: #fff;}
+</style>
+<link rel="stylesheet" type="text/css" href="style/style.css"/>
+<link rel="stylesheet" type="text/css" href="style/video.css"/>
+</head>
+<body>
+<div id="video"  class="box">
+    <div class="video_con">
+    
+      <div class="vp_bt"> <img src="images/videobt.png"  />
+        <div id="LworkVideoZx" class="p2pvideobtn">视频座席登录</div>
+        <div id="LworkAudioZx" class="mpvideobtn">语音坐席登录</div>
+      </div>
+
+      <div class="vpBox" id="vpBox">
+        
+        <div class="vpCon">
+          <div class="vpList">
+            <video class="videplayer bgvideo" src="" style=""></video>
+            <video class="smvideo" src="" style=""></video>
+            <div class="bgvideoTip vdTip">空闲<br/>
+              等待邀请</div>
+            <div class="smvideoTip vdTip">空闲<br/>
+              等待接入</div>
+            <div class="videobt"><span class="videotype">双方视频</span><span class="videolink"> 生成链接：
+              <a href="###"> http://www.lwork.hk?room=10005&videotype=p2p </a></span></div>
+          </div>
+        </div>
+        
+      </div>
+      
+    </div>
+  </div>
+
+<!--<a href="" id="LworkVideoCs" style="position:absolute; left:100px; top:250px; z-index:10000;">找我聊天撒</a>
+    <br>
+    <a href="" id="LworkVideoZx" style="position:absolute; left:100px; top:220px; z-index:10000;">坐席登录</a>
+    <br>
+    <a href="" id="LworkAudioCs" style="position:absolute; left:100px; top:280px; z-index:10000;">请求语音聊天</a>
+    <br>
+    <a href="" id="LworkAudioZx" style="position:absolute; left:100px; top:310px; z-index:10000;">语音坐席</a>
+    <br>-->
+    
+<script type="text/javascript">
+  $('.videplayer').videoPlayer();
+</script>    
+    
+</body>
+</html>

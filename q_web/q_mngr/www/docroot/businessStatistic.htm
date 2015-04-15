@@ -1,0 +1,214 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="style/businessStatistic.css" />
+    <title>业务统计</title>
+</head>
+<body>
+    <div id='container'>
+    	<div id='monthNav'>
+    		<div>
+	    		<span id="lmonthblock" class="flleft"><a class="btn" href="###" id="lastMonth">前一月</a></span>
+	    		<span id="cmonthblock" class="flmidlle">当月实时</span>
+	            <span id="nmonthblock" class="flright" style="display:none"><a class="btn" href="###" id="nextMonth">后一月</a></span>
+            </div>
+            <div class="flright tblSum">单位：元</div>
+    	</div>
+        <div class="clearboth"></div>
+    	<div id="export">
+	        <table class="dlgTable" id="statisticsTbl">
+	        	<thead>
+		            <tr>
+		                <th rowspan="2" style="width: 140px">姓名工号</th>
+		                <th rowspan="2" style="width: 180px">所在部门</th>
+                        <th colspan="2" style="width: 120px">回拨电话</th>
+                        <th colspan="2" style="width: 120px">网络电话</th>
+                        <th colspan="2" style="width: 120px">电话会议</th>
+                        <th colspan="2" style="width: 120px">手机短信</th>
+                        <th colspan="2" style="width: 120px">多方视频</th>
+		                <th rowspan="2" style="width: 50px">合计</th>
+		            </tr>
+                    <tr>
+                        <th style="width: 70px">时长</th>
+                        <th style="width: 50px">费用</th>
+                        <th style="width: 70px">时长</th>
+                        <th style="width: 50px">费用</th>
+                        <th style="width: 70px">时长</th>
+                        <th style="width: 50px">费用</th>
+                        <th style="width: 70px">条数</th>
+                        <th style="width: 50px">费用</th>
+                        <th style="width: 70px">时长</th>
+                        <th style="width: 50px">费用</th>
+                    </tr>
+		        </thead>
+		        <tbody></tbody>
+                <tfoot>
+                    <tr>
+                        <td style="width: 140px">合计</td>
+                        <td style="width: 180px">--</td>
+                        <td class="callbackQSum" style="width: 70px">0</td>
+                        <td class="callbackCSum" style="width: 50px">0.00</td>
+                        <td class="voipQSum" style="width: 70px">0</td>
+                        <td class="voipCSum" style="width: 50px">0.00</td>
+                        <td class="pmeetingQSum" style="width: 70px">0</td>
+                        <td class="pmeetingCSum" style="width: 50px">0.00</td>
+                        <td class="smsQSum" style="width: 70px">0</td>
+                        <td class="smsCSum" style="width: 50px">0.00</td>
+                        <td class="dmeetingQSum" style="width: 70px">0</td>
+                        <td class="dmeetingCSum" style="width: 50px">0.00</td>
+                        <td class="totalSum" style="width: 50px">0.00</td>
+                    </tr>
+                </tfoot>
+	        </table>
+        </div>
+            
+        <div class="button">
+            <div class="btn" style="*float: right; margin-left: 10px;" id="addSubmit" onclick="print();">
+                打印此页</div>
+            <div class="btn" style="*float: right; margin-left: 10px;" id="export_excel">
+                导出账单</div>
+            <div class="btn" style="*float: right; margin-left: 10px;" id="cancel">
+                关闭</div>
+        </div>
+    </div>
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.dataTables.js?t=20120528"></script>
+    <script type="text/javascript" src="script/api.js?t=20120528"></script>
+    <script type="text/javascript" src="script/sprintf.js?t=20120528"></script>
+    <script type="text/javascript" src="script/bill.js?t=20120528"></script>
+    <script type="text/javascript">
+        var extractStateObj = function(stat){
+            var obj = {'callback':{'q':0, 'c':0.00}, 
+                       'voip':{'q':0, 'c':0.00}, 
+                       'phone_meeting':{'q':0, 'c':0.00}, 
+                       'sms':{'q':0, 'c':0.00}, 
+                       'data_meeting': {'q':0, 'c':0.00}};
+
+            for (var i = 0; i < stat.length; i++){
+                    obj[stat[i].type] = {'q':parseInt(stat[i].quantity), 'c':parseFloat(stat[i].charge)};
+                }
+            return obj;
+        }
+
+        var stTblObj = null;
+        var refreshDataTable = function(){
+            var html =  $('#statisticsTbl tbody').html();
+            if (stTblObj !== null){
+                stTblObj.fnDestroy();
+            }
+            $('#statisticsTbl tbody').html(html);
+            stTblObj = $('#statisticsTbl').dataTable({
+                "bPaginate": false,
+                "bAutoWidth": false,
+                "sPaginationType": "full_numbers"
+            });            
+        }
+
+        var updateStatisticsData = function(data){
+            var html = '', obj = data,
+                callbackQSum = 0, voipQSum = 0, pmQSum = 0, smsQSum = 0, dmQSum = 0,
+                callbackCSum = 0.00, voipCSum = 0.00, pmCSum = 0.00, smsCSum = 0.00, dmCSum = 0.00;
+            for (var i = 0; i < obj.length; i++) {
+                var statObj = extractStateObj(obj[i].stat);
+                var sumFee = statObj.callback.c + statObj.voip.c + statObj.phone_meeting.c + statObj.sms.c + statObj.data_meeting.c;
+                var dptName = (obj[i].department.indexOf('/') >= 0) ? 
+                        obj[i].department.substring(obj[i].department.indexOf('/') + 1) : 
+                        obj[i].department;
+                callbackQSum += statObj.callback.q;
+                voipQSum += statObj.voip.q;
+                pmQSum += statObj.phone_meeting.q;
+                smsQSum += statObj.sms.q;
+                dmQSum += statObj.data_meeting.q;
+                callbackCSum += statObj.callback.c;
+                voipCSum += statObj.voip.c;
+                pmCSum += statObj.phone_meeting.c;
+                smsCSum += statObj.sms.c;
+                dmCSum += statObj.data_meeting.c;
+                var d
+                html += [
+                        '<tr>',
+                        '<td class="tblItem2">' + obj[i].name + obj[i].employee_id+ '</td>',
+                        '<td class="tblItem3">' + dptName + '</td>',
+                        '<td class="tblItem">' + statObj.callback.q.toString() + '</td>',
+                        '<td class="tblItem" class="tblItem">' + changeTwoDecimal_f(statObj.callback.c) + '</td>',
+                        '<td class="tblItem">' + statObj.voip.q.toString() + '</td>',
+                        '<td class="tblItem">' + changeTwoDecimal_f(statObj.voip.c) + '</td>',
+                        '<td class="tblItem">' + statObj.phone_meeting.q.toString() + '</td>',
+                        '<td class="tblItem">' + changeTwoDecimal_f(statObj.phone_meeting.c) + '</td>',
+                        '<td class="tblItem">' + statObj.sms.q.toString() + '</td>',
+                        '<td class="tblItem">' + changeTwoDecimal_f(statObj.sms.c) + '</td>',
+                        '<td class="tblItem">' + statObj.data_meeting.q.toString() + '</td>',
+                        '<td class="tblItem">' + changeTwoDecimal_f(statObj.data_meeting.c) + '</td>',
+                        '<td class="tblItem">' + changeTwoDecimal_f(sumFee) + '</td>',
+                        '</tr>'
+                      ].join("");
+            }
+            $(".dlgTable").find('tbody').html(html);
+            $(".dlgTable").find('tfoot').find('.callbackQSum').eq(0).text(callbackQSum.toString());
+            $(".dlgTable").find('tfoot').find('.voipQSum').eq(0).text(voipQSum.toString());
+            $(".dlgTable").find('tfoot').find('.pmeetingQSum').eq(0).text(pmQSum.toString());
+            $(".dlgTable").find('tfoot').find('.smsQSum').eq(0).text(smsQSum.toString());
+            $(".dlgTable").find('tfoot').find('.dmeetingQSum').eq(0).text(dmQSum.toString());
+            $(".dlgTable").find('tfoot').find('.callbackCSum').eq(0).text(callbackCSum.toString());
+            $(".dlgTable").find('tfoot').find('.voipCSum').eq(0).text(changeTwoDecimal_f(voipCSum));
+            $(".dlgTable").find('tfoot').find('.pmeetingCSum').eq(0).text(changeTwoDecimal_f(pmCSum));
+            $(".dlgTable").find('tfoot').find('.smsCSum').eq(0).text(changeTwoDecimal_f(smsCSum));
+            $(".dlgTable").find('tfoot').find('.dmeetingCSum').eq(0).text(changeTwoDecimal_f(dmCSum));
+            $(".dlgTable").find('tfoot').find('.totalSum').eq(0).text(changeTwoDecimal_f((callbackCSum + voipCSum + pmCSum + smsCSum + dmCSum)));
+            if (obj.length > 0){
+                refreshDataTable();
+            }
+        };
+	    
+        var testDatas = {"status":"ok","bills":[{"department":"�梯�颲橘�瘛勗嚗�����砍/�唬��∪��","name":"撘���","employee_id":"0131000018","stat":[{"type":"call_back","quantity":0,"charge":"0.00"},{"type":"phone_meeting","quantity":121,"charge":"24.20"},{"type":"sms","quantity":0,"charge":"0.00"},{"type":"voip","quantity":0,"charge":"0.00"}]},{"department":"�梯�颲橘�瘛勗嚗�����砍/�唬��∪��","name":"��","employee_id":"0131000020","stat":[{"type":"call_back","quantity":0,"charge":"0.00"},{"type":"phone_meeting","quantity":1,"charge":"0.10"},{"type":"sms","quantity":0,"charge":"0.00"},{"type":"voip","quantity":0,"charge":"0.00"}]}]};	
+        var loadDepartmentBill = function (year, month) {
+            api.getDptBill(adminUser, companyid, departmentid, year, month, function (data) {
+                   	if (data.status === 'ok'){
+                        updateStatisticsData(data.bills);
+                    }
+				});
+        };
+
+        var viewMonth = function(yearMonth){
+            var cDate = new Date();
+            if (yearMonth.year === cDate.getFullYear() && yearMonth.month === cDate.getMonth()){
+                $('#nmonthblock').hide();
+            }else{
+                $('#nmonthblock').show();
+
+            }
+            $('#cmonthblock').text(yearMonth.year.toString() + '年' + (yearMonth.month + 1).toString() + '月');
+            loadDepartmentBill(yearMonth.year.toString(), (yearMonth.month + 1).toString());
+        }
+
+        $('#cancel').click(function () {
+            parent.$.dialog({ id: "businessStatistic" }).close();
+        });
+        $('#lastMonth').click(function(){
+            if (curViewingYearMonth.month === 0){
+                curViewingYearMonth.month = 11;
+                curViewingYearMonth.year -= 1;
+            }else{
+                curViewingYearMonth.month -= 1;
+            }
+            viewMonth(curViewingYearMonth);
+        });
+        $('#nextMonth').click(function(){
+            if (curViewingYearMonth.month === 11){
+                curViewingYearMonth.month = 0;
+                curViewingYearMonth.year += 1;
+            }else{
+                curViewingYearMonth.month += 1;
+            }
+            viewMonth(curViewingYearMonth);
+        });
+
+        var curDate = new Date();
+        var curViewingYearMonth = {'year': curDate.getFullYear(), 'month':curDate.getMonth()};
+        viewMonth(curViewingYearMonth);
+        $('#container').height(parent.tabheight+80);
+	    $('#export').height(parent.tabheight-60);		
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="images/lwrok_new.ico"/>
+<style type="text/css">
+body{
+	padding: 0;
+	margin: 0;
+}
+</style>
+<title>LWORK工作平台</title>
+</head>
+<body>  
+</body>
+<script type="text/javascript" src="script/jquery-1.6.3.min.js"></script>
+<script type="text/javascript" src="script/jquery.cookie.js"></script>
+<script type="text/ecmascript">
+
+  (function(){
+        var url = '/lwork/auth/enter';
+        var str =  (window.location.search).split('=');
+        var uuid = str[1].toString();
+        var data = {'uuid':uuid, 't': new Date().getTime()};
+          $.post(url,JSON.stringify(data),function(data){
+              if(data.status === 'ok'){
+                 $.cookie('uuid', data['uuid']);
+                 $.cookie('nologin', 'yes');
+                 window.location = "default.yaws?uuid=" + data['uuid'];	   
+             
+              }else{
+                 alert("初始化失败，请跟管理员联系");
+              }
+             })
+    })();
+</script>
+</html>

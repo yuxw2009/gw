@@ -1,0 +1,57 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="/ringo/images/favicon.ico"/>
+<title>呼叫坐席登录</title>
+ <style type="text/css">
+   body{ background-color: #252d30; color: #fff;}
+   a{ color: #fff;}
+ </style>
+<link rel="stylesheet" type="text/css" href="style/style_new.css"/>
+<link rel="stylesheet" type="text/css" href="style/video.css"/>
+<link rel="stylesheet" type="text/css" href="style/lwDialog.css"/>
+<link rel="stylesheet" type="text/css" href="style/jquery.gritter.css" />
+<script src="script/jquery-1.6.3.min.js" type="text/javascript"></script>
+<script src="script/jquery.gritter.min.js" type="text/javascript"></script> 
+<script src="script/jquery.lwDialog.js" type="text/javascript"></script> 
+<script src="script/videoPligin.js" type="text/javascript"></script> 
+<script src="script/lworkVideoImport_new.js" type="text/javascript"></script> 
+<script src="script/p2pdemo2.js" type="text/javascript"></script> 
+<script src="script/webrtc.js" type="text/javascript"></script> 
+<script src="script/restconnection.js" type="text/javascript"></script> 
+<script src="script/restchannel.js" type="text/javascript"></script> 
+<script src="script/createwin.js" type="text/javascript"></script> 
+<script src="script/tipsplugin.js" type="text/javascript"></script>  
+<style type="text/css">
+.vpBox .peerName{
+  top:314px;
+  left:420px;	
+}
+</style>
+</head>
+<body>
+<div id="video"  class="box">
+    <div class="video_con">
+      <div class="vp_bt"> <img src="images/videobt.png"  />
+        <div id="LworkVideoZx" class="p2pvideobtn">视频座席登录</div>
+        <div id="LworkAudioZx" class="mpvideobtn">语音座席登录</div>
+      </div>
+      <div class="vpBox" id="vpBox">
+        <div class="vpCon">
+          <div class="vpList" id="vpList">
+            <video class="videplayer bgvideo" autoplay src="" style=""></video>
+            <video class="smvideo" autoplay src="" poster="" style=""></video>
+            <div class="bgvideoTip vdTip">空闲<br/>等待客户接入</div>
+            <div class="smvideoTip vdTip"><div class="smvideocon">空闲<br/>等待接入</div></div>
+            <div class="peerName">座席号<span class="peerNumber"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+</div>
+<script type="text/javascript">
+  $('.videplayer').videoPlayer();
+</script>
+</body>
+</html>

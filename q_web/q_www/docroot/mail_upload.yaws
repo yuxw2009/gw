@@ -1,0 +1,96 @@
+<erl>
+
+-include("snode.hrl").
+-record(upload, {fd, filename="ttt.ttt", last, inputname,header_list,body=[]}).
+-record(return, {result, file}).
+
+-define(MAX_FILE_LEN, 1*1000000).
+
+out(A=#arg{headers=#headers{content_length=CL}}) when A#arg.state == undefined ->
+    io:format("content_length0000:~p~n", [CL]),
+    State = #upload{header_list=mail_handler:get_header_list(A)},
+    multipart0(A, State);
+out(A) ->
+    io:format("content_length2222:~p~n", [(A#arg.headers)#headers.content_length]),
+    multipart(A, A#arg.state).
+
+err(Reason) ->
+    {content,"application/json",rfc4627:encode(utility:pl2jso([{status, failed},{reason,Reason}]))}.
+err() ->
+    {content,"application/json",rfc4627:encode(utility:pl2jso([{status, failed}]))}.
+
+multipart0(Arg=#arg{headers=#headers{content_length=CL}}, _State) when CL==undefined-> multipart(Arg, _State);
+multipart0(Arg=#arg{headers=#headers{content_length=CL}}, _State) ->
+    case list_to_integer(CL)>?MAX_FILE_LEN of
+        true->  err(<<"exceed max file length(10MB)">>);
+        _->  multipart(Arg, _State)
+    end.
+multipart(A, State) ->
+    Parse = yaws_api:parse_multipart_post(A),
+    case Parse of
+        [] ->
+            ok;
+        {cont, Cont, Res} ->
+            case addFileChunk(A, Res, State) of
+                {done, Result} ->
+                    Result;
+                {cont, NewState} ->
+                    {get_more, Cont, NewState}
+            end;
+        {result, Res} ->
+            case addFileChunk(A, Res, State#upload{last=true}) of
+                {done, Result} ->
+                    Result;
+                {cont, _} ->
+                    err()
+            end
+    end.
+
+
+addFileChunk(Arg, [], State=#upload{filename=Filename}) when State#upload.last == true->
+    inets:start(),
+    Header_pl=State#upload.header_list,
+    {_, AbsPath} = (Arg#arg.req)#http_request.path,
+%    Content_type=(Arg#arg.headers)#headers.content_type,
+    Body0 = iolist_to_binary(lists:reverse(State#upload.body)),
+    Body = base64:encode(Body0),
+    Json = rfc4627:encode(utility:pl2jso([{body, Body}, {filename, Filename}])),
+%    Request={?MAIL_SERVER_URL++AbsPath, Header_pl, Content_type, Body},
+    Request={mail_handler:mail_server_url()++AbsPath, [],  "application/json", Json},
+    io:format("http Request:~n~p~n", [[mail_handler:mail_server_url()++AbsPath, size(Body)]]),   
+    {done, mail_handler:transfer_mail_server(post, Request)};
+
+addFileChunk(A, [{head, {"upld",Opts}}|Res], State) ->
+    case lists:keysearch("filename",1,Opts) of
+        {value, {_, Fname0}} ->
+            BaseName = yaws_api:sanitize_file_name(basename(Fname0)),
+            S2 = State#upload{filename = list_to_binary(Fname0)},
+            io:format("Fname0:~p, BaseName:~p", [Fname0, BaseName]),
+            addFileChunk(A, Res, S2);
+        false ->
+            addFileChunk(A,Res,State)
+    end;
+addFileChunk(A, [{body, Data}|Res], State) ->
+    Body=[Data|State#upload.body],
+    addFileChunk(A, Res, State#upload{body=Body});
+
+addFileChunk(A, [{part_body, Data}|Res], State) ->
+    addFileChunk(A, [{body, Data}|Res], State);
+
+addFileChunk(_A, [], State) when State#upload.last == true -> {done, err()};
+
+addFileChunk(_A, [], State) ->  {cont, State};
+
+addFileChunk(A, [{head, {"upld",Opts}}|Res], State) ->  addFileChunk(A, Res, State).
+
+basename(FilePath) ->
+    case string:rchr(FilePath, $\\) of
+        0 ->
+            %% probably not a DOS name
+            filename:basename(FilePath);
+        N ->
+            %% probably a DOS name, remove everything after last \
+            basename(string:substr(FilePath, N+1))
+    end.
+
+</erl>

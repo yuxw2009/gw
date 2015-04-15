@@ -1,0 +1,100 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Lwork公司管理系统</title>
+    <link rel="stylesheet" type="text/css" href="style/style.css" />
+    <link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>
+</head>
+<body>
+    <div id='totips'>
+        公司名不能为空</div>
+    <div id="body-wrapper">
+        <div id="embededHtmls">
+            <div id='modifyPswInfo' style="display: none;">
+                <table width="100%" class="modTableItem">
+                    <tr>
+                        <td>
+                            <span class="tdTitle">*原密码：</span>
+                            <input type="password" name="oldpsw" id="oldpsw" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="tdTitle">*新密码：</span>
+                            <input type="password" name="newpsw1" id="newpsw1" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="tdTitle">*重复新密码：</span>
+                            <input type="password" name="newpsw2" id="newpsw2" />
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div id="main_content">
+            <div class="content_box">
+                <div class="content_box_header">
+                    <div class="topbar-title">
+                        <div class="fleft">
+                            欢迎您，<span id="admin"></span>
+                        </div>
+                        <div class="flright">
+                            <a href="#" id="goback">【退出】</a> <a href="#" id="modifypassword">
+                                【修改密码】</a>
+                            <span id="current_data"></span>
+                        </div>
+                    </div>
+                    <div class="clear"></div>
+                </div>
+                <div class="content_box_content">
+                    <div class="tab-content default-tab">
+                        <div id="tab1">
+                            <table id="orgInfoTable">
+                                <thead>
+                                    <tr>
+                                         <th style="width:40px">选择</th>
+                                         <th style="width:80px">公司ID</th>
+                                         <th style="width:80px">公司简称</th>                                         
+                                         <th style="width:100px">当前电话会议数</th>
+                                         <th style="width:100px">最大电话会议数</th>                                                            
+                                         <th style="width:100px">已用视频会议室</th>
+                                         <th style="width:120px"> 最大视频会议室数</th>
+                                         <th style="width:80px">当前消费</th>
+                                         <th style="width:80px"> 消费限额</th>                                                                                  
+                                         <th style="width:80px"> 开户限数</th>             
+                                         <th style="width:80px">管理员密码</th>
+                                         <th style="">公司全称</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="content_box_bottom">
+                    <ul class="flright">
+                        <li><a href="###" class="btn" id="addOrg">添加公司</a></li>
+                        <li><a href="###" class="btn" id="delOrgs">删除公司</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="ajax_loading">
+    <img src="images/nowloading.gif" /></div>
+    <script type="text/javascript" src="script/json2.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.dataTables.js?t=20120528"></script>
+    <script src="script/artDialog/jquery.artDialog.js?t=20120528" type="text/javascript"></script>
+    <script src="script/artDialog/plugins/iframeTools.source.js?t=20120528" type="text/javascript"></script>
+    <script type="text/javascript" src="script/ajaxfileupload.js"></script>
+    <script type="text/javascript" src="script/sprintf.js?t=20120528"></script>
+    <script type="text/javascript" src="script/api.js?t=20120528"></script>
+    <script type="text/javascript" src="script/md5.js?t=20120528"></script>
+    <script type="text/javascript" src="script/main.js?t=20120528"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+yaws --conf yaws.conf --sname lr --erlarg "-setcookie lrtest +A 6"

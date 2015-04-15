@@ -1,0 +1,325 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Lwork员工管理系统</title>
+    <link rel="stylesheet" type="text/css" href="style/style.css" />
+    <link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>
+</head>
+<body>
+    <div id='totips'>
+        部门名不能为空</div>
+    <div id="embededDlgs">
+        <div id='modifyPswInfo' style="display: none;">
+            <table width="100%" class="modTableItem">
+                <tr>
+                    <td>
+                        <span class="tdTitle">*原密码：</span>
+                        <input type="password" name="oldpsw" id="oldpsw" />
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="tdTitle">*新密码：</span>
+                        <input type="password" name="newpsw1" id="newpsw1" />
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="tdTitle">*重复新密码：</span>
+                        <input type="password" name="newpsw2" id="newpsw2" />
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div id='modifyEmployeeInfo' style="display: none;width:100%" >
+            <table class="modTableItem">
+                <tr>
+                    <td colspan="2">
+                        <span class="tdTitle">姓名：</span>
+                        <span id="modEname"></span>
+                    </td>
+                    <td colspan="2">
+                        <span class="tdTitle">工号：</span>
+                        <span id="modEid"></span>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <span class="tdTitle">重置密码：</span>
+                        <input type="checkbox" id="resetPW" />
+                    </td>
+                    <td colspan="2">
+                        <span class="tdTitle">每月额度：</span>
+                        <select name="" class="amount" id="monthLimit">
+                          <option value="0">0</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>   
+                          <option value="200">200</option>
+                          <option value="300">300</option>
+                          <option value="400">400</option>     
+                          <option value="500">500</option>    
+                          <option value="1000">1000</option>   
+                          <option value="1500">1500</option>     
+                          <option value="2000">2000</option>                            
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="tdTitle">业务权限设置：</td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <span>回拨电话：</span>
+                        <select name="" id="callbackAuth" value="">
+                            <option>开通</option>   
+                            <option>取消</option> 
+                        </select>
+                    </td>
+                    <td colspan="2">
+                        <span>网络电话：</span>
+                        <select name="" id="voipAuth" value="">
+                            <option>开通</option>   
+                            <option>取消</option> 
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <span>电话会议：</span>
+                        <select name="" id="phoneconfAuth" value="">
+                            <option>开通</option>   
+                            <option>取消</option> 
+                        </select>
+                    </td>
+                    <td colspan="2">
+                        <span>手机短信：</span>
+                        <select name="" id="smsAuth" value="">
+                            <option>开通</option>   
+                            <option>取消</option> 
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <span>多方视频：</span>
+                        <select name="" id="dataconfAuth" value="">
+                            <option>开通</option>   
+                            <option>取消</option> 
+                        </select>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="float_corner float_corner_top" id="floatCorner_top" style="">
+        <span style="color: rgb(247, 206, 57);" class="corner corner_1">◆</span><span style="color: rgb(255, 255, 224);"
+            class="corner corner_2">◆</span></div>
+    <div id="body-wrapper">
+        <div id="sidebar">
+            <div class="logo_block"></div>
+            <div class="sidebar-title">
+                <ul>
+                    <li>欢迎您，<span id="admin"></span></li>
+                    <li class="flright"><a href="#" id="goback">【退出】</a> <a href="#" id="modifypassword">
+                        【修改密码】</a> </li>
+                    <li id="current_data"></li>
+                </ul>
+            </div>
+            <div>
+                <a href="###" id="nav_manage_btn">导航设置</a>
+            </div>
+            <div>
+                <a href="###" id="business_statistic_btn">查看业务统计</a>
+            </div>
+            <div class="seperation_line">
+            </div>
+            <div id="menu_contianer">
+            </div>
+        </div>
+        <div id="main_content">
+            <div id="nav_management" style="display: none;">
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>
+                            <span class="department_intro"></span>
+                        </h3>
+                        <ul class="content-box-tabs">
+                            <li><a href="#tab4" class="current">当前导航</a></li>
+                        </ul>
+                        <div class="clear"></div>
+                    </div>
+                    <div class="content_box_content">
+                        <div class="tab-content default-tab">
+                            <div id="tab4">
+                                <table id="navInfoTable">
+                                    <thead>
+                                        <tr>
+                                             <th style="width: 5%">选择</th>
+                                             <th style="width:30%">链接名称</th>
+                                             <th style="width:70%">链接地址</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="content_box_bottom">
+                        <ul class="flright">
+                            <li><a href="###" class="btn" id="addNavLink">添加</a></li>
+                            <li><a href="###" class="btn" id="delNavLink">删除</a></li>
+                        </ul>
+                    </div>
+                    <!--<div class="content_box_bottom"></div> -->
+                </div>
+            </div>
+            <div id="department_Overview" style="display: none;">
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>
+                            <span class="department_intro" id="department_intro"></span>
+                        </h3>
+                        <ul class="content-box-tabs">
+                            <li><a href="#tab1" class="current">业务统计</a></li>
+                        </ul>
+                        <div class="clear"></div>
+                    </div>
+                    <div class="content_box_content">
+                        <div class="tab-content default-tab">
+                            <div id="tab1">
+                                <table id="departmentCostTable">
+                                    <thead><tr>
+                                        <th>下属部门</th>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div  class="flright" style="padding-top:10px;">
+                       <ul>
+                         <li><a href="companyemployee.xls" class="downmoudle">模板下载</a></li>                      
+                         <li><a href="###" class="btn" id="companyimportExcel_btn" type="company">批量导入</a></li>
+     
+                       </ul>
+                    </div>
+
+                    <!--<div class="content_box_bottom"></div> -->
+                </div>
+            </div>
+            <div id="member_manager">
+                <div id='importexcel' style="display: none;"> 
+                 <form enctype="multipart/form-data" method="post" action="/lw_upload_user.yaws">              
+                    <table width="100%" class="modTableItem">
+                        <tr>
+                            <td>
+                                  <input id="file" type="file" size="25" name="file" class="inputexcel" /> 
+                                  <div style="float: left; margin-top: 5px; width: 15px;">
+                                  <img style="display: none;" id="loading" src="images/loading.gif" /></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-left: 80px;">
+                                <div class="cancle">
+                                    <a href="###" id="cancel" onclick="return cancel_btn();" class="btn">取消</a></div>
+                                    <input type="submit" id="uploadfile" class="btn" value="上传"></input>
+                            </td>
+                        </tr>
+                    </table>
+                    </form>
+                </div>
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>
+                            <div style="float: left;">
+                                <span id="employ_intro" class="department_intro"></span>
+                            </div>
+                        </h3>
+                        <ul class="content-box-tabs">
+                            <li><a href="#tab2" class="current">成员管理</a></li>
+                            <li><a href="#tab3">业务统计</a></li>
+                        </ul>
+                        <div class="clear"></div>
+                    </div>
+                    <div class="content_box_content content_box_contentAdd">
+                        <div id="tab2" style="display:block">
+                            <table id="employeeInfoTable" class="employeeTables">
+                                <thead><tr>
+                                    <th rowspan="2" style="width: 5%"><input class="check-all" id="check-all" type="checkbox"></input></th>
+                                    <th rowspan="2" style="">姓名工号</th>
+                                    <th rowspan="2" style="width:15%">手机号码</th>
+                                    <th rowspan="2" style="width:20%">email地址</th>
+                                    <th rowspan="2" style="width:8%">每月额度</th>
+                                    <th colspan="5" >业务权限</th></tr><tr>
+                                    <th style="width:7.2%">回拨电话</th>
+                                    <th style="width:7.2%">网络电话</th>
+                                    <th style="width:7.2%">电话会议</th>
+                                    <th style="width:7.2%">手机短信</th>
+                                    <th style="width:7.2%">多方视频</th></tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div id="tab3" style="display:none">
+                            <table id="employeeCostTable" class="employeeTables">
+                                <thead><tr>
+                                <th rowspan="2">姓名工号</th>
+                                <th colspan="6">当月实时</th>
+                                </tr><tr>
+                                <th class="width1">回拨电话</th>
+                                <th class="width1">网络电话</th>
+                                <th class="width1">电话会议</th>
+                                <th class="width1">手机短信</th>
+                                <th class="width1">多方视频</th>
+                                <th class="width1">合计</th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="tableSupplement">
+                            <div id="tab2_supplements"></div>
+                            <div id="tab3_supplements">
+                                <div class="unit_text">单位：元</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="content_box_bottom">
+                        <div id="tab2_operations" class="flright">
+                            <ul>
+                                <li><a href="employee.xls" class="downmoudle">模板下载</a></li>
+                                <li><a href="###" class="btn" id="importExcel_btn">批量导入</a></li>
+                                <li><a href="###" class="btn" id="addbtn">增加成员</a></li>
+                                <li><a href="###" class="btn" id="delbtn">删除成员</a></li>
+                                <li><a href="###" class="btn" id="tranDptbtn">部门调动</a></li>
+                            </ul>
+                        </div>
+                        <div id="tab3_operations" class="flright">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="ajax_loading">
+    <img src="images/nowloading.gif" /></div>
+    <script type="text/javascript" src="script/json2.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.dataTables.js?t=20120528"></script>
+    <script src="script/artDialog/jquery.artDialog.js?t=20120528" type="text/javascript"></script>
+    <script src="script/artDialog/plugins/iframeTools.source.js?t=20120528" type="text/javascript"></script>
+    <script type="text/javascript" src="script/ajaxfileupload.js"></script>
+    <script type="text/javascript" src="script/sprintf.js?t=20120528"></script>
+    <script type="text/javascript" src="script/md5.js?t=20120528"></script>
+    <script type="text/javascript" src="script/api.js?t=20120528"></script>
+    <script type="text/javascript" src="script/bill.js?t=20120528"></script>
+    <script type="text/javascript" src="script/employeeManage.js?t=20120528"></script>
+    <script type="text/javascript" src="script/main.js?t=20120528"></script>
+</body>
+</html>

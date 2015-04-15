@@ -1,0 +1,343 @@
+﻿<!DOCTYPE>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta content="telephone=no" name="format-detection" />   
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Lwork登录界面</title>
+<link rel="stylesheet" href="css/common.css" type="text/css" />
+</head>
+<body>
+<div id="contianer">
+  <div id="containerbox">
+    <div id="login" class="box">
+      <div style="text-align:center; margin-top:20px;"><img src="images/logo.png" /></div>
+      <div class="login_content">
+        <div class="username"> <span class="input_tip">输入账号</span>
+          <input  value="" type="text" class="username_input" name = "username_input"/>
+        </div>
+        <div class="password"> <span class="input_tip">输入密码</span>
+          <input value="" type="password" class="password_input" name = "username_input"/>
+        </div>
+        <div class="company"> <span class="input_tip">企业标识</span>
+          <input  value="" type="text" class="company_input" name = "username_input"/>
+        </div>
+        <a  href="###" class="ui-btn-hidden"><span class="login_text">登录</span></a> </div>
+    </div>    
+    <div id="home" class="box">
+      <div class="header"><span class="myname"></span></div>      
+      <header><img src="images/logo_hr.png" class="hr_logo"/><span class="company_name">Livecom</span></header>
+      <article id="home_box"  bindscroll='no'> 
+       <div class="opt_content">
+        <ul>
+          <li class="border_top"><a href="###" class="myfocus pageForward"  link = "focus">我的关注</a> </li>
+          <li> <a href="###" class="tasks pageForward" from="home" link="tasks">工作协同</a> </li>  
+          <li><a href="###" class="topics pageForward" from="home" link="topics">企业微博</a> </li>    
+          <li><a href="###" class="meeting pageForward" from="home" link="meeting_history">电话会议</a> </li>  
+          <li> <a href="###" class="callback pageForward" from="home" link="callback">电话回拨</a>  </li>   
+          <li class="border_bottom"><a href="###" class="shortmsg pageForward" from="home" link = "sms_history">手机短信</a></li>
+        </ul>
+       </div>
+      </article>
+      <footer>
+      <ul>    
+       <li class="current_nav"><a href="###" class="home_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="work_menu"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" from="home" link="tasks"></a></li>
+       <li class=""><a href="###" class="colleague pageForward" from="home" link="Address_Book"></a></li>
+       <li class=""><a href="###" class="setup pageForward" from="home" link="setup"></a></li>  
+<!-- <li class=""><a href="###" class="logout"></a></li>-->
+      </ul>
+      </footer>
+    </div> 
+   <div id="focus" class="box" >
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a><span class="focus_title">我的关注</span></div>
+       <article id="focus_box" bindscroll='no'>       
+          <div class="opt_msg" id="focus_msg" containdom="no">          
+         </div>                
+       </article> 
+      <footer>
+      <ul>
+       <li class=""><a href="###" class="home_menu pageForward" link="home" form="focus"></a></li>
+       <li class=""><a href="###" class="work_menu" link="tasks" form="focus"></a></li>
+       <li class=""><a href="###" class="topics_menu pageForward" link="topics" form="focus"></a></li>
+       <li class="current_nav"><a href="###" class="focus_menu" form="focus"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" link="callback" form="focus"></a></li>
+      </ul>
+      </footer>  
+    </div>     
+     <div id="tasks" class="box" >
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a><span class="tasks_title">我发起的工作</span><a href="###" class="write_msg pageForward" pagepara="title=:=发起新任务|^|tip=:=大家一起协同完成工作 @同事" from="tasks" link="new_msg"></a></div>
+       <article id="tasks_box" bindscroll='no'>       
+          <div class="opt_msg" id="tasks_msg" containdom="no">          
+         </div>                
+       </article> 
+      <footer>
+      <ul>
+       <li class=""><a href="###" class="home_menu pageForward" from="tasks"></a></li>
+       <li class="current_nav"><a href="###" class="work_menu"></a></li>
+       <li class=""><a href="###" class="topics_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="focus_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" from="home" link="tasks"></a></li>
+      </ul>
+      </footer>  
+    </div> 
+     <div id="topics" class="box" >
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a>企业微博 <a href="###" class="write_msg pageForward" pagepara="title=:=发布新微博|^|tip=:=给同事发个微博吧 @同事" from="topics" link="new_msg"></a></div>
+       <article id="topics_box" bindscroll='no'>       
+          <div class="opt_msg" id="topics_msg" containdom="no">          
+         </div>                
+       </article> 
+      <footer>
+      <ul>
+       <li class=""><a href="###" class="home_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="work_menu"></a></li>
+       <li class="current_nav"><a href="###" class="topics_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="focus_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" from="home" link="tasks"></a></li>
+      </ul>
+      </footer>  
+    </div>    
+     <div id="msgdetail" class="box" >
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a><span class="msgdetail_title"></span></div>
+       <article id="msgdetail_box" bindscroll='no'>    
+         <div class="opt_msg">
+          <div class="msg_personanl" id="msgdetail_msg">  
+              <div class="modifyperinof_content">   
+                <img src="images/photo/defalt_photo.gif" style="width:43px;height:43px;">
+                <ul class="employer_detail">
+                 <li><span class="name"></span></li>
+                 <li style="padding-top:5px;"><a class="focusmsg sendbtn" href="###">关注</a><a style="display:none;" class="cancelfocus sendbtn" href="###">已关注</a><a class="sendcomt sendbtn"  href="###">回复</a><a class="invite sendbtn pageForward"  pagepara="title=:=邀请同事|^|require=:=invite|^|select=:=multi" from="msgdetail" link="Address_Book"  href="###">邀请</a><a class="sendbtn" href="###">完成</a></li>
+                </ul>    
+             </div>  
+          </div> 
+          <div class="msgcontent">
+              <div class="cornor"></div>
+              <dl class="msgdetail_con">
+                <dd class="pagecontent">
+                  <pre></pre>
+                 </dd>
+                  <dd class="pagefoot"><a href="###" class="comment">回复 (<span class="unreadcomt"></span>)</a><span class="split">|</span><a href="###"  class="comment trace_btn">动态 (<span class="unreadinvite"></span>)</a>
+                 </dd>
+             </dl> 
+          </div>
+             <div class="comt_msg">
+                 <div class="cornor"></div>
+                 <div id="comt_msg">
+                 </div>               
+             </div>  
+          </div>         
+       </article> 
+    </div> 
+    
+    <div id="new_msg" class="box">
+       <div class="header"><a href="###" class="goback pageBackward"  link="tasks"></a><span class="newmsg_title">发布新微博 </span><a href="###" class="sendmsg"></a></div>
+       <article> 
+         <div class="opt_msg">
+          <span class="write_tip">给同事发个微博吧 @同事</span>
+          <textarea name="" cols=""  rows="1" class="lwork_mes" sendid=""></textarea> 
+          <div class="send_btn"><a class="add_member pageForward" href="###" from="new_msg" link="Address_Book" pagepara="select=:=multi|^|require=:=name_eid"></a><a class="add_pic" href="###" from="new_msg"></a></div>
+         </div>
+       </article> 
+    </div> 
+    
+    <div id="Address_Book" class="box">  
+      <div class="header"><a href="###" class="goback pageBackward" link=""></a><span class="newmsg_title">我的同事</span></div>
+      <header><div class="sea_box"><div class="sea_content"><span class="sea_btn"></span><span class="sea_tip">姓名/工号查找同事</span><input class="sea_inputbox" type="text" value=""/></div></div></header>    
+          <article id="Address_Book_box" bindscroll='no'>
+            <div class="opt_content">
+            <ul class="employer_list" id="employer_list">                         
+            </ul> 
+          </div>
+          </article>                
+          <article id="Address_Book_box_2" bindscroll='no' style="display:none;">
+            <div class="opt_content">
+            <ul class="employer_list" id="search_list">                         
+            </ul> 
+          </div>
+          </article>
+      <footer>
+         <div link="new_msg" class="select_employ current">确定(<span class="selected_num">0</span>)</div>
+      </footer>
+    </div> 
+    <div id="setup" class="box" style="display:none;">
+      <div class="header"><a href="###" class="goback pageBackward" link="home"></a>个人设置</div>
+      <article>
+        <div class="modifyperinof">   
+         <div class="modifyperinof_content">   
+             <img src="images/photo/defalt_photo.gif" style="width:50px;height:50px;">
+             <a href="###" class="modify_img pageForward" from="setup">修改头像</a>  
+             <ul class="lwork_modifypass">
+               <li><span class="tdTitle">姓名：</span><span class="name">潘刘兵</span></li>
+               <li><span class="tdTitle">工号：</span><span class="department">0131000032</span></li>
+               <li><span class="tdTitle">部门：</span>新业务开发部</li>
+             </ul>    
+         </div> 
+           <div class="setup_menu">
+              <div class="setbase_info"> 
+                <ul>
+                 <li><a href="###" from="setup">修改信息</a></li>
+                 <li class="list_last"><a href="#" class="pageForward" from="setup">修改密码</a></li>
+                </ul>
+              </div>
+              <div class="setbase_info"> 
+                <ul>
+                  <li class="list_last"><a href="#" class="pageForward" from="setup">语言设置</a></li>
+                </ul>
+              </div>  
+              <div class="setbase_info"> 
+                <ul>
+                  <li><a href="#" class="pageForward" from="setup">关于我们</a></li>
+                  <li><a href="#" class="pageForward" from="setup">检查更新</a></li>    
+                  <li class="list_last"><a href="#" class="pageForward" from="setup">应用推荐</a></li>                                       
+                </ul>
+               </div>                                             
+           </div>         
+        </div>
+     </article> 
+     <footer>
+      <ul>    
+       <li class=""><a href="###" class="home_menu pageForward" from="tasks"></a></li>
+       <li class=""><a href="###" class="work_menu"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" from="home" link="tasks"></a></li>
+       <li class=""><a href="###" class="colleague pageForward" from="home" link="Address_Book"></a></li>
+       <li class="current_nav"><a href="###" class="setup pageForward" from="home" link="setup"></a></li> 
+      </ul>
+    </footer>  
+   </div>
+   
+   <div id="sms_new" class="box">
+       <div class="header"><a href="###" class="goback pageBackward" link="sms_history"></a>编写短信 <a href="###" class="sendsms flright"></a></div>
+      <header>
+       <div class="tel_box">
+        <span class="write_tip" style="color: rgb(153, 153, 153);">输入手机号码</span>
+        <textarea name="" cols="" rows="1" class="new_sms_receivers"></textarea>
+        <a class="add_receivers pageForward address_book_btn" href="###" from="sms_new" link="Address_Book" pagepara="select=:=multi|^|require=:=phone_name"></a>
+       </div>
+      </header> 
+       <article>
+         <div class="opt_msg">
+          <span class="write_tip" style="color: rgb(153, 153, 153);">输入短信内容</span>
+          <textarea name="" cols="" rows="1" class="new_sms_content"></textarea>
+         </div>
+       </article>
+    </div>
+    <div id="sms_history" class="box">
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a>已发送短信 <a href="###" class="write_sms pageForward" from="sms_history" link="sms_new"></a></div>
+       <article id="sms_history_box">
+        <div class="opt_msg">
+        </div>
+       </article>
+      <footer>
+      <ul>
+       <li class=""><a href="###" class="home_menu pageBackward" link="home"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" from="sms_history" link="callback"></a></li>
+       <li class=""><a href="###" class="meeting_menu pageForward" from="sms_history" link="meeting_history"></a></li>
+       <li class="current_nav"><a href="###" class="sms_menu"></a></li>
+       <li class=""><a href="###" class="work_menu pageForward" from="sms_history" link="topics"></a></li>
+      </ul>
+      </footer>  
+    </div>
+
+
+    <div id="callback" class="box">
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a><span class="callback_title">回拨电话</span></div>
+       <article>
+          <div class="callback_peer_block">
+            <div class="tel_box">
+                <span class="write_tip" style="color: rgb(153, 153, 153);">输入电话号码</span>
+               <input type="text"  class="callback_peer_num" id="callback_peer_num" value=""></input> 
+               <a class="add_receivers pageForward address_book_btn" href="###" from="callback" link="Address_Book" pagepara="select=:=single|^|require=:=phone_name"></a>
+            </div>
+            <div class="start_block"><a href="###" class="start_callback">拨打</a></div>
+          </div>
+       </article>
+       <footer>
+      <ul>
+       <li class=""><a href="###" class="home_menu pageBackward" link="home"></a></li>
+       <li class="current_nav"><a href="###" class="callback_menu pageForward" from="sms_history" link="callback"></a></li>
+       <li class=""><a href="###" class="meeting_menu pageForward" from="sms_history" link="meeting_history"></a></li>
+       <li class=""><a href="###" class="sms_menu pageForward"></a></li>
+       <li class=""><a href="###" class="work_menu pageForward" from="sms_history" link="topics"></a></li>
+      </ul>
+      </footer>
+    </div>
+
+    <div id="meeting_new" class="box">
+       <div class="header"><a href="###" class="goback pageBackward" link="meeting_history"></a><span class='meeting_new_title'>新会议</span></div>
+       <header>   
+       <div class="tel_box"> 
+         <span class="write_tip">输入手机号码</span>
+         <input type="text" class="addmeetinginput" id="meeting_member_input" value=''></input><a class="new_members address_book_btn" href="###"></a>
+       </div>
+       </header> 
+      <article id="meeting_new_box">
+          <div class="opt_msg" id="meeting_member_list"></div>
+      </article>
+      <footer>
+         <div class="ctrl_meeting">开始</div>
+      </footer>
+    </div>
+    <div id="meeting_history" class="box">
+       <div class="header"><a href="###" class="goback pageBackward" link="home"></a>历史会议 <a href="###" class="new_meeting pageForward" from="meeting_history" link="meeting_new"></a></div>
+       <article id="meeting_history_box">
+        <div class="opt_msg">
+        </div>
+        </article>
+      <footer>
+      <ul>
+       <li class=""><a href="###" class="home_menu pageBackward" link="home"></a></li>
+       <li class=""><a href="###" class="callback_menu pageForward" from="sms_history" link="callback"></a></li>
+       <li class="current_nav"><a href="###" class="meeting_menu pageForward" from="sms_history" link="meeting_history"></a></li>
+       <li class=""><a href="###" class="sms_menu pageForward"></a></li>
+       <li class=""><a href="###" class="work_menu pageForward" from="sms_history" link="topics"></a></li>
+      </ul>
+      </footer>  
+    </div>
+   </div>
+</div>
+<div id="loading" class="loading"><img alt="" src="images/loading.gif"> 发布中.... </div>
+<div id='tips' class="tips">账号不能为空</div>
+<div>
+</div>
+</body>
+<script type="text/javascript" src="cordova-1.7.0.js"></script>
+<script type="text/javascript" src="script/jquery-1.6.3.min.js"></script>
+<script type="text/javascript" src="script/gb2312.js"></script> 
+<script type="text/javascript" src="script/md5.js"></script>
+<script type="text/javascript" src="script/sprintf.js"></script>
+<script type="text/javascript" src="script/api.js"></script>
+<script type="text/javascript" src="script/iscroll.js"></script>
+<script type="text/javascript" src="script/jquery_plugins.js"></script>
+<script type="text/javascript" src="script/common.js"></script>
+<script type="text/javascript" src="script/phoneNum.js"></script>
+<script type="text/javascript">
+ //初始化界面宽度 
+  var pageMngr = new pageManager();
+  var lworklogin = new login(); 
+ 
+  function init(){  
+   var  screenWidth = parseInt(document.body.clientWidth),
+        screenHeight = parseInt(document.body.clientHeight);
+	pageMngr.bindJumpers();
+    pageMngr.bindHandlers();		
+    lworklogin.createNew();
+    $('.new_sms_receivers').width(screenWidth - 55);
+    $('#meeting_member_input').width(screenWidth - 52);
+	$('#callback_peer_num').width(screenWidth - 100);	
+  	$('#contianer').find('input').each(function(){ $(this).InputFocus(); })
+	$('#contianer').find('textarea').each(function(){ $(this).InputFocus(); }) 
+	$('.sea_inputbox').filter_addressbook();	
+  	if(localStorage["company"]&&localStorage["account"]&&localStorage["password"]){
+  	   lworklogin.loginIn(localStorage["company"], localStorage["account"], localStorage["password"]);		   
+     }else{
+  	   if(localStorage["company"]) $('.username_input').val(localStorage["account"]);
+  	   if(localStorage["account"]) $('.company_input').val(localStorage["company"]);	
+  	   $('#login').addClass('current_box').show();
+     }
+  } 
+  init();
+ //	 document.addEventListener("deviceready", init, false);	  
+  
+</script>
+</html>

@@ -189,6 +189,7 @@ parse_format_specified(Codec,PN, Cfg,[{a,Attribute} | Rest]=Announce) ->
       {ok, Re} = re:compile("(\\d+) ([^/]+)"),
       {match, [_, Format, Params]} = re:run(Value, Re, [{capture, all, list}]),
       if Format==PN ->
+         io:format("parse_format_specified:~p~n",[{Codec,Params}]),
         Ccfg = parse_codec_params(Codec,Params),
         parse_format_specified(Codec,PN,[Ccfg|Cfg],Rest);
       true -> {ok,lists:reverse(Cfg),Announce} end;
@@ -518,15 +519,15 @@ parse_codec_params(g729,Params) ->
 	{ok, Re} = re:compile("([^/]+)=([^/]+)"),
 	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
 	{atom(Type),atom(T1)};
-parse_codec_params(iLBC,Params) ->
-	{ok, Re} = re:compile("([^/]+)=([^/]+)"),
-	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
-	{atom(Type),atom(T1)};
 % "a=fmtp:111 minptime=10"
 parse_codec_params(opus, Params) ->
 	{ok, Re} = re:compile("([^/]+)=(\\d+)"),
 	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
-	{atom(Type),list_to_integer(T1)}.
+	{atom(Type),list_to_integer(T1)};
+parse_codec_params(_PlType,Params) ->
+	{ok, Re} = re:compile("([^/]+)=([^/]+)"),
+	{match, [_Matched, Type, T1]} = re:run(Params, Re, [{capture, all, list}]),
+	{atom(Type),atom(T1)}.
 	
 encode_codec_params(telephone,PTnum,{BegN,EndN}) ->
   NRange = integer_to_list(BegN)++"-"++integer_to_list(EndN),

@@ -1,0 +1,29 @@
+<erl>
+
+-include("snode.hrl").
+
+
+out(A) -> 
+%	Param = yaws_api:parse_post(A),
+%    io:format("post: ~p~n",[Param]),
+
+    case rpc:call(?SNODE,lw_instance,get_login_history,[2367]) of
+        {ok,Historys} ->
+            Tf = fun(T)->
+                    {{Year, Mon, Day},{Hour, Min, Sec}} = T,
+                    Args = [Year, Mon, Day, Hour, Min, Sec],
+                    S = io_lib:format("~B-~2.10.0B-~2.10.0B/~2.10.0B:~2.10.0B:~2.10.0B", Args),
+                    lists:flatten(S)
+                end,
+            Rows=[{Name,Eid,string:join([Tf(T)||T<-Tl], "\r\n")}||{{Name,Eid,DepId},Tl}<-Historys],
+            Records=["<tr>"++"<td>"++N++"</td>"++"<td>"++E++"</td>"++"<td>"++T++"</td><tr>"||{N,E,T}<-Rows],
+            Records1=["<tr style=\"background-color: #f1f1f1\"><th style=\"width:70px\">姓   名</th><th>工   号</th><th>登录时间</th></tr>"|Records],
+            RR = "<table border=\"1\" style=\"width:100%;\">"++lists:concat(Records1)++"</table>",
+%            {html, f("~p", [Rows])};
+            {streamcontent, "text/html; charset=utf-8", RR};
+        R ->
+            {content, "text/html", rfc4627:encode({obj,[{status,failed},{reason,R}]})}
+    end.
+</erl>
+
+

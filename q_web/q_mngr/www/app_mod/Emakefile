@@ -1,0 +1,1 @@
+{"src/*",      [{outdir, "ebin/"}, {i, "include/"},{i,"/usr/local/lib/yaws/include"}]}.

@@ -1,0 +1,104 @@
+<erl>
+
+-include("snode.hrl").
+
+-define(CHUNKSIZE, 100000).
+-define(SvrTimeout,2000).
+
+-define(SVRF,{sfid,?FNODE}).
+
+out(A) -> 
+	Param = yaws_api:parse_query(A),
+	{FID,UUID} = {proplists:get_value("fid",Param),list_to_integer(proplists:get_value("uuid",Param))},
+    {Bin,FnSfx}= 
+    case proplists:get_value("type",Param) of
+        "raw"->
+            {fid:read_file(FID),""};
+        _->
+            Okbin=fid:read_file(FID++"_ok.txt"),
+            Kjbin=fid:read_file(FID++"_kajie.txt"),
+            Gmbin=fid:read_file(FID++"_gaimi.txt"),
+            PerhapsOk=fid:read_file(FID++"_redial1.txt"),
+            AgainBin=list_to_binary(string:join(fid:get_left_qnos(FID),"\r\n")),
+            {<<"解封成功\r\n",Okbin/binary,"\r\n卡解\r\n",Kjbin/binary,"\r\n改密\r\n",Gmbin/binary,"\r\n可能成功\r\n",PerhapsOk/binary,"\r\n需要再解\r\n",AgainBin/binary>>, "_result.txt"}
+    end,
+
+	case {fid:check(UUID,FID),fid:filename(FID)} of
+		{false,_} ->
+			{html, "unauthorized."};
+		{true,undefined} ->
+			{html, "FILE REMOVED."};
+		{true,Fname_bin} ->
+            Fname=binary_to_list(Fname_bin)++FnSfx,
+%			io:format("download file ~p~n",[Fname]),
+			Self = self(),
+            spawn(fun()-> chunksend(Self,Bin) end),
+            [{header,"content-disposition:attachment; filename="++Fname},
+             {streamcontent, "application/octet-stream", <<>>}]
+	end.
+
+chunksend(YawsPid,Bin) when size(Bin)=< ?CHUNKSIZE ->  
+	yaws_api:stream_chunk_deliver(YawsPid,Bin),
+	yaws_api:stream_chunk_end(YawsPid);		%fileserver stopped automatically
+chunksend(YawsPid,<<Head:?CHUNKSIZE/binary, Other/binary>>)->
+	yaws_api:stream_chunk_deliver(YawsPid,Head),
+    chunksend(YawsPid,Other).
+
+%out(A) -> 
+%	[{"fid", Fidstr}] = yaws_api:parse_query(A),
+%	FID = list_to_integer(Fidstr),
+%	case rpc_fsvcs(?SVRF,{file_download,FID,[]}) of
+%		{ok,Wkr,Info} ->
+%			Fname=get_key(fname,Info,"empty_file_name"),
+%			io:format("download file ~p~n",[Fname]),
+%			Self = self(),
+%            spawn(fun()-> chunksend(Self,Wkr,FID,0) end),
+%            [{header,"content-disposition:attachment; filename="++Fname},
+%             {streamcontent, "application/octet-stream", <<>>}];
+%		{error,_} ->
+%			{html, "FILE REMOVED."}
+%	end.
+
+%chunksend(YawsPid,Wkr,FID,Pos) ->
+%	Ref=make_ref(),
+%	Wkr ! {file_read_chunk,Ref,self(),FID,{Pos,?CHUNKSIZE}},
+%	receive
+%		{ok,Ref,_,eof} ->
+%			yaws_api:stream_chunk_end(YawsPid);		%fileserver stopped automatically
+%		{ok,Ref,_,error} ->
+%			yaws_api:stream_chunk_end(YawsPid);		%fileserver stopped automatically
+%		{ok,Ref,_,Bin} ->
+%			yaws_api:stream_chunk_deliver(YawsPid,Bin),
+%			chunksend(YawsPid,Wkr,FID,Pos+?CHUNKSIZE)
+%	after 5000 ->
+%		yaws_api:stream_chunk_end(YawsPid)
+%	end.
+
+rpc_fsvcs(undefined,Msg) ->
+    rpc_fsvcs(?SVRF,Msg);
+rpc_fsvcs(Wkr,{CC,ID,Params}) ->
+io:format("snd: ~p ~p~n",[CC,ID]),
+    Ref=make_ref(),
+    Wkr ! {CC,Ref,self(),ID,Params},
+    receive
+        {ok,Ref,Who,Msg} ->
+            {ok,Who,Msg};
+        {error,Ref,Reason} ->
+            {error,Reason}
+    after ?SvrTimeout ->
+        {error, timeout}
+    end.
+
+get_key(Key, KVs, Default) ->
+    case lists:keysearch(Key, 1, KVs) of
+        {value, {_, Val}} when is_list(Val) ->
+            Val;
+        _ ->
+            Default
+    end.
+    
+to_utf8([H|T]) when H < 16#80 -> [H | to_utf8(T)];                                                                 
+to_utf8([H|T]) when H < 16#C0 -> [16#C2,H | to_utf8(T)];                                                           
+to_utf8([H|T])                -> [16#C3, H-64 | to_utf8(T)];                                                       
+to_utf8([])                   -> [].                        
+</erl>

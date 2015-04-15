@@ -1,0 +1,90 @@
+/* CSS Document */
+#video {background-repeat: no-repeat; background-position: center; background-color:#252d30; position: relative; z-index: 300; padding-top: 100px;}
+#video .video_con{ margin:0 auto; width:1000px;position: relative;-webkit-transition: 0.3s all ease-out;-moz-transition: 0.3s all ease-out;-ms-transition: 0.3s all ease-out;-o-transition: 0.3s all ease-out;transition: 0.3s all ease-out;}
+#video .active_con1{ margin-top: 150px; opacity: 0.7}
+#video .active_con2{ margin-top: 100px; opacity: 0.8}
+#video .active_con3{ margin-top: 50px; opacity: 0.9}
+#video .active_con4{ margin-top: 0; opacity: 1.0}
+#video .video_con .vp_bt{ margin-top:30px; float:left; position:relative;}
+#video .video_con .p2pvideobtn , #video .video_con .mpvideobtn , #video .video_con .mpvideodevbtn{background:url(../images/new_btnbg.png) left -145px no-repeat #27a9e3; height: 70px;width: 250px;margin-top: 20px;letter-spacing: 2px; position: relative;left: 5px;line-height: 70px;color: #fff;font-size: 22px; cursor:pointer; padding-left:70px;}
+#video .video_con .mpvideobtn{background-color:#28b779; }
+#video .video_con .mpvideodevbtn{ background:url(../images/new_btnbg.png) left -90px no-repeat #da542e;  }
+#video .video_con .p2pvideobtn:hover , #video .video_con .mpvideobtn:hover , #video .video_con .mpvideodevbtn:hover{ background-color:#2255a4;}
+#video .videobt{position: absolute;bottom: -62px;font-size: 13px;  color:#5f6e73;}
+#video .videobt .videotype , #video .videobt a{ background:none;}
+#video .videobt .videolink{padding-left: 40px;}
+.vpBox:after , .video_con:after{content:".";height:0;visibility:hidden; display:block;clear:both; }
+.vpBox{ width:600px;height: 483px;position:relative; overflow:hidden; margin:0 auto; margin-top:10px; color: #fff; font-family:Helvetica, Arial, sans-serif; font-size: 13px;position: relative; float:right;}
+.vpBox .vpList{ width:600px; height:450px; float:left; position: relative;}
+.vpBox .con_roomnum{ background:#27a9e3; padding-top: 30px; height:393px;border: 30px solid hsl(0, 0%, 0%);border-color: hsla(0, 0%, 0%, 0.65);border-radius: 15px;width:540px;}
+.vpBox video{ background:#000000;position: absolute;}
+.vpBox .bgvideo{left: 0; top:0; width: 100%; height: 100%; z-index: 99;}
+.vpBox .smvideo{ bottom: 5px;right: 5px; border:1px solid #386083; width:30%; height:30%;z-index: 1000;}
+.vpBox .bgvideoTip{background: url(../images/preload_vdbg.gif) center center;width: 355px;height: 250px;padding-left: 245px;padding-top: 200px;position: absolute;left: 0;top: 0;z-index: 101;font-size: 24px;line-height: 30px;}
+.vpBox .smvideoTip{background: url(../images/preload_vdsm.gif) left center;   bottom: 5px;right: 5px; border:1px solid #386083; width:30%; height:30%; z-index: 1001;font-size: 15px;line-height: 20px; position: absolute; font-weight: bold;}
+.vpBox .smvideoTip .smvideocon{ padding-left: 62px; padding-top: 47px;}
+.vpBox a{background:url(../images/default_controlbtn.png);}
+.vpBox .vp_con{height: 33px;line-height: 32px;background: #000;padding-top: 2px;position: absolute;width: 100%;bottom: -35px;}
+.vpBox .vp_con.vp_conplay{ background: #333;}
+.vpBox .vp_con a{color: #fff;text-decoration:none;text-align:center;width: 13px;height:12px; display:inline-block; background-repeat: no-repeat;background-clip: content-box; padding: 6px ;vertical-align: middle;}
+.vpBox a.vd_pause{background-position: -4px 9px;margin-top: 3px;}
+.vpBox a.vd_pause:hover{background-position: -4px -3px;}
+.vpBox a.vd_play{background-position: 8px 9px; margin-top: 3px; display:none;}
+.vpBox a.vd_play:hover{background-position: 8px -3px;}
+.vpBox .vd_flbtn{ float: right; padding-top: 4px; padding-right: 10px;}
+.vpBox .vd_time{line-height: 25px;margin-right: 15px; vertical-align: top;}
+.vpBox a.vd_volume_bar{display: none;}
+.vpBox a.vd_volume{background-position: -6px -28px;}
+.vpBox a.vd_volume:hover{background-position: -6px -16px;}
+.vpBox a.vd_muted{background-position: 11px -28px;}
+.vpBox a.vd_muted:hover{background-position: 11px -16px;}
+.vpBox .vd_volume_bar{ display: inline-block; border:1px solid #555; background:url(../images/vd_volume_value.png);color: #fff;width: 100px;border-radius: 5px;vertical-align: middle;height: 10px; position: relative;margin-right: 10px;}
+.vpBox .vd_volume_bar_value{background: #000;display: inline-block;width: 70%;position: absolute;height: 10px; left:0; top:0;border-radius: 5px; }
+.vpBox .vd_handle{ border:solid thin; color: #777; background: #333; width: 10px; height: 15px; display: inline-block; position: absolute;top:-3px;border-radius: 5px; left:70%;cursor: pointer;}
+.vpBox a.vd_switch{background-position: -6px -76px;}
+.vpBox a.vd_hidesm{background-position:6px -138px;}
+.vpBox a.vd_hidesm:hover{background-position: -8px -138px;}
+.vpBox a.vd_showsm{background-position:6px -151px;}
+.vpBox a.vd_showsm:hover{background-position: -8px -151px;}
+.vpBox a.vd_fullscreen{background-position:-6px -52px;}
+.vpBox a.vd_fullscreen:hover{background-position: -6px -40px;}
+.vpBox a.vd_cancelfullscreen{background-position: 6px -51px;}
+.vpBox a.vd_cancelfullscreen:hover{background-position: 6px -38px;}
+.vpBox a.vd_hangup{background-position:6px -91px; width: 25px; display: none;}
+.vpBox a.vd_hangup:hover{background-position:6px -108px; width: 25px;}
+.vpBox a.vd_start{background-position: 6px -196px;width: 46px;height: 20px;padding-top: 0;}
+.vpBox a.vd_start:hover{background-position:6px -172px;}
+.vpBox:-webkit-full-screen, .vpBox:-moz-full-screen { width:100%; height:100%;}
+.vpBox:-webkit-full-screen video, .vpBox:-moz-full-screen video{ width:100%; height:100%;}
+.vpBox .vd_snap{background-position:6px -124px;}
+.vpBox .peerName{ font-size:14px; position:absolute; left: 20px;top: 15px; z-index:1002; color:yellow; display:none;}
+
+/*video*/
+#video .startOrEnter,#video .video_content{ text-align: center;position: relative;display: table-cell;vertical-align: middle;}
+.vbox{ width:740px; height:350px;  margin: 0 auto; border-radius: 10px; padding:17px 0px;position: relative;background: #6cf;-webkit-border-radius: 10px;-moz-border-radius: 10px;border-radius: 10px;border: 2px solid #ddd;}
+.startOrEnter .vbox{ padding:30px;}
+.newvideobtns{  height:350px;}
+.vpBox a.startVedio, .vpBox a.enterVedio, .vpBox a.endVedio{
+ cursor: pointer; -moz-border-radius: 5px;-webkit-border-radius: 5px;border-radius: 5px;color: #fff;font-size: 15px;font-weight: bold;display: inline-block;width: 130px; height: 35px; line-height: 35px; padding: 0;margin: 0;moz-box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);-webkit-box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);background: -moz-linear-gradient(19% 75% 90deg, #FF4D01, #FF8924);background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#FF8924), to(#FF4D01));text-align: center;text-decoration: none;}
+.video_content .endVedio{ width:95px; margin-right: -15px;}
+.vpBox a.enterVedio{ margin-top:20px;}
+.toStart, .toEnter{ width: 240px;padding: 20px 5px 0 25px;text-align: left;height: 345px; }
+/*background-color: #f5f5f5;
+border: 2px solid #6cf;
+border-radius: 10px;*/
+.toStart{ border-right:1px solid #aee1fe;float: left;}
+.toEnter{float:right;padding: 20px 5px 0 24px;}
+.toEnter  input{border: 1px solid #DADADA;box-shadow: 0 1px 2px rgba(0,0,0,.1) inset;height: 35px;width: 150px;line-height: 30px;border-radius: 4px;outline:none;color: #054f88;font-size:25px;font-weight:bold;padding-left:5px;	}
+.newvideobtns a{ margin-top:15px;}
+.toEnter input:focus{border: 1px solid #a3d2ed;	border-color: #7BD6F6;	-moz-outline-radius: 8px;-webkit-box-shadow: 0 0 10px rgba(123,214,246,.6);-moz-box-shadow: 0 0 10px rgba(123,214,246,.6);box-shadow: 0 0 10px rgba(123,214,246,.6);}
+h2{color: #054f88; font-size: 18px;}
+.tips{ color: #fff;line-height: 65px; font-size:15px;}
+.videoTips{position: absolute;top: -45px;display:none;left: 280px;color: #054f88;}
+.videoTips img{ display:none;vertical-align: middle; }
+.video_content .vbox .video_bar{ position: absolute;width: 534px;height: 42px;bottom: 20px;left: 20px; }
+.video_content .vbox{width: 575px;height: 445px;}
+.video_content .roomInfo{position: absolute;left: 10px;top: 20px; }
+.video_content .videoTimeCT, .video_content .ErrorTips{position: absolute;left:240px;top: 20px; display:none; }
+.video_content .video_time{ position:absolute; right:15px; top:10px;}
+#video_screem{  background:url(../images/video_bg.png); border-radius: 10px;}
+#videoInvite{ position:absolute; left: 0;top: -39px;width: 110%;color: #fff;}

@@ -1,0 +1,8 @@
+*.beam
+vcr
+new_vcr
+/wcg/applications/firstqq_vcr
+/wcg/applications/vcr_bak
+Mnesia.lws@10.32.3.52
+Mnesia.lws@ubuntu.livecom
+log

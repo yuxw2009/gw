@@ -1,0 +1,114 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="style/employeeManage.css" />
+    <title>添加员工</title>
+</head>
+<body>
+    <div id='container'>
+        <table class="dlgTable">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="prsnName"><span class="necessarilyItem">*</span>姓名</th>
+                    <th rowspan="2" class="prsnID"><span class="necessarilyItem">*</span>工号</th>
+                    <th rowspan="2" class="pw">登录密码</th>
+                    <th rowspan="2" class="mblNum">手机号码</th>
+                    <th rowspan="2" class="emailA">Email地址</th>
+                    <th rowspan="2" class="monthLimit">每月额度</th>
+                    <th colspan="5">业务权限</th>
+                </tr>
+                <tr>
+                    <th class="serviceAuth">回拨电话</th>
+                    <th class="serviceAuth">网络电话</th>
+                    <th class="serviceAuth">电话会议</th>
+                    <th class="serviceAuth">手机短信</th>
+                    <th class="serviceAuth">多方视频</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class='no_validate'>
+                    <td class="prsnName">
+                        <input name=""  add_data="personsName" class="personsName" type="text" value="" />
+                    </td>
+                    <td class="prsnID">
+                        <input name=""  add_data="jobNumber" class="jobNumber" type="text" value="" />
+                    </td>
+                    <td class="pw">
+                        <input name=""  add_data="defaultPassword" class="defaultPassword" type="text" value="888888" />
+                    </td>
+                    <td class="mblNum">
+                        <input name=""  add_data="mobileNumber" class="mobileNumber"   onblur="value=value.replace('+','00')"  type="text" value="" />
+                    </td>
+                    <td class="emailA">
+                        <input name="" add_data="emailAddr"  class="emailAddr" />
+                    </td>
+                    <td class="monthLimit">
+                        <select name="" class="amount" add_data="monthLimit">
+                          <option value="0">0</option>
+                           <option value="20">20</option>
+                          <option value="50">50</option>
+                          <option value="100" selected="selected">100</option>
+                          <option value="200">200</option>
+                          <option value="300">300</option>
+                          <option value="400">400</option>     
+                          <option value="500">500</option>    
+                          <option value="1000">1000</option>  
+    					  <option value="1500">1500</option>    
+                          <option value="2000">2000</option>                              
+                        </select>
+                    </td>
+                    <td class="serviceAuth">
+                        <select name="" add_data="callbackAuth">
+                          <option selected="selected">开通</option>   
+                          <option>取消</option> 
+                        </select>
+                    </td>
+                    <td class="serviceAuth">
+                        <select name="" add_data="voipAuth">
+                          <option selected="selected">开通</option>   
+                          <option>取消</option> 
+                        </select>
+                    </td>
+                    <td class="serviceAuth">
+                        <select name="" add_data="phoneconfAuth">
+                          <option>开通</option>   
+                          <option selected="selected">取消</option> 
+                        </select>
+                    </td>
+                    <td class="serviceAuth">
+                        <select name="" add_data="smsAuth">
+                          <option selected="selected">开通</option>   
+                          <option>取消</option> 
+                        </select>
+                    </td>
+                    <td class="serviceAuth">
+                        <select name="" add_data="dataconfAuth">
+                          <option>开通</option>   
+                          <option selected="selected">取消</option> 
+                        </select>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="button">
+            <div class="btn" id="cancel" style="*float:right;*margin-left:15px;">取 消</div>
+            <div class="btn" id="addSubmit" style="*float:right;margin-left:15px;">确 认</div>
+        </div>   
+    </div>
+    <div id='totips'></div>    
+    <div class="float_corner float_corner_top" id="floatCorner_top" style=""><span style="color: rgb(247, 206, 57);" class="corner corner_1">◆</span><span style="color: rgb(255, 255, 224);" class="corner corner_2">◆</span></div>
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script> 
+    <script type="text/javascript" src="script/json2.js?t=20120528"></script>
+    <script type="text/javascript" src="script/sprintf.js?t=20120528"></script>
+    <script type="text/javascript" src="script/md5.js?t=20120528"></script>
+    <script type="text/javascript" src="script/api.js?t=20120528"></script>
+    <script type="text/javascript" src="script/bill.js?t=20120528"></script>
+    <script type="text/javascript" src="script/employeeManage.js?t=20120528"></script>
+    <script type="text/javascript">
+        $(".dlgTable").addMember();
+        $('#container').find('input').eq(0).focus();
+        $("#container").height(parent.tabheight-70);
+    </script>
+</body>
+</html>

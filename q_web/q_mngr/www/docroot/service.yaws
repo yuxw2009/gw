@@ -1,0 +1,234 @@
+<erl>
+-include("db.hrl").
+-include("jsonerl.hrl").
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+my_postvar(Request,CommandID) ->
+    {ok,Value} = yaws_api:postvar(Request,CommandID),
+    Value.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+handle_load_org(A) ->
+    io:format("~p~n",[yaws_load_org]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    case rpc:call('db@caspar-PC',db,load_org,[CompanyID]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Orgs ->
+            {content,"application/json",jsonerl:nest_record_to_json(org,Orgs)}
+    end.
+
+handle_load_sub_org_stat(A) ->
+    io:format("~p~n",[yaws_load_sub_org_stat]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call('db@caspar-PC',db,load_sub_org_stat,[CompanyID,DepartmentID]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        SubOrgStats ->
+            {content,"application/json",?list_records_to_json(department_load,SubOrgStats)}
+    end.
+
+handle_add_org(A) ->
+    io:format("~p~n",[yaws_add_org]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    DepartmentName = list_to_bitstring(my_postvar(A,"departmentname")),
+    case rpc:call('db@caspar-PC',db,add_org,[CompanyID,DepartmentID,DepartmentName]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_non_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_non_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist_employer ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist_employer))},
+            {content,"application/json",?record_to_json(message,Message)};
+        AddID ->
+            RtnID = #id{id=list_to_binary(my_postvar(A,"departmentid") ++ "-" ++ integer_to_list(AddID))},
+            {content,"application/json",?record_to_json(id,RtnID)}
+    end.
+
+handle_del_org(A) ->
+    io:format("~p~n",[yaws_del_org]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call('db@caspar-PC',db,del_org,[CompanyID,DepartmentID]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_non_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_non_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist_sub_department ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist_sub_department))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist_employer ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist_employer))},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_modify_org(A) ->
+    io:format("~p~n",[yaws_modify_org]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    DepartmentName = list_to_bitstring(my_postvar(A,"departmentname")),
+    case rpc:call('db@caspar-PC',db,modify_org,[CompanyID,DepartmentID,DepartmentName]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_non_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_non_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+handle_add_employ(A) ->
+    io:format("~p~n",[yaws_add_employer]),
+    CompanyID    = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    EmployerAddRecordList = ?json_to_list_records(employer_add,my_postvar(A,"employerlist")),
+    case rpc:call('db@caspar-PC',db,add_employer,[CompanyID,DepartmentID,EmployerAddRecordList]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Rtn ->
+            Message = #message{message=Rtn},
+            {content,"application/json",?record_to_json(message,Message)}
+            %%{content,"application/json","{\"message\":\"\"}"}.
+    end.
+
+handle_del_employ(A) ->
+    io:format("~p~n",[yaws_del_employer]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    EmployerDelIDList = string:tokens(my_postvar(A,"employeridlist"),","),
+    case rpc:call('db@caspar-PC',db,del_employer,[CompanyID,EmployerDelIDList]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_load_employer(A) ->
+    io:format("~p~n",[yaws_load_employer]),
+    CompanyID    = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call('db@caspar-PC',db,load_employer,[CompanyID,DepartmentID]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        EmployerList ->
+            {content,"application/json",?list_records_to_json(employer_load,EmployerList)}
+    end.
+
+handle_load_employer_detail(A) ->
+    io:format("~p~n",[yaws_load_employer_detail]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    JobNumber = my_postvar(A,"employerid"),
+    case rpc:call('db@caspar-PC',db,load_employer_detail,[CompanyID,JobNumber]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        EmployerDetailList ->
+            {content,"application/json",?list_records_to_json(employer_load_detail,EmployerDetailList)}
+    end.
+
+handle_load_department_employer_detail(A) ->
+    io:format("~p~n",[yaws_load_department_employer_detail]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call('db@caspar-PC',db,get_all_employer_stat_in_department,[CompanyID,DepartmentID]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        DepEmployerStats ->
+            {content,"application/json",?list_records_to_json(department_employer_load,DepEmployerStats)}
+    end.
+
+handle_modify_employer(A) ->
+    io:format("~p~n",[yaws_modify_employer]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    JobNumber = my_postvar(A,"employerid"),
+    EmployerModify = ?json_to_record(employer_modify,my_postvar(A,"employermodify")),
+    case rpc:call('db@caspar-PC',db,modify_employer,[CompanyID,JobNumber,EmployerModify]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_login(A) ->
+    io:format("~p~n",[yaws_login]),
+    Username = list_to_binary(my_postvar(A,"username")),
+    Password = list_to_binary(my_postvar(A,"password")),
+    case rpc:call('db@caspar-PC',db,login,[1,Username,Password]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Ack ->
+            Message = #message{message=list_to_binary(Ack)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_modify_password(A) ->
+    io:format("~p~n",[yaws_modify_password]),
+    Username    = list_to_binary(my_postvar(A,"username")),
+    OldPassword = list_to_binary(my_postvar(A,"oldpassword")),
+    NewPassword = list_to_binary(my_postvar(A,"newpassword")),
+    case rpc:call('db@caspar-PC',db,modify_password,[1,Username,OldPassword,NewPassword]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Ack ->
+            Message = #message{message=list_to_binary(Ack)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+out(A) ->
+%%    io:format("A is:~p~n",[A]),
+%%    io:format("Command is:~p~n",[yaws_api:parse_post(A)]),
+    Command = my_postvar(A,"command"),
+    case Command of
+	    "load_org" ->
+		    handle_load_org(A);
+        "load_sub_org_stat" ->
+            handle_load_sub_org_stat(A);
+        "add_org" ->
+            handle_add_org(A);
+        "del_org" ->
+            handle_del_org(A);
+        "modify_org" ->
+            handle_modify_org(A);
+        "add_employer" ->
+            handle_add_employ(A);
+        "load_employer" ->
+            handle_load_employer(A);
+        "load_employer_detail" ->
+            handle_load_employer_detail(A);
+        "load_department_employer_detail" ->
+            handle_load_department_employer_detail(A);
+        "del_employer" ->
+            handle_del_employ(A);
+        "modify_employer" ->
+            handle_modify_employer(A);
+        "login" ->
+            handle_login(A);
+        "modify_password" ->
+            handle_modify_password(A)
+	end.
+</erl>

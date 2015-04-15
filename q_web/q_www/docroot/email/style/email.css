@@ -1,0 +1,222 @@
+/* CSS Document */
+body, pre {margin:0;padding:0;font-size:13px;color:#333;overflow:auto;overflow-x:hidden; font-family: Helvetica, 'Microsoft Yahei', verdana;}
+ul, li{ margin:0; padding:0; list-style:none;}
+#container, #MailSetUp{background: #FFF;border: 1px solid #F3F3F3;box-shadow: 0 2px 2px rgba(0, 0, 0, .1);padding: 0 1px;margin-top: 0 !important;width:95%;margin:0 auto;border-radius: 4px;position: absolute;top: 0;bottom: 20px;left: 25px;	overflow: hidden;}
+#subContainer:after, .uploadfilelist:after{content:".";height:0;visibility:hidden; display:block;clear:both; }
+#container:after, #base_info:after, #container .th:after, #container .bt:after {content:".";height:0;visibility:hidden;display:block;clear:both;}
+#container .th, .pagetitle , #MailSetUp .bt{background-image: -webkit-gradient(linear, left top, left bottom, from(#FFFFFF), to(#F4F4F4));background-image: -webkit-linear-gradient(top, #FFFFFF, #F4F4F4);background-image: -moz-linear-gradient(center top, #FFFFFF, #F4F4F4);background-image: -ms-linear-gradient(top, #FFFFFF, #F4F4F4);background-image: -o-linear-gradient(top, #FFFFFF, #F4F4F4);background-image: linear-gradient(center top, #FFF, #F4F4F4); FILTER: progid:DXImageTransform.Microsoft.gradient(startColorstr = #FFFFFF, endColorstr = #F4F4F4);	border-bottom: 2px solid #2A7AD2;_display: inline-block;}
+#MailSetUp .bt{line-height: 26px;padding-left: 20px;font-size: 16px;}
+#container .th, #MailSetUp .bt{height: 35px;white-space: nowrap; padding-top: 5px;}	
+.pagetitle {height:50px;}
+#container .th a.tabI, .pagetitle span , #container .th span.checkmore{position: relative;
+width: 80px; text-overflow:ellipsis; -o-text-overflow:ellipsis;outline: 0;cursor: pointer;z-index: 3;height: 25px;border-width: 1px 1px 0 1px;
+border-style: solid;border-top-left-radius: 3px;border-top-right-radius: 3px;text-align: center;line-height: normal;font-size: 14px;padding: 7px 5px 2px 5px;
+border-color: #b9c4cf;
+background: #dae8f6;
+background: -webkit-linear-gradient(top,#feffff,#dae8f6);
+background: -moz-linear-gradient(top,#feffff,#dae8f6);
+background: -o-linear-gradient(top,#feffff,#dae8f6);
+background: -ms-linear-gradient(top,#feffff,#dae8f6);
+background: linear-gradient(top,#feffff,#dae8f6);
+color: #6a6a6a;margin-right: -5px;text-decoration:none;display:inline-block;}
+#container .th .volatile_tablist a{ margin-right:-1px;}
+#container .th a{ overflow:hidden;}
+#container .th span.checkmore{ vertical-align:top; width:30px; height:34px; padding: 0;margin-left: -4px;}
+#container .th span .more_icon{ background: url(../images/btn_bg.png) no-repeat 10px -26px; width:30px; height:34px; display:inline-block;}
+#container .th a.pr{ padding-right:20px; vertical-align: top;}
+#container .th a.current ,.nui-menu a:hover, .nui-menu a.active:hover {
+/*	background-color: #266DBB;color: #fff;border-bottom: 1px solid #329ECC;background: #2A7AD2 !important;background-color: #266DBB;border-bottom: 1px solid #329ECC;background: #2A7AD2 !important;	padding-bottom: 2px;padding-top:1px; margin-bottom: -1px*/
+background: #135ba5;
+background: -ms-linear-gradient(top,#196fc6,#135ba5);
+background: -o-linear-gradient(top,#196fc6,#135ba5);
+background: -moz-linear-gradient(top,#196fc6,#135ba5);
+background: -webkit-linear-gradient(top,#196fc6,#135ba5);
+background: linear-gradient(top,#196fc6,#135ba5);border-color: #135aa4;color: #fff;z-index:7;}
+#base_info, #tabIframe {clear:both;padding:20px 10px;height: 435px;}
+.email_list {position: absolute;width: 100%;overflow-y: auto;bottom: 0;top: 87px;}
+.mail_tabs{ padding-left:70px;}
+.tablist {width:100%;border-spacing: 0px;}
+.tablist td {height:30px;line-height:30px;}
+.text_1_a {	border: 1px solid #79D7F7;color: #000000;font-size: 12px;ime-mode: active;}
+.tr_2_1 {background-color: #cfedfa;}
+.tr_2_0 {background-color: #e7f6fd;}
+.btn_group {text-align:right;padding: 0 12px 20px;}
+.btn{background: url(../images/btn.png) no-repeat;cursor: pointer;width: 60px;height: 30px;line-height:30px;margin-top: 4px;border: none;display:inline-block;color: #fff;text-decoration: none;text-align: center;font-size: 14px;}
+h2 {background: url(../images/h2Bg.gif) repeat-x top left;font-size: 12px;padding: 8px;color: #333;width: 94%;	margin: 0 auto 20px;}
+.tr_3 {background-color: #65afe4;color: #ffffff;font-weight: normal;height: 21px;text-align: center;}
+.t16 td, .t16 th {height:25px;line-height:25px;}
+#searchForm {background: url(../images/searchBg.gif) #FFFFCC no-repeat right center;border: 1px dotted #CCC;margin: 8px;padding: 8px;}
+.sea_tab th {width: 65px;height: 26px;line-height: 25px;font-weight: normal;text-align: right;}
+.email_list dl{border-bottom: 1px solid #d5d6d7;position: relative;clear: both;vertical-align: middle;cursor: pointer;background-color: #fff;height: 30px;line-height: 30px;height: 40px;line-height: 40px; }
+.email_list dl, .email_list dd{ margin:0; padding:0;}
+.email_list dd{ position: relative;}
+.email_list span{  overflow:hidden;text-overflow:ellipsis; -o-text-overflow:ellipsis;}
+.email_list .subject{white-space: nowrap;overflow: hidden;left: 260px;right: 200px; position: absolute; display: inline-block; }
+.email_list .checkBox{ width:30px; padding-left: 13px;}
+.email_list .readMark{ width:30px;}
+.email_list .readStatus{ text-align: center; padding: 0 10px;}
+.email_list .from{ width:175px;padding-left: 10px; display:inline-block;  width: 175px; padding-left: 10px; display: inline-block; white-space: nowrap;}
+.email_list .mailTime, .email_list .mailSize{ color:#bbb; width:115px; position: absolute; right: 0; display: inline-block; font-size: 12px;}
+.email_list .mailSize{ right:120px; width:70px;}
+.email_list .unread { font-weight:bold;}
+.email_opt{ background:  #FFFFCC no-repeat right center;}
+.email_opt_con{  padding:8px 8px 8px 4px; 	border: 1px dotted #CCC; }
+.email_opt a{ background-color: transparent;
+	background-image: linear-gradient(top,#f5f5f5,#f1f1f1);
+	background-image: -moz-linear-gradient(top,#f5f5f5,#f1f1f1);
+	background-image: -o-linear-gradient(top,#f5f5f5,#f1f1f1);
+	background-image: -webkit-gradient(linear,left top,left bottom,from(#f5f5f5),to(#f1f1f1));
+	background-image: -webkit-linear-gradient(top,#f5f5f5,#f1f1f1);
+	background-image: -ms-linear-gradient(top,#f5f5f5,#f1f1f1);
+	border: 1px solid rgba(0,0,0,0.1);
+	-webkit-border-radius: 2px;
+	-moz-border-radius: 2px;
+	border-radius: 2px;
+	cursor: default;
+	font-size: 11px;
+	font-weight: bold;
+	text-align: center;
+	white-space: nowrap;
+	margin-right: 5px;
+	height: 27px;
+	line-height: 27px;
+	min-width: 40px;
+	outline: 0;
+	padding: 0 8px;
+	display:inline-block;
+	border: 1px solid rgba(0,0,0,0.1);
+	color: #444;
+	text-decoration: none;
+	font-weight: normal;
+	font-size: 14px;
+	-webkit-box-shadow: 0 1px 1px rgba(0,0,0,.1);
+	-moz-box-shadow: 0 1px 1px rgba(0,0,0,.1);
+	box-shadow: 0 1px 1px rgba(0,0,0,.1);
+    cursor:pointer;
+}
+.email_opt a.checkall{ min-width: 20px;vertical-align: top;}
+.email_opt a.checkall input{ margin: 0;margin-top: 7px;}
+.email_opt a:hover{ border:1px solid #c6c6c6;color: #0078B6;}
+.emailList , .readmailist{overflow-y: auto;}
+.readmailist{top: 87px;position: absolute;width: 100%;overflow-y: auto;bottom: 0;}
+.mail_top{background-color: #fcfbf1; padding-left: 20px; border-bottom:1px dotted #CCC; padding:6px 0px 6px 10px;}
+.writemail_top{ border-bottom:none;}
+.mail_top h1{white-space: normal;word-wrap: break-word;word-break: break-all;outline: 0; margin: 0 12px 0 0;font-size: 15px;line-height: normal;font-weight: bold;}
+.cH, .fT {color: #afa89d;}
+.fT {position: absolute;left: 0;top: 3px; width: 65px;}
+.dj {margin-bottom: 3px;margin-top: 8px;}
+.fS {position: relative;}
+.fU {padding-left: 70px; min-height: 24px;line-height: 23px;}
+.fw{ position:relative;line-height: 35px;padding-left: 55px;}
+.mailText { padding:0 20px; font-size: 14px;  line-height: 25px;white-space: pre-wrap;overflow-x: auto;}
+/*写邮件*/
+.nui_ipt {border-radius: 3px;font-size: 12px;line-height: 1.666;position: relative;zoom: 1;	padding: 0 8px;border: 1px solid #bbb;background: #fff;box-shadow: 1px 1px 2px rgba(0,0,0,.1) inset; top: 4px; margin-top: 3px;margin-right: 10px;min-height: 30px;}
+.sjR{border-radius: 3px;font-size: 12px;line-height: 1.666;position: relative;zoom: 1;	padding: 0 8px;top: 6px; }
+.upload_image , .upload_attachment, .attachment_tag { background:url(/images/icon.png) no-repeat  left -317px; display:inline-block; height:17px; padding:2px 0 2px 22px; color:#343434; line-height:22px; text-decoration:none}
+.upload_image , .upload_attachment { margin:10px 50px;}
+.wm_input{border: none;height: 22px; outline:none; width: 100%;}
+.tabopt{ display: none;}
+.close { background: url(../images/btn_bg.png) no-repeat;cursor: pointer;width: 18px;height: 18px; display:inline-block; position:absolute; right: 4px;top: 4px;} 
+.close:hover{ background-position:left -18px;}
+.seatips{ position:absolute;border: 1px solid #CCCCCC; background:#fff; display:none; z-index:1999;width: 350px; top: 30px; left: 0; display:none;}
+.seatips li.member_icon{ height:40px; font-size: 12px; line-height:40px; position: relative; cursor:pointer;padding:0 10px 0 52px; /* background:url(/images/icon.png) no-repeat  left -690px; */ }
+.seatips li.member_icon img{ border: 1px solid #ccc;padding: 1px;position: absolute;left: 10px;top: 3px;}
+.seatips li.member_icon  .member_phone{ color: #99A}
+.seatips li.group_icon{ height:30px; line-height:30px; cursor:pointer;padding:0 10px 0 32px;; background:url(/images/icon.png) no-repeat  left -820px;}
+.seatips li.sea_title{ padding-left:10px; font-weight:bold; height:30px; line-height:30px; background:#EEE;}
+.seatips li.current{ background-color:#EEE;color: #0078B6;}
+/*附件*/
+.pagecontent_attachment{ padding:10px; margin-top:10px; clear:both;}
+.attachment{background:url(/images/file_icon.png) no-repeat  left top;  display:inline-block; padding-left:35px; color:#343434; height:32px; line-height:14px;text-overflow:ellipsis; -o-text-overflow:ellipsis;white-space: nowrap; overflow:hidden; width:455px; }
+.attachment_header{ height:25px; line-height:25px; background:whiteSmoke; padding-left:10px; color: #000;font-weight: bold; }
+.attachment_header{ background:#eee;}
+.attachment_content{ padding:0 10px 5px; border-bottom:1px dashed #ccc;  position:relative; width: 100%; margin: 0; padding-left:15px;}
+.comtcontent .attachment_content { border-bottom:none;}
+.download_attachment{padding-left: 5px; left: 45px; position: absolute; top: 17px;}
+.download_attachment a{color:#663A0D; padding-right:10px; text-decoration:none;}
+.download_attachment a:hover{ color:#0078B6;}
+.file-wrapper input {cursor: pointer;font-size: 100px;height: 30px;width: 120px;overflow: hidden;filter: alpha(opacity=1);-moz-opacity: 0.01;opacity: 0.01;position: absolute;left: 40px;top:-30px;vertical-align: middle;}
+.file_share_form3{ height:0;}
+.file-wrapper {height: 35px;height: 35px;margin-top: 0;padding: 0;position:relative;}
+.clear{ clear:both;}
+.progressContainer{ position:relative; float:left; max-width:200px; border: 1px dashed #ccc;margin-right: 10px;padding: 4px;margin-top: 3px;margin-bottom: 3px;}
+.uploadfilelist{ padding-left:50px;}
+.progressName{font-size: 13px;color: #515151;height: 20px;text-align: left;white-space: nowrap;overflow: hidden;display: inline-block; padding-right:10px;padding-left: 35px;line-height: 20px;max-width: 130px;text-overflow:ellipsis; -o-text-overflow:ellipsis; }
+.upload_success {margin-top: -9px; padding: 0 0 0 35px;height: 30px; line-height: 29px;  background:url(/images/file_icon.png) no-repeat  left -1494px; }
+.upload_error {margin-top: -9px; padding: 0 0 0 35px;height: 30px; line-height: 29px;  background:url(/images/file_icon.png) no-repeat  left -1543px; }
+.progressBarStatus {padding: 10px 0 0 0;text-align: left;white-space: nowrap;display: inline-block;}
+.progress , .uploadstatus{border: 1px solid #DDDDDD;padding: 1px;position: absolute;width: 100px;left: 40px;top: 32px;}
+.uploadstatus{border: none;top: 23px;color: #0099ff; display:none; left:37px}
+.bar {background-color: #0099ff; border-radius: 3px 3px 3px 3px; height: 3px;width: 0;}
+.percent {display: inline-block; left: 103%; position: absolute;top: -7px;font-size: 12px;}
+.sharefileupload_btn{ margin-top:-20px; padding:10px 0;}
+.file_icon{  background:url(/images/file_icon.png) no-repeat  left top; height:32px; width: 30px; display:inline-block;}
+.rar,.zip{ background-position:left -1460px;}
+.jpg, .jpeg, .png, .gif, bmp ,.ico{ background-position:left -513px;}
+.pdf{ background-position:left -122px;}
+.txt{background-position:left -718px;  }
+.hrl, .js, .php, .yaws, .c, .java { background-position:left -676px; }
+.html, .htm{ background-position:left -323px; }
+.xls, .xlsx{ background-position:left -164px; }
+.doc, .docx{ background-position:left -41px; }
+.ppt, .pptx{ background-position:left -800px; }
+.mp3, .wmv, .mid{ background-position:left -965px;}
+.mp4, .rm{ background-position:left -635px;}
+.exe , .msi {background-position:left -122px; }
+.apk{ background-position:left -1203px; }
+.swf{ background-position:left -1377px; }
+.delfile{color: #CC0000;font-family: Helvetica,STHeiti;font-size: 25px;height: 21px;line-height: 21px;padding: 0;display: inline-block;text-align: center;text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);cursor:pointer;width: 21px;}
+.nui-menu{border-radius: 4px;text-align: left;line-height: 25px;padding: 7px 0;white-space: nowrap;position: absolute!important;z-index: 1000000;border: 1px solid #999;background: #fff;box-shadow: 0 0 10px rgba(0,0,0,.5);cursor: default;outline: 0; width: 180px;left: -149px;top: 36px; display:none;}
+.nui-menu a{ padding-left:20px; line-height:25px; display:block;  height:27px; line-height:27px; color: #b6966f; text-decoration: none; text-overflow:ellipsis; -o-text-overflow:ellipsis; overflow:hidden;}
+.nui-menu a.active{ background:url(/email/images/btn_bg.png) no-repeat  left -51px; }
+#MailSetUp label{ width:150px; display:block; padding:5px;}
+#MailSetUp dd{ padding-left:0; padding-right:230px; position:relative;}
+#MailSetUp input{ width:100%; display:block; height:27px; line-height:27px; border:1px solid #3197b5; outline:none; padding:0 5px; }
+#MailSetUp input:focus{ background:#fdf9c8;}
+#MailSetUp .btn{ background:url(/email/images/btn.png) no-repeat  left top; width:60px; height:30px; line-height:27px; text-align:center;}
+#MailSetUp .btngroup{  text-align:left; padding-left:40px;}
+#MailSetUp .tip{ position:absolute; right:141px; top:35px; color:#f9590d;background:url(/images/formcheckIcon.png) no-repeat  left -72px; padding-left:18px; display:none; }
+.writemailBtn{cursor: pointer;font-size: 14px;color: #6a6a6a;background: url(/email/images/btn.png) no-repeat left -40px;width: 35px;height: 35px;display: inline-block;
+position: absolute;line-height: 39px;left: 5px;top: 2px;padding-left: 28px;text-decoration: none; cursor:pointer; }
+.writemailBtn:hover{ background-position:left -88px;}
+
+
+/*mail.tips*/
+.zeng_msgbox_layer,
+.zeng_msgbox_layer .gtl_ico_succ,
+.zeng_msgbox_layer .gtl_ico_fail,
+.zeng_msgbox_layer .gtl_ico_hits,
+.zeng_msgbox_layer .gtl_ico_clear,
+.zeng_msgbox_layer .gtl_end{display:inline-block;height:54px;line-height:54px;font-weight:bold;font-size:14px;color:#606060;background-image:url(/images/gb_tip_layer.png);_background-image:url(/images/gb_tip_layer_ie6.png);background-repeat:no-repeat;}
+.zeng_msgbox_layer_wrap{width:100%;position:fixed;_position:absolute;top:46%;left:0;text-align:center;z-index:65533;}
+.zeng_msgbox_layer{background-position:0 -161px;background-repeat:repeat-x;padding:0 18px 0 9px;margin:0 auto;position:relative;}
+.zeng_msgbox_layer .gtl_ico_succ{background-position:-6px 0;left:-45px;top:0;width:45px;position:absolute;}
+.zeng_msgbox_layer .gtl_end{background-position:0 0;position:absolute;right:-6px;top:0;width:6px;}
+.zeng_msgbox_layer .gtl_ico_fail{background-position:-6px -108px;position:absolute;left:-45px;top:0;width:45px;}
+.zeng_msgbox_layer .gtl_ico_hits{background-position:-6px -54px;position:absolute;left:-45px;top:0;width:45px;}
+.zeng_msgbox_layer .gtl_ico_clear{background-position:-6px 0;left:-5px;width:5px;position:absolute;top:0;}
+.zeng_msgbox_layer img{float:left;margin:19px 10px 0 5px ;}
+.stb {position: relative;}
+input.DiskFile{cursor: pointer;font-size: 100px;height: 32px;width: 120px;
+overflow: hidden;filter: alpha(opacity=1);-moz-opacity: 0.01;opacity: 0.01;
+position: absolute;left: 10px;vertical-align: middle;top: 10px;}
+
+.fileList{margin-bottom: 50px; display: none;}
+.fileList  .file_icon{ vertical-align:middle; height:35px; position:static; }
+.fileList dl, .fileList dd{ position:relative; padding:0; margin:0;}
+.fileList dl, .fileList .Flth { padding-left: 70px;padding: 5px 10px;border-bottom: #ebebeb 1px solid;height: 35px;line-height: 35px;}
+.fileList span{ padding: 0 5px; display: inline-block;white-space: nowrap;text-overflow:ellipsis; -o-text-overflow:ellipsis;white-space: nowrap; overflow:hidden;}
+dl.failed .Dsa, dl .Dopt{ color:#da0303;}
+
+
+.fileList dl{ padding: 2px 0; text-align: left;}
+.Dsa{ max-width: 55px;  position: absolute;left: 29px;bottom: -8px;}
+.fileList span.Dfz { max-width: 50px; display: none;}
+.Dfn { max-width: 130px;margin-top: -9px;vertical-align: top;}
+.Dopt{ max-width: 60px;cursor: pointer;vertical-align: top;position: absolute;top:-9px;right: -30px }
+.delete{background: url(/images/diskbg.gif) no-repeat right -131px;width: 16px;height: 16px;display: inline-block;top: 0px;}
+dl.success .Dsa{color: #298ff8;}
+.fileList dl{float: left;min-width: 100px; background: #e6ecf5; border: 1px solid #ccc; padding-right: 35px; margin-top: 5px;max-width: 285px; padding-left: 5px; margin-right: 5px;}
+.inline_mask {position: absolute;left: 0;top: 0;opacity: 0.5;z-index: 0;background: #abd7fb;width: 0;height: 100%;background: #f5f7ff -webkit-gradient(linear,left top,left bottom,color-stop(0,rgba(153,209,255,.8)),color-stop(.5,rgba(132,199,255,.8)),color-stop(1,rgba(108,188,255,.8)));background: #f5f7ff -moz-linear-gradient(top,rgba(153,209,255,.8),rgba(132,199,255,.8) 50%,rgba(108,188,255,.8));}
+.pageTips{color: #da0303; position: absolute; top: 14px; left: 140px; background: url(/images/diskbg.gif) no-repeat -20px -180px; padding-left: 25px;}
+dl .reupload{ position: absolute;top: 8px;right: 16px;color: #da0303; cursor: pointer;}

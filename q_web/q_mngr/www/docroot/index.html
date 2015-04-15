@@ -1,0 +1,104 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style/login.css" />
+<title>Lwork员工管理系统-登录</title>
+</head>
+<body>
+<div id="center_block">
+	<div id="contianer">
+	  <div class="logo"> </div>
+	  <div class="title_txt">后台管理系统</div>
+	  <div class="logo2"></div>
+	  <ul>
+	  	<li>
+	      <label>公司名称</label>
+	      <input class="markname" type="text" value="" />
+	    </li>
+	    <li>
+	      <label>管理员账号</label>
+	      <input class="usename" type="text" value="" />
+	    </li>
+	    <li>
+	      <label>管理员密码</label>
+	      <input class="password" type="password" value="" />
+	    </li>
+	  </ul>
+	  <a type="submit" id="submit" class="btn" />登录 </a>
+	  <div class="tipTxt">* 公司名称、管理员账号或密码有误，请重新输入！</div>
+	</div>
+</div>
+</body>
+<script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script> 
+<script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>  
+<script type="text/javascript" src="script/sprintf.js?t=20120528"></script> 
+<script type="text/javascript" src="script/api.js?t=20120528"></script>
+<script type="text/javascript" src="script/md5.js?t=20120528"></script>        
+<script type="text/ecmascript">
+	 var setHeight=function(){
+		 var clientHeight = document.documentElement.clientHeight > document.body.clientHeight ? document.documentElement.clientHeight :document.body.clientHeight;
+		 $('#contianer').css('margin-top',(clientHeight-360)/2).show();
+	 }
+	var getCookieFields = function(){
+		var cookieMarkName = $.cookie("markName");
+		var cookieUserName = $.cookie("userName");
+		if (cookieMarkName && cookieMarkName.length > 0){
+			$('input.markname').val(cookieMarkName);
+		}
+		if (cookieUserName && cookieUserName.length > 0){
+			$('input.usename').val(cookieUserName);
+		}
+	}
+	setHeight();
+	getCookieFields();
+
+	$('#contianer').find('input:first').focus();
+	window.onresize = function () { 
+	   setHeight()
+	};
+	$('input').keyup(function(){			 
+		$('.tipText').css('visibility','hidden');
+	})	
+	
+	$('#submit').click(function(){
+		var markName = $('input.markname').val();
+		var userName = $('input.usename').val();
+		var password = $('input.password').val();
+		if(''===markName){
+		  $('.tipText').text('* 公司名称不能为空！').css('visibility','visible');
+		  $('input.markname').focus();
+		  return false;
+		}		  		 
+		if(''===userName){
+		  $('.tipText').text('* 账号不能为空！').css('visibility','visible');
+		  $('input.usename').focus();
+		  return false;
+		}
+		if(''===password){
+		  $('.tipText').text('* 密码不能为空！').css('visibility','visible');
+		  $('input.password').focus();
+		    return false;
+		}
+	    api.adminLogin(userName, md5(password), markName, function (data) {
+				$.cookie("markName", markName, {expires: 30});
+			    $.cookie("userName", userName, {expires: 30});
+			    $.cookie("orgId", data.org_id);
+				window.location = "admin.html";							
+			},
+            function (failed){              
+                $('.tipText').text('* 公司名称、管理员账号或密码有误，请重新输入！').css('visibility','visible');
+                $('input.markname').focus();
+            }
+	    );	  
+	})
+	
+    document.onkeydown = function (event) {
+        e = event ? event : (window.event ? window.event : null);
+        if (e.keyCode == 13) {
+            $('#submit').click()
+            return false;
+        }
+    }
+</script>
+</html>

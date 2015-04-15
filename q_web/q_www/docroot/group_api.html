@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" charset="utf-8" src="script/jquery-1.6.3.min.js"></script>
+<script type="text/javascript" charset="utf-8" src="script/api.js"></script>
+</head>
+<body>
+    <a id="load">获取会议</a>
+    <a id="create">新建</a>
+    <ul id="groups"></ul>
+    <script type="text/javascript" charset="utf-8">
+        console.log(api);
+        $('#load').click(function() {
+                api.group.list_groups('123', function(data) {
+                    console.log(data);
+                    var groups = data['groups'];
+                    for (var i = 0; i < groups.length; i++) {
+                    var group = groups[i];
+                    var a = $('<li id="group-id-' + group['group_id'] + '">' + group['name'] + '</li>');
+                    var group_id = group['group_id'];
+                    a.click(function() {
+                        api.group.get_members('123', group_id, function(data) {
+                            console.log('get members');
+                            console.log(data);
+                            });
+                        });
+                    $('#groups').append(a);
+                    }
+                    });
+        });
+$('#create').click(function() {
+        api.group.create_group('123', 'test', 'ww', function(data) {
+            console.log('create success');
+            console.log(data);
+            var a = $('<li id="group-id-' + data['group_id'] + '">' + 'test' + '</li>');
+            a.click(function() {
+                api.group.delete_group('123', data['group_id'], function(data) {
+                    console.log('delete success');
+                    console.log(data);
+                    a.remove();
+                    });
+                });
+            $('#groups').append(a);
+            });
+        });
+    </script>
+</body>
+</html>

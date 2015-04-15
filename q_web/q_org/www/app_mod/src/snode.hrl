@@ -1,0 +1,3 @@
+-define(SNODE, cfg:snode()).
+-define(FNODE, cfg:fnode()).
+-define(VNODE, cfg:vnode()).

@@ -1,0 +1,1 @@
+{"esrc/*", [{outdir, "ebin"}, {i, "esrc"}]}.

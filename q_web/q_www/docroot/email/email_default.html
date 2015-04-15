@@ -1,0 +1,175 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title id="email_title">邮箱管理</title>
+<link rel="stylesheet" type="text/css" href="style/email.css"/>
+<link rel="stylesheet" type="text/css" href="../style/jquery.tagsinput.css?t=75" />
+<link href="../script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="ueditor/editor_config.js"></script>
+<script type="text/javascript" src="ueditor/editor_all.js"></script>
+</head>
+<body>
+
+<div id="MailSetUp" >
+  <div class="bt" id="email_login_name"> 邮箱登录 </div>
+  <div>
+    <dl>
+      <dd>
+        <label id="email_addr_name">电子邮箱地址:</label>
+        <input  class="mail_addr" name="mailadd" type="text" />
+        <span class="tip tip_no_empty">不能为空</span> </dd>
+      <dd>
+        <label id="mail_password">密码：</label>
+        <input class="mail_pwd" name="psw" type="password" />
+        <span class="tip tip_no_empty">不能为空</span> </dd>
+      <dd style="display:none;">
+        <label>IMAP server address</label>
+        <input class="imap_addr" name="IMAP" type="text" />
+        <span class="tip tip_no_empty">no empty </span> </dd>
+      <dd style="display:none;">
+        <label>SMTP server address</label>
+        <input class="smtp_addr" name="SMTP" type="text" />
+        <span class="tip tip_no_empty">not allowed to be empty </span> </dd>
+    </dl>
+    <div class="btngroup"><a href="###" class="btn submit_setmail">登录</a> <a href="###" class="btn cancel_setmail">取消</a></div>
+  </div>
+</div>
+
+
+<div id="container" style="display:none;">
+  <div class="th cl">
+    <div class="mail_tabs cl"> 
+       <a class="inbox current tabI inbox_name" link="inbox_container" href="###" folder_id="" max_uid="1">收件箱</a> 
+       <a class="draft tabI draft_name" link="draft_container" href="###">草稿箱</a> 
+       <a class="sent tabI sent_name" link="sent_container"  href="###">发件箱</a> 
+       <a class="trash tabI trash_name" link="trash_container"  href="###">已删除</a> 
+       <span class="volatile_tablist"> </span> 
+       <span class="checkmore"><em class="more_icon"></em>
+       <div class="nui-menu">
+         <a action="emailsetup" class="setup"  href="###">邮箱设置</a>        
+         <a action="inbox" class="active subMenu_inbox_container inbox_name"   href="###">收件箱</a> 
+         <a action="sent" class="subMenu_sent_container sent_name"   href="###">发件箱</a> 
+         <a action="draft" class="subMenu_draft_container draft_name" href="###">草稿箱</a> 
+         <a action="writemailBtn" class="subMenu_write_emails_container write_mail_name" href="###">写信</a> 
+       </div>
+      </span> 
+     </div>
+      <a class="writemailBtn write_mail_name" href="###">写信</a>
+  </div>
+  <div id="subContainer">
+    <input type="file" id="mail_file_box" style="display:none">
+    <div id="inbox_container" class="tabopt" style="display:block;">
+      <div class="email_opt">
+        <div class="email_opt_con"><a href="###" class="checkall" style="display:none">
+          <input type="checkbox" name="checkbox" />
+          </a> <a href="###" class="transfer_mails">转发</a> <a href="###" class="delete_mails delete_to_trash">删除</a> <a href="###" class="refresh_mails">刷新</a> </div>
+      </div>
+      <div class="email_list"> </div>
+    </div>
+    <div id="draft_container" class="tabopt">
+      <div class="email_opt">
+        <div class="email_opt_con"><a href="###" class="checkall" style="display:none">
+          <input type="checkbox" name="checkbox" />
+          </a> <a href="###" class="transfer_mails">转发</a> <a href="###" class="delete_mails delete_to_trash">删除</a> <a href="###" class="refresh_mails">刷新</a> </div>
+      </div>
+      <div class="email_list"> </div>
+    </div>
+    <div id="sent_container" class="tabopt">
+      <div class="email_opt">
+        <div class="email_opt_con"><a href="###" class="checkall" style="display:none">
+          <input type="checkbox" name="checkbox" />
+          </a> <a href="###" class="transfer_mails">转发</a> <a href="###" class="delete_mails delete_to_trash">删除</a> <a href="###" class="refresh_mails">刷新</a> </div>
+      </div>
+      <div class="email_list"> </div>
+    </div>
+    <div id="trash_container" class="tabopt">
+      <div class="email_opt">
+        <div class="email_opt_con"><a href="###" class="checkall" style="display:none">
+          <input type="checkbox" name="checkbox" /> </a> 
+          <a href="###" class="restore_mail">恢复到收件箱</a> <a href="###" class="delete_mails delete_forever">彻底删除</a>
+        </div>
+      </div>
+      <div class="email_list"> </div>
+    </div>
+  </div>
+</div>
+
+<div id="write_emails_container" class="tabopt" style="display:none">
+  <div class="email_opt">
+    <div class="email_opt_con"> <a href="###" class="send_btn">发送</a> <!--a href="###" class="save_btn">保存草稿</a> <a href="###" class="cancel_btn">取消</a--> <a href="###" class="add_cc">增加抄送</a> <a href="###" class="add_bcc">增加密送</a>
+  </div>
+  </div>
+  <div class="mail_top writemail_top">
+    <ul>
+      <li class="fw fj">
+        <div class="fT sender">发件人：</div>
+        <div class="fw sjR" >
+          <div><span class="sender_name"></span><span class="sender_addr"></span></div>
+        </div>
+      </li>
+      <li class="fw sj">
+        <div class="fT receiver">收件人：</div>
+        <div class="nui_ipt">
+          <input id="sendmail_obj"  type="text" class="wm_input receiver_addr"  value=""/>
+        </div>
+      </li>
+      <li class="fw ccs" style="display:none">
+        <div class="fT cc">抄送人：</div>
+        <div class="nui_ipt">
+          <input id="sendmail_obj_cc"  type="text" class="wm_input receiver_addr_cc"  value=""/>
+        </div>
+      </li>
+      <li class="fw bccs" style="display:none">
+        <div class="fT bcc">密送人：</div>
+        <div class="nui_ipt">
+          <input id="sendmail_obj_bcc"  type="text" class="wm_input receiver_addr_bcc"  value=""/>
+        </div>
+      </li>
+      <li class="fw zt">
+        <div class="fT subject_name">主&nbsp;&nbsp;&nbsp;题：</div>
+        <div class="nui_ipt">
+          <input  type="text" class="wm_input subject"  value=""/>
+        </div>
+      </li>
+    </ul>
+      <div class="stb"> 
+        <a href="###" class="upload_attachment">选择文件(小于1M)</a>
+        <div class="sharefile_handle">
+        <form enctype="multipart/form-data" action ="/mail_upload.yaws" method="post">
+          <input type="file" class="DiskFile" name="upld" onchange="sharefiles_handle(this, 'email')"/>
+          <input type="submit" value="submit_files" class="submit_sharefile"  style="display:none" />
+        </form>
+      </div>
+      <div class="fileList">
+      </div>
+      </div> 
+<!-- <div class="uploadfilelist" id="upload_filecontent"> </div>-->
+  </div>
+  <div class="clear"></div>
+  <textarea name="后台取值的key" id="myEditor" class="send_payload"></textarea>
+</div>
+
+<div style="top: 200px; display: none;" id="loading" class="zeng_msgbox_layer_wrap"><span id="mode_tips_v2" style="z-index: 10000;" class="zeng_msgbox_layer"><span class="gtl_ico_clear"></span><img alt="" src="/images/loading.gif"> <span class="hint"></span><span class="gtl_end"></span></span></div>  
+<script type="text/javascript" src="../script/jquery-1.7.2.min.js"></script> 
+<script type="text/javascript" src="../script/jquery.cookie.js"></script>
+<script src="../script/artDialog/jquery.artDialog.js?t=20120528" type="text/javascript"></script>
+<script type="text/javascript" src="../script/restchannel.js?t=75"></script> 
+<script type="text/javascript" src="../script/jquery.form.js"></script> 
+<script type="text/javascript" src="../script/all_share.js?t=75"></script> 
+<script type="text/javascript" src="../script/jquery_plugins.js?t=75"></script> 
+<script type="text/javascript" src="../script/tagsInput.js?t=75"></script> 
+<!--script type="text/javascript" src="../script/lw_lang.js?t=75"></script--> 
+<script type="text/javascript" src="script/email_lang.js?t=75"></script> 
+<script type="text/javascript" src="script/base64.js?t=75"></script> 
+<script type="text/javascript" src="script/email_common.js?t=75"></script> 
+<script type="text/javascript">
+   var employer_status = parent.employer_status;
+	 var correctPhoneNumber = parent.correctPhoneNumber;
+	 var mobile_test = parent.mobile_test;
+	 var totips = parent.totips ? parent.totips : my_totips;
+	 $('.mail_tabs').width(parseInt(document.body.clientWidth) - 100);
+
+</script>
+</body>
+</html>

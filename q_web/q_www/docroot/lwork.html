@@ -1,0 +1,1015 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="images/favicon.ico"/>
+<link rel="stylesheet" type="text/css" href="style/common.css?t=75" />
+<link rel="stylesheet" type="text/css" href="style/forum.css?t=75" />
+<link rel="stylesheet" type="text/css" href="style/jquery.tagsinput.css?t=75" />
+<link rel="stylesheet" type="text/css" href="style/video_plugin.css?t=75" />
+<link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+<link href="script/upload/jquery.plupload.queue/css/jquery.plupload.queue.css" rel="stylesheet" type="text/css" />
+<title>Lwork工作平台</title>
+<script type="text/javascript" src="script/jquery-1.7.2.min.js"></script>
+<script type="text/javascript" src="script/jquery.cookie.js"></script>
+</head>
+<body onclick="showNotification('','')">
+<erl> out(A) ->
+  {html, "<span id=\"lw_ws_origin\" style=\"display:none\">" ++ (A#arg.headers)#headers.host ++ "</span>"}. </erl> 
+<div class="pagefix">
+  <div class="topbg">
+    <div id="header">
+      <div class="logo"> 爱讯达科技（深圳）有限公司 </div>
+      <div class="sidebar_title">
+        <ul>
+          <li class="login_suc it_daohang"> <a href="#" class="set_perinformation"><span class="per_infomation">企业IT导航</span></a>
+            <ul class="set_list">
+              <li><a href="http://10.60.108.131:8080/" target="_blank">计费系统</a> </li>
+              <li><a href="http://10.60.108.131:8080/dm.html" target="_blank">话务系统</a></li>
+              <li><a href="http://10.32.3.60:8080" target="_blank">文档服务器</a> </li>
+            </ul>
+          </li>
+          <li class="login_suc mobile"> <a href="#" class="set_perinformation" ><span class="per_infomation">移动客户端下载</span></a>
+            <ul class="set_list">
+              <li><a class="" href="/mobile_download/Lwork_iPhone&User_guide.zip" target="_blank">iphone客户端</a> </li>
+              <li><a class=""  href="/mobile_download/Lwork.apk" target="_blank">android客户端</a></li>
+            </ul>
+          </li>        
+          <li class="login_suc shezhi"> <a href="#" class="set_perinformation" id="set"><span class="per_infomation" id="username"></span></a>
+            <ul class="set_list">
+              <li  mode = "modifyperinof"  class="modifyperinof personal"> 个人设置</li>
+              <li  mode = "modifypassword" class="modifypassword personal">更改密码</li>
+              <li><a href="#" id="goback">退出系统</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="lwork">
+    <video id="soundControl" src="digit_ring.mp3" playcount="3" width="0" height="0"></video>
+    <div class="lwork_content">
+      <div class="lwork_logo"> </div>
+      <ul class="dynamic">
+        <li class="topics"><a class="new_num" href="###">0</a>
+          <ul class="topics_detail detail">
+            <li>企业微博： </li>
+            <li mode = "topics" type = "new_msg" link = 'topic_msg' class="new_msg">新话题（<span class="new_msg_num">0</span>） </li>
+            <li mode = "topics" type = "new_comt" link = 'newcomt_content' class="new_comt">新回复（<span class="new_msg_comt">0</span>） </li>
+          </ul>
+        </li>
+        <li class="tasks"> <a class="new_num"  href="###">0</a>
+          <ul class="tasks_detail detail">
+            <li>工作任务： </li>
+            <li mode = "tasks" type = "new_msg" link = 'current_task' class="new_msg">新任务（<span class="new_msg_num">0</span>） </li>
+            <li mode = "tasks" type = "new_comt" link = 'newcomt_tasks' class="new_comt">新回复（<span class="new_msg_comt">0</span>） </li>
+          </ul>
+        </li>
+        <li class="video"> <a class="new_num"  href="###">0</a>
+          <ul class="video_detail detail">
+            <li>Web视频： </li>
+            <li class="vedio_notice p2p_vedio_notice" vmode="p2p" style="display:none"> </li>
+            <li class="vedio_notice mp_vedio_notice" vmode="mp" style="display:none"> </li>
+          </ul>
+        </li>
+        <li class="questions"> <a href="###">0</a>
+          <ul class="questions_detail detail" >
+            <li>知识问答： </li>
+            <li class="new_msg">新问答（<span class="new_msg_num">0</span>） </li>
+            <li class="new_comt">新回复（<span class="new_msg_comt">0</span>） </li>
+          </ul>
+        </li>
+        <li class="news"> <a href="###">0</a>
+          <ul class="news_detail detail">
+            <li>新闻消息： </li>
+            <li class="new_msg">新消息（<span class="new_msg_num">0</span>） </li>
+          </ul>
+        </li>
+        <li class="polls"> <a  class="new_num"  href="###">0</a>
+          <ul class="polls_detail detail">
+            <li>投票： </li>
+            <li class="new_msg"  mode = "polls" link = 'polls_msg' type = "new_msg2" >新投票（<span class="new_msg_num">0</span>） </li>
+          </ul>
+        </li>
+        <li class="documents"> <a class="new_num" href="###">0</a>
+          <ul class="documents_detail detail">
+            <li>文件共享： </li>
+            <li class="new_msg"  mode = "documents" link = 'file_share_container' type = "new_msg2" >新文件（<span class="new_msg_num">0</span>） </li>
+          </ul>
+        </li>
+        <li class="notice"><a class="new_num" href="###">0</a>
+          <ul class="notice_detail detail">
+            <li  class="new_msg"   mode = "tasks" type = "taskfinish">您当前有<span class="new_msg_num">0</span>条任务被发起人完成！</li>
+          </ul>
+        </li>
+      </ul>
+      <div id="search_box" class="sea_box">
+        <input type="text" class="inputbox" id="search_input" value="搜索关键字" maxlength="20"/>
+        <span><a class="searchbutton" herf="###"></a></span>
+        <ul class="suggests">
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="Interrupt"  class="alert alert-block alert-error fade in Interrupt">
+  <a class="close" data-dismiss="alert" href="#">×</a>
+  <h4 class="alert-heading">下线通知</h4>
+  <p>由于您的账号已在另一个地点登录、网络连接中断等问题，您被迫下线，请点击重新登录激活账号</p>
+  <p>
+  <a class="btn" href="#">立即激活</a>
+  </p>
+</div> 
+<div id="alert" class="alert alert-block alert-error fade in"> <a class="close" data-dismiss="alert" href="#">×</a>
+    <h4 class="alert-heading">温馨提示：</h4>
+    <p>Lwork工作平台网络电话、视频通话部分功能使用了HTML5中的领先特性，点击安装<a style="color:red; text-decoration:underline;" href="http://www.google.cn/chrome/intl/zh-CN/landing_chrome.html?hl=zh_cn&brand=CHMA&utm_campaign=zh_cn&utm_source=zh_cn-ha-apac-zh_cn-bk&utm_medium=ha" target="_blank">chrome浏览器</a>.<br/>
+      另外：当您打网络电话和使用视频通话功能时，请检查您的电脑是否安装麦克风、摄像头等设备。</p>
+    <p> <a class="btn btn-danger concel" target="_blank"  href="http://www.google.cn/chrome/intl/zh-CN/landing_chrome.html?hl=zh_cn&brand=CHMA&utm_campaign=zh_cn&utm_source=zh_cn-ha-apac-zh_cn-bk&utm_medium=ha">点击安装</a> <a class="btn concel" href="#">看看再说</a> </p>
+</div>
+<div id="container">
+  <div id="content">
+    <div id="nav">
+      <ul class="tab_item">
+        <li class="email"><a comtlink="email" link="email" href="###"  class="">我的邮箱</a></li>
+        <li class="forum li_current"><a comtlink="forum" link="forum" href="###" class="curent">ZTE技术论坛</a></li>
+        <li class="salary"><a comtlink ="salary"  link="salary" href="###">我的工资</a></li>        
+        <li class="focus"><a comtlink ="focus"  link="focus" href="###">我的关注</a></li>
+        <li class="documents"><a comtlink ="file_share_container"  link="documents" href="###">我的网盘</a><span class="new_mes"> </span> </li>
+        <li class="line"></li>
+        <li class="tasks"><a comtlink ="curent" link="tasks" href="###">工作协同</a><span class="new_mes"> </span> </li>
+        <li class="topics"><a comtlink ="topic_msg" link="topics" href="###">企业微博</a><span class="new_mes"> </span></li>
+        <li class="meeting"><a comtlink ="meeting"  link="meeting" href="###">电话会议</a><span class="new_mes"> </span> </li>
+        <li class="voip"><a comtlink ="voip"  link="voip" href="###">网络电话</a><span class="new_mes"> </span> </li>
+        <li class="questions"><a comtlink ="questions"  link="questions"  href="###">知识问答</a><span class="new_mes"> </span></li>
+        <li class="polls"><a comtlink ="polls"  link="polls" href="###">集体决策</a><span class="new_mes"> </span></li>
+        <li class="video"><a comtlink ="video"  link="video" href="###">多方视频</a></li>
+        <li class="shortmsg"><a comtlink ="shortmsg"  link="shortmsg" href="###">手机短信</a></li>
+        <li class="line"></li>
+        <li class="recycle"><a comtlink ="recycle"  link="recycle" href="###">回收站</a></li>
+      </ul>
+    </div>
+  <div id="article">
+      <div id="topics" style="display: none;">
+        <div class="sendmessage">
+          <div class="mode_tag"> <span class="modetype"> 企业微博</span> <span class="modetips"> 就某个话题和同事一起讨论吧！ @同事 @群组 @部门</span> </div>
+          <div class="containeditDiv">
+            <div contenteditable="true" id="lwork_mes_weibo" class="lwork_mes"> </div>
+          </div>
+        <div class="stb">
+          <a href="###" class="upload_image">选择图片</a> 
+          <a class="sendBtn disabledBtn"  href="###">发布</a> <span class="remindSpan"><span class="countTxt"> 还能输入</span><span class="maxNum">300</span><span>个字</span></span>
+          <div class="sharefile_handle">
+            <form enctype="multipart/form-data" action ="/lw_pic_upload.yaws" method="post">
+              <input type="file" class="DiskFile" name="upld" link="'+ css +'" onchange="sharefiles_handle(this, 'images')"/>
+              <input type="submit" value="submit_files" class="submit_sharefile"  style="display:none" />
+            </form>
+          </div>
+          <div class="fileList">
+          </div>
+        </div>
+
+                   
+        </div>
+        <ul class="menu">
+          <li mode="topics" class="curent" type="topics" link="topic_content" status="all">全部话题</li>
+          <li mode="topics" class="newcomt" status="unread" link="newcomt_content" type="topics">最新回复
+          </li>
+        </ul>
+        <div class="option_content content_border">
+          <div id="topic_content"> <a href="###" mode="topics"  link = 'topic_msg' class="nuread_msg">你当前有<span class="unreadmsg_num">1</span>条未读话题</a>
+            <div id="topic_msg" class="msg" containdom="no"></div>
+          </div>
+          <div id="newcomt_content" class="newcomtContent"> <a href="###" mode="topics"  link = 'newcomt_content' class="nuread_comt">你当前有<span class="unreadcomt_num">1</span>条未读回复</a>
+            <div class="newcomt_wrap" containdom="no"> </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tasks" style="display: none;">
+        <div class="sendmessage">
+          <div class="mode_tag"> <span class="modetype"> 工作协同</span> <span class="modetips"> 为了提高同事间配合的效率，发起一个工作协同吧！ @同事 @群组 @部门</span> </div>
+          <!--<textarea name="" cols=""  rows="1" class="lwork_mes" sendid=""></textarea>-->
+           <div class="containeditDiv">
+            <div contenteditable="true" id="lwork_mes_tasks" class="lwork_mes"></div> 
+           </div>
+          <div class="stb"> 
+          <a href="###" class="upload_attachment">选择文件</a> 
+
+          <a class="sendBtn disabledBtn"  href="###">发布</a> 
+          <span class="remindSpan">
+            <span class="countTxt"> 还能输入</span>
+            <span class="maxNum">300</span><span>个字</span>
+          </span>
+
+          <div class="sharefile_handle">
+            <form enctype="multipart/form-data" action ="/lw_upload.yaws?size_limit=10000000" method="post">
+              <input type="file" class="DiskFile" name="upld" link="'+ css +'" onchange="sharefiles_handle(this, 'attach')"/>
+              <input type="submit" value="submit_files" class="submit_sharefile"  style="display:none" />
+            </form>
+          </div>
+          <div class="fileList">
+          </div>
+
+          </div>
+        </div>
+        <ul class="menu task_menu">
+          <li class="curent" type="assigned" link="current_task" status="unfinished">我协同的工作</li>
+          <li link="mysend_msg" type="owned" status="unfinished">我发起的工作</li>
+          <li link="newcomt_tasks" class="newcomt"  type="" status="reply">最新回复</li>
+          <li link="finish_msg" type="" status="finished">已完成的工作</li>
+        </ul>
+        <div class="option_content"> <a href="###" mode="tasks"  link = 'current_task' class="nuread_msg">你当前有<span class="unreadmsg_num">0</span>条未读工作任务</a>
+          <div id="current_task"  class="msg" containdom="no"></div>
+          <div id="finish_msg"  class="msg" containdom="no" style="display:none;"></div>
+          <div id="mysend_msg"  class="msg" containdom="no" style="display:none;"></div>
+          <div id="newcomt_tasks"  class="newcomtContent"> <a href="###" mode="tasks"  link = 'newcomt_tasks' class="nuread_comt">你当前有<span class="unreadcomt_num">1</span>条未读回复</a>
+            <div class="newcomt_wrap" containdom="no"></div>
+          </div>
+        </div>
+      </div>
+      <div id="questions" style="display: none;">
+        <div class="sendmessage">
+          <div class="mode_tag"> <span class="modetype">知识问答</span> <span class="modetips">你遇到的问题也许其他同事也碰到过并解决了，问问看吧</span> </div>
+          <div class="containeditDiv">
+           <div contenteditable="true" id="lwork_mes_questions" class="lwork_mes"></div>
+          </div>
+          <textarea name="description_input" style="margin-top:10px;" cols=""  rows="1" class="poll_item description_input" sendid="">详细描述</textarea>
+          <input  type="text" name="ask_tag"  value="打个标签便于今后查找，可以设置5个标签，空格分开" class="poll_item ask_tag"/ >
+          <a class="sendBtn disabledBtn"  href="###">发布</a> <span class="remindSpan"><span class="countTxt"> 还能输入</span><span class="maxNum">300</span><span>个字</span></span>
+
+        </div>
+        <div class="op_content content_border">
+          <div class="option_content" id="questions_msg" containdom="no"> </div>
+        </div>
+      </div>
+      <div id="forum" style="display: none;">
+        <div class="mode_tag"> <span class="modetype">ZTE技术论坛</span> <span class="forum_sums">今日: <strong class="xi1">0</strong> 主题: <strong class="xi1">0</strong></span>
+          <div class="modetips">欢迎进入ZTE中兴政企网技术论坛，我们将为您集结渠道和技术方面的咨询和资源，欢迎参与技术讨论！</div>
+        </div>
+        <div class="forum_pgt"> <a href="javascript:;" id="forum_post" title="发新帖" initialized="true"><img src="images/forum_post.png" alt="发新帖"> </a> <span class="pg"> <a class="gotolist"  target="_blank" href="###">返回列表</a> <strong>1</strong> <a  target="_blank" href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=2">2</a> <a target="_blank" href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=3">3</a> <a target="_blank" href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=4">4</a> <a href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=5" target="_blank">5</a> <a href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=2" target="_blank" class="nxt">下一页</a> </span> </div>
+
+        <div id="forum_detail" class="forum_detail">            
+            <h3 class="thread_subject"> 2012 @3 二级渠道利益（返点、促销奖励等）发放进度公告            
+              <div class="thread_btns">
+                <a href="###" title="打印" target="_blank"><img src="images/print.png" alt="打印" class="vm"></a>
+                <a href="###" title="上一主题"><img src="images/thread-prev.png" alt="上一主题" class="vm"></a>
+                <a href="###" title="下一主题"><img src="images/thread-next.png" alt="下一主题" class="vm"></a>
+              </div>    
+            </h3> 
+              <div class="forumtop"><img src="/images/forum_top.gif" width="148" height="88" /></div>
+              <dl class="msg_item">
+                <dt class="personal_icon">
+                  <img src="/images/photo/5.gif" width="20" height="20">
+                  <span class="postby">潘刘兵</span><span class="posttime">发表于：2012年12月25日 17:16</span>
+                  <span class="floor"> <em>1</em> <sup>#</sup> </span>
+                </dt>
+                <dd class="pagecontent">
+                    Hi~亲耐滴开发者们：<br />
+                    尼玛，竟然没有世界末日 <br /> 
+                    不过，小编看大家参加活动的热情依然高涨，决定延长活动时间哦^^ <br />  
+                    
+                    这是一个专为论坛成员开通的绿色通道！不需要两位已认证开发者推荐，只需答题即可通过认证！
+                    爱同步怎么取消正在同步的文件呀！！！求助。一个超级大的文件要很久才能传完，本来就不高的网速，现在更是龟速了。传过的文件可以删除，可是这个就是删除不掉，也没法停止。并且这还是100M以上的文件不是说不能传，提示错误吗，为什么不提示？？？开关机也不行。                  
+                    
+                </dd>
+              </dl>                   
+
+            
+        <div id="forum_reply">            
+              <dl class="msg_item">
+                <dt class="personal_icon">
+                  <img src="/images/photo/5.gif" width="20" height="20"> 
+                  <span class="postby">潘刘兵</span><span class="posttime">发表于：2012年12月25日 17:16</span>                  
+                  <span class="floor"> <em>2</em> <sup>#</sup> </span>
+                </dt>
+                <dd class="pagecontent">
+                    申请#普通开发者认证# + @晓风东东  新浪微博UID：1742112874                    
+                    第一个问题链接：http://cloudbbs.org/forum.php?mod=viewthread&tid=9190
+                    第二个问题链接：http://cloudbbs.org/forum.php?mod=viewthread&tid=9051
+                    第三个问题链接：http://cloudbbs.org/forum.php?mod=viewthread&tid=8952
+                    
+                    求认证啊！！
+                </dd>
+              </dl>
+
+              <dl class="msg_item">
+                <dt class="personal_icon">
+                  <img src="/images/photo/5.gif" width="20" height="20">
+                  <span class="postby">潘刘兵</span><span class="posttime">发表于：2012年12月25日 17:16</span>
+                  <span class="floor"> <em>3</em> <sup>#</sup> </span>
+                </dt>
+                <dd class="pagecontent">
+                    申请#普通开发者认证# + @晓风东东  新浪微博UID：1742112874
+                    <br />
+                    第一个问题链接：<a href="###">http://cloudbbs.org/forum.php?mod=viewthread&tid=9190 </a>   <br />
+                    第二个问题链接： <a href="###">http://cloudbbs.org/forum.php?mod=viewthread&tid=9051 </a>  <br />
+                    第三个问题链接： <a href="###">http://cloudbbs.org/forum.php?mod=viewthread&tid=8952 </a>  <br />              
+                    求认证啊！！
+                </dd>
+              </dl>
+
+              <dl class="msg_item">
+                <dt class="personal_icon">
+                  <img src="/images/photo/5.gif" width="20" height="20">
+                  <span class="postby">潘刘兵</span><span class="posttime">发表于：2012年12月25日 17:16</span>
+                  <span class="floor"> <em>4</em> <sup>#</sup> </span>
+                </dt>
+                <dd class="pagecontent">
+                    申请#普通开发者认证# + @晓风东东  新浪微博UID：1742112874
+                    
+                    第一个问题链接：http://cloudbbs.org/forum.php?mod=viewthread&tid=9190
+                    第二个问题链接：http://cloudbbs.org/forum.php?mod=viewthread&tid=9051
+                    第三个问题链接：http://cloudbbs.org/forum.php?mod=viewthread&tid=8952
+                    
+                    求认证啊！！
+                </dd>
+              </dl>
+           </div>
+           
+          </div>
+        
+
+      <div class="forum_pgt"> <span class="pg"> <a class="gotolist"  target="_blank" href="###">返回列表</a> <strong>1</strong> <a  target="_blank" href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=2">2</a><a target="_blank" href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=3">3</a><a target="_blank" href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=4">4</a><a href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=5" target="_blank">5</a><a href="forum.php?mod=forumdisplay&amp;fid=41&amp;page=2" target="_blank" class="nxt">下一页</a> </span> </div>
+      <div class="sendmessage">
+        <textarea name="forum_title" maxlength="70" cols="" rows="1" class="lwork_mes title" sendid="" style="color: rgb(153, 153, 153);">标题</textarea>
+        <textarea name="" cols=""  rows="1" class="lwork_mes detail_content" sendid=""></textarea>
+        <a href="###" class="upload_image">图片</a> <a href="###" class="upload_attachment">附件</a> <a class="sendBtn disabledBtn"  href="###">快速发帖</a> <span  class="remindSpan"><span class="countTxt"> 还能输入</span><span class="maxNum">300</span><span>个字</span></span>
+        <div class="seatips"> </div>
+      </div>
+    </div>
+    <div id="meeting" style="display:none;"  containdom="no">
+      <div class="sendmessage">
+        <div class="mode_tag"> <span class="modetype">电话会议</span> <span class="modetips">电话会议将占用所有参会者的时间，请注意会议效率！</span> </div>
+        <div class="meeting_box">
+          <div class="meeting_input_box">
+            <input  type="text" name="meetingTheme"  value="会议主题:新会议" class="meetingTheme" / >
+            <input  type="text" name="username"  value="输入电话号码/拼音或汉字" class="inputText" />
+            <a href="###" class="meeting_pending_add"></a>
+            <ul class="seatips"> </ul>
+          </div>
+          <div class="membertitle"> 当前会议成员</div>
+          <ul id="meeting_current_list" class="meeting_current_list">
+            <!--li class="pending"><span class="meeting_member_name">会议成员</span><span class="meeting_member_tel">13788927293</span><span style="display: none;" class="member_status"></span><span class="member_button"><a href="###">删除</a><a href="###">设为主持人</a></span></li-->
+          </ul>
+        </div>
+        <div><a id="meeting_start_action"  class="meeting_action" href="">开始会议</a><a class="meeting_action"  style="display:none;" id="meeting_stop_action" href="">结束会议</a></div>
+        <ul class="meeting_history_list option_content">
+        </ul>
+      </div>
+    </div>
+    <div id="voip" style="display:none;"  containdom="no">
+      <div class="sendmessage">
+        <div class="mode_tag"> <span class="modetype">网络电话</span> <span class="modetips">紧急事情通过电话沟通吧！</span> </div>
+        <div class="voip_mgt">
+          <video id="voip_obj" style="width:1;height:1;display:none;" autoplay></video>
+        </div>
+        <div class="voip_box">
+          <div class="peer">
+
+       <div class="call_status">
+        <span class="peer_status">
+          <img src="images/warning.png" class="warning" width="25" height="25" /> 
+          <img src="images/smile.png" class="smile" width="25" height="25" /> 
+          <img src="images/error.png" class="error" width="25" height="25" /> 
+          <img src="images/micro.gif" class="micro" width="40" height="40" />
+          <img src="images/calling.gif" class="calling" width="40" height="40" /> 
+          <img src="images/ring.gif" class="ring" width="40" height="40" /> 
+          <img src="images/talking.gif" class="talking" width="40" height="40" /> 
+       </span>
+       <span class="voip_call_status">Call in making...</span> 
+       <span class="callTime"> Time remained：<span class="callTimeTtext">02:00</span></span>
+      </div>
+                      
+            <span class="peer_inputer">
+            <input type="text" name="peerNum"  value="填写被叫号码" class="peerNum"> </input>
+            <ul class="seatips"> </ul>
+            </span>
+            <div class="showhideDP"><a class="showpanel toshow" href="###"></a></div>
+            <div class="voip_operations"> <a id="voip_start" class="voip_action" href="###"></a><a id="voip_stop" class="voip_action" href="###" style="display:none"></a> </div>
+            <div class="dialpanel" id='dialpanel'>
+              <ul>
+                <li><a href="###" class="key_97 key_49">1</a></li>
+                <li><a href="###" class="key_98 key_50">2</a></li>
+                <li><a href="###" class="key_99 key_51">3</a></li>
+                <li><a href="###" class="key_100 key_52">4</a></li>
+                <li><a href="###" class="key_101 key_53">5</a></li>
+                <li><a href="###" class="key_102 key_54">6</a></li>
+                <li><a href="###" class="key_103 key_55">7</a></li>
+                <li><a href="###" class="key_104 key_56">8</a></li>
+                <li><a href="###" class="key_105 key_57">9</a></li>
+                <li><a href="###" class="key_star">*</a></li>
+                <li><a href="###" class="key_96 key_48">0</a></li>
+                <li><a href="###" class="key_mark">#</a></li>
+              </ul>
+            </div> 
+          </div>
+        </div>
+        <ul class="voip_history_list option_content">
+        </ul>
+      </div>
+    </div>
+    <div id="polls" style="display: none;">
+      <div class="sendmessage">
+        <div class="mode_tag"> <span class="modetype"> 集体决策</span> <span class="modetips"> 拿不定主意吗？ 那就让大家一起帮你决策吧 @同事 @群组 @部门</span> </div>
+        <div class="containeditDiv">
+         <div contenteditable="true" id="lwork_mes_polls" class="lwork_mes"></div>
+       </div>
+       <div class="stb">
+        <a href="###" class="upload_image">选择图片</a>
+          <div class="sharefile_handle">
+            <form enctype="multipart/form-data" action ="/lw_upload.yaws?size_limit=10000000" method="post">
+              <input type="file" class="DiskFile" name="upld" link="'+ css +'" onchange="sharefiles_handle(this, 'images')"/>
+              <input type="submit" value="submit_files" class="submit_sharefile"  style="display:none" />
+            </form>
+          </div>
+          <div class="fileList">
+          </div>
+       </div> 
+
+        <div id="polls_option">
+          <ul>
+            <li>
+              <form  enctype="multipart/form-data" action ="/lw_pic_upload.yaws" method="post">
+                <div class="file-wrapper_polls">
+                  <input type="file" name="upld"  class="upload_pollsitem" onchange="upload_itemimages(this)"/>
+                  <div class="uploadItem_btn"> <img src = "/images/update_pic.png" source="" class="display_img"/> </div>
+                  <input type="submit" value="submit_files" class="submit_imgaes"  style="display:none" />
+                </div>
+              </form>
+              <div class="pollitembox">
+              <input  type="text" name="poll_item"  value="选项A" class="poll_item" / >
+              </div>
+            </li>
+            <li>
+              <form  enctype="multipart/form-data" action ="/lw_pic_upload.yaws" method="post">
+                <div class="file-wrapper_polls">
+                  <input type="file" name="upld"  class="upload_pollsitem" onchange="upload_itemimages(this)"/>
+                  <div class="uploadItem_btn"> <img src = "/images/update_pic.png" source="" class="display_img"/> </div>
+                  <input type="submit" value="submit_files" class="submit_imgaes"  style="display:none" />
+                </div>
+              </form>
+              <div class="pollitembox">
+               <input  type="text" name="poll_item"  value="选项B" class="poll_item" / >
+              </div>
+            </li>
+            <li>
+              <form  enctype="multipart/form-data" action ="/lw_pic_upload.yaws" method="post">
+                <div class="file-wrapper_polls">
+                  <input type="file" name="upld"  class="upload_pollsitem" onchange="upload_itemimages(this)"/>
+                  <div class="uploadItem_btn"> <img src = "/images/update_pic.png" source="" class="display_img"/> </div>
+                  <input type="submit" value="submit_files" class="submit_imgaes"  style="display:none" />
+                </div>
+              </form>
+              <div class="pollitembox">
+                <input  type="text" name="poll_item"  value="选项C" class="poll_item" / >
+              </div>
+            </li>
+          </ul>
+        </div>
+        <a class="sendBtn disabledBtn"  href="###">发布</a> <span  class="remindSpan"><span class="countTxt"> 还能输入</span><span class="maxNum">300</span><span>个字</span></span>
+        <div class="seatips"> </div>
+      </div>
+      <div class="op_content content_border"> <a href="###" mode="polls"  link = 'polls_msg' class="nuread_msg">你当前有<span class="unreadmsg_num">1</span>条新投票</a>
+        <div id="polls_msg" class="option_content"  containdom="no"></div>
+      </div>
+    </div>
+
+    <div id="documents" style="display: none;">
+      <div class="sendmessage">
+        <div class="mode_tag"> <span class="modetype">我的网盘</span> <span class="modetips">保存您的工作文件，永不丢失，方便查找</span> </div>
+      </div>
+      <div class="">
+        <div class="sharefile_handle">
+         <a href="###" id="share_file"></a> 
+        <form enctype="multipart/form-data" action="/lw_upload.yaws" method="post">
+         <input type="file" class="DiskFile" onchange="sharefiles_handle(this, 'documents')"  name="upld"  />
+          <input type="submit" value="submit_files" class="submit_sharefile" style="display:none"/>
+        </form>
+
+       </div>
+        <div class="option_content" >
+          <ul>
+            <li class="vd_sieve">
+              <span class="current" title="所有文件" filetype = 'all_files'><a href="###"  class="all_file"></a></span>
+              <span class="" title="图片" filetype = 'pic_files'><a href="###" class="pic_file"></a></span>
+              <span class="" title="文档" filetype = 'doc_files'><a href="###" class="doc_file"></a></span>  
+              <span class="" title="压缩包" filetype = 'rar_files'><a href="###" class="rar_file"></a></span> 
+              <span class="" title="其他文件" filetype = 'other_files'><a href="###" class="other_files"></a></span>  
+            </li>
+            <li class="hover_top"> <em class="uname">文件名</em> <span class="fsize file_gray">大小</span> <span class="fdate file_gray">更新时间</span></li>
+          </ul>
+          <div id="file_share_container" class="msg"  containdom="no"></div>
+        </div>
+      </div>
+    </div>
+
+     <div id="video" style="display: none;">
+        <div class="videocontainer">
+          <div class="sendmessage">
+             <div class="mode_tag">     
+             <span class="modetype">%%ID_VIDEO_CALL%%</span>
+             <span class="modetips">%%ID_MODETIPS_VIDEO%%</span>
+           </div>            
+            <div class="navigator_tips">
+              <ul>
+                <li><em>1、</em>%%ID_TIP_CHROME%%<a href="https://tools.google.com/dlpage/chromesxs" target="_blank">https://tools.google.com/dlpage/chromesxs</a>；</li>       
+                <li><em>2、</em>%%ID_RESTART_BROWSER%%</li>
+              </ul>
+            </div>
+            <div class="video_panel">
+              <ul class="menu video_mode_selections">
+               <li class="video_mode p2p_video curent" v_mode="p2p">两方视频</li>
+               <li class="video_mode mp_video" v_mode="mp">多方视频</li>
+              </ul>
+              <div class="video_bar">
+                <div class="video_btns p2p_btns"><span class="video_time"> <a class="startVedio"  href="###">发起</a> <a class="endVedio" href="###">结束</a></span>
+                </div>
+                <div class="video_btns mp_btns" style="display:none"><span class="video_time"> <a class="startVedio"  href="###">发起</a> <a class="endVedio" href="###">结束</a><a class="leaveVedio" href="###">退出</a></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="video_content">
+            <div class="video_box">
+              <div class="video_box_icon p2p_icon">
+                <video id="p2p_main_screen" class="free" src="" autoplay width="100%" height="100%">
+                </video>
+                <video id="p2p_slave_screen" class="free" src="" autoplay width="30%" height="30%">
+                </video>
+                <div class="peer_info"></div>
+              </div>
+              <div class="video_box_icon mp_icon" style="display:none">
+              <video id="video_screem" class="video-js vjs-default-skin" autoplay controls preload="auto" width="100%" height="100%" data-setup="{}">
+                <!--source src="http://video-js.zencoder.com/oceans-clip.mp4" type='video/mp4'-->
+              </video>   
+              <table id="video_grade" width="100%" height="100%" >
+                <tbody>
+                  <tr class="vd_tr" width="100%" height="50%">
+                    <td class="seat free" id="seat0" width="50%" height="50%" mUUID="90" style="box-shadow: 1px 0px 8px rgba(50, 50, 50, 0.68);">
+                      <span class="vmember_name"></span>
+                      <span class="vmember_status"></span>
+                      <span class="chairman_opt"><a href="###" class="chairman_btn del_vmember">删除</a><a href="###" class="chairman_btn call_vmember">呼叫</a><a href="###" class="chairman_btn hkon_vmember">请出</a></span>
+                    </td>
+                    <td class="seat free" id="seat1" width="50%" height="50%" mUUID="91" style="box-shadow: -1px 0px 8px rgba(50, 50, 50, 0.68);">
+                      <span class="vmember_name"></span>
+                      <span class="vmember_status"></span>
+                      <span class="chairman_opt"><a href="###" class="chairman_btn del_vmember">删除</a><a href="###" class="chairman_btn call_vmember">呼叫</a><a href="###" class="chairman_btn hkon_vmember">请出</a></span>
+                    </td>
+                  </tr>
+                  <tr class="vd_tr" width="100%" height="50%">
+                    <td class="seat free" id="seat2" width="50%" height="50%" mUUID="92" style="box-shadow: 1px 0px 8px rgba(50, 50, 50, 0.68);">
+                      <span class="vmember_name"></span>
+                      <span class="vmember_status"></span>
+                      <span class="chairman_opt"><a href="###" class="chairman_btn del_vmember">删除</a><a href="###" class="chairman_btn call_vmember">呼叫</a><a href="###" class="chairman_btn hkon_vmember">请出</a></span>
+                    </td>
+                    <td class="seat free" id="seat3" width="50%" height="50%" mUUID="none" style="border-left:none;box-shadow: -1px 0px 8px rgba(50, 50, 50, 0.68);">
+                      <span class="vmember_name"></span>
+                      <span class="vmember_status"></span>
+                      <span class="chairman_opt"><a href="###" class="chairman_btn del_vmember">删除</a><a href="###" class="chairman_btn call_vmember">呼叫</a><a href="###" class="chairman_btn hkon_vmember">请出</a></span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="seatips"> </div>
+            </div>
+          </div> 
+        </div>
+      </div>
+      
+    <div id="shortmsg" style="display:none;"  containdom="no">
+      <div class="sendmessage">
+        <div class="mode_tag"> <span class="modetype">手机短信</span> <span class="modetips">同事不在线？发送手机短信给他吧！手机短信存在延时，紧急情况请选择其他联系方式。</span> </div>
+        <div class="shortmsg_mgt"></div>
+        <div class="shortmsg_box">
+    <!--      <input name="" cols="" rows="1" id="" value="1[a];2[b]" data="1[a];2[b]" class="receivers">手机号码/@同事/@群组(分号";"隔开)</input>-->
+          <input id="sendsms_input" data='' type="text" class="receivers" value="" /> 
+          <textarea name="" cols="" rows="1" value="" class="shortmsg_content">输入短信内容</textarea>
+          <a id="sendShortMsg"  href="###">发送</a> <span class="remindSpan">还能输入<span class="maxNum">120</span><span>个字，最多可输入120个字</span></span>
+        </div>
+        <div class="shortmsg_history"> <a id="view_shortmsg_history" href="###">查看已发短信</a>
+          <ul class="shortmsg_history_list option_content">
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div id="salary" style="display: none;">
+      <div class="option_content">
+     <div id="salary-header">
+        <h1><span id="titleTime"></span>工资列表</h1>
+        <div class="selectMonth">选择月份：
+          <select name="" class="amount" id="select_year" add_data="year">
+          </select>
+          <select name="" class="amount" id="select_month" add_data="month">
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
+            <option>4</option>
+            <option>5</option>
+            <option>6</option>
+            <option>7</option>
+            <option>8</option>
+            <option>9</option>
+            <option>10</option>
+            <option>11</option>
+            <option>12</option>
+          </select>
+          <a href="###" class="salarybtn" id="searchBTN">查询</a></div>
+      </div>
+      <hr />
+      <div id="salary_msg"></div>
+      </div>
+    </div>
+    <div id="focus" style="display: none;">
+      <div class="mode_tag">
+        <div><span class="focustype">我的关注</span><span class="title_supliment">(共<span class='focus_num'>0</span>条)</span></div>
+        <div><span class="modetips">我关注的工作任务和话题</span></div>
+      </div>
+      <div class="tag_mgt"></div>
+      <div class="option_content" id="focus_msg" containdom="no"></div>
+    </div>
+
+    <div id="recycle" style="display: none;">
+      <div class="mode_tag"> <span class="modetype">回收站</span> <span class="modetips">已删除的消息</span> </div>
+      <div class="recycle_mgt">
+        <div><span><a href="###" id="delete_all">清空回收站</a></span></div>
+      </div>
+      <div class="option_content" id="recycled_msg"  containdom="no"></div>
+    </div>
+    <div id="search_result" style="display: none;">
+      <div class="mode_tag">
+        <div><span class="search_result_type">我的搜索结果</span><span class="title_supliment">(共<span class='search_result_num'>0</span>条)</span></div>
+        <div><span class="modetips">与<span class="search_keyword">某关键字</span>相关的<span class="search_type">某类消息</span></span></div>
+      </div>
+      <div class="search_mgt">
+        <div><a href="###" id="abandon_search_result">放弃搜索</a></div>
+      </div>
+      <div class="option_content" id="search_result_msg"  containdom="no"></div>
+    </div>
+  </div>
+  <div class="slide_box">
+    <div class="contactbox" style="display:none;">
+      <div class="contact_tab">
+        <ul>
+          <li class="li_current"><a link="org_structure" class="structre_contact curent" title="组织架构" href="###">组织架构</a></li>
+          <li class=""><a link="group_list"  class="mygroup_contact" title="自定义分组" href="###">自定义组</a></li>
+          <li class="group_list"><a link="recontact" class="Recontcont_contact" title="最近联系人" href="###">最近联系人</a></li>
+        </ul>
+        <ul class="search_members">
+          <li class="li_current"><a class="structre_contact curent" title="搜索联系人" href="###">搜索结果</a></li>
+        </ul>
+      </div>
+      <div class="membercount"> <a class="" href="###"><span id='groupname' groupname=''></span> (<span id='group_num'></span>)</a></div>
+      
+      <div class="contianer_contact" id="contianer_contact">
+      
+        <div class="scrollbar">
+          <div class="track">
+            <div class="thumb">
+              <div class="end"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="contact"  class="viewport">
+        
+          <div class="overview">
+          
+            <div>
+              <div id = "org_structure"></div>
+              <div id='group_list' style="display:none;"> </div>
+              <div id="recontact" style="display:none;" isupdate="no"></div>
+            </div>
+            <div id='search_employer' style="display:none;"> </div>
+            
+          </div>
+          
+        </div>
+        
+      </div>
+      
+      <div class="ser_employer"> <a class="ser_employer_btn" herf="###"></a>
+        <input type="text" class="sea_member_input" value="搜索联系人"/>
+        <span id ="creategroup" class="create_group">创建组</span> </div>
+    </div>
+    <div class="forum_box">
+      <div class="sea_box">
+        <input type="text" class="inputbox" id="" value="搜索帖子" maxlength="20" style="color: rgb(153, 153, 153);">
+        <span><a class="searchbutton" herf="###"></a></span> </div>
+      <div class="forum_nav">
+        <div class="forum_nav_con"> <a href="###">帖子</a> <span class="forum_split">|</span> <a href="###">回复</a> </div>
+      </div>
+      <div class="forum_menu">
+        <h3>论坛版面</h3>
+        <ul>
+          <li>中兴公司动态
+            <ul>
+              <li><a href="#">渠道政策信息发布区</a></li>
+              <li><a href="#">PRM系统交流区</a></li>
+              <li><a href="#">培训相关</a></li>
+            </ul>
+          </li>
+          <li>中兴产品服务支持
+            <ul>
+              <li><a href="#">数通产品</a></li>
+              <li><a href="#">视讯产品</a></li>
+              <li><a href="#">终端产品</a></li>
+            </ul>
+          </li>
+          <li>行业及解决方案
+            <ul>
+              <li><a href="#">能源</a></li>
+              <li><a href="#">铁路</a></li>
+              <li><a href="#">大企业</a></li>
+            </ul>
+          </li>
+          <li>中兴论坛服务管理区
+            <ul>
+              <li><a href="#">论坛公告区</a></li>
+              <li><a href="#">版主会议室</a></li>
+              <li><a href="#">建议反馈</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  
+  <div id="email"> 
+    <iframe name="email"  frameborder="0" width="100%" height="100%" src="email/email_default.html"></iframe>
+  </div>
+  
+  
+  <div style="top: 400px; display: none;" id="loading" class="zeng_msgbox_layer_wrap"><span id="mode_tips_v2" style="z-index: 10000;" class="zeng_msgbox_layer"><span class="gtl_ico_clear"></span><img alt="" src="images/loading.gif"> 正在加载...<span class="gtl_end"></span></span></div>
+  
+  
+  <div id="creatgroupbox" style="display: none;">
+    <div class="modify_tips">不能与现有的组重复</div>
+    <ul>
+      <li>
+        <label>组名称：</label>
+        <input class="inputbox" type="text"  value="输入组名/不能与现有的组重复" c/>
+      </li>
+      <li class="tips">组名称不能为空！</li>
+    </ul>
+  </div>
+  <div id="modifygroupbox" style="display: none;">
+    <ul>
+      <li>
+        <input id="add_member" data='' type="text" class="receivers" value="" /> 
+      </li>
+      <li>
+        <ul id='addmemberlist'>
+        </ul>
+      </li>
+    </ul>
+  </div>
+</div>
+</div>
+<div id="modifyperinof" style="display:none;">
+  <div class="modify_tips"></div>
+  <img src="" style="width:58px;height:58px;"> <a href="###" class="modify_img">更换</a>
+  <table class="lwork_modifypass lworkmodify_info">
+    <tr>
+      <td><span class="tdTitle">姓名工号：</span><span class="name"></span></td>
+    </tr>
+    <tr>
+      <td><span class="tdTitle">所在部门：</span><span class="department"></span></td>
+    </tr>
+    <tr>
+      <td><span class="tdTitle">联系电话：</span>
+        <input type="text"  value=""  name="telephone" class="telephone" /></td>
+    </tr>
+    <tr>
+      <td><span class="tdTitle">公司邮箱：</span>
+        <input type="text"  value=""  name="email" class="email" /></td>
+    </tr>
+  </table>
+</div>
+<div id="modifypassword" style="display:none;">
+  <div class="modify_tips">原密码不能为空</div>
+  <table width="100%" class="lwork_modifypass">
+    <tr>
+      <td><span class="tdTitle">原密码：</span>
+        <input type="password" name="oldpsw" class="oldpsw" /></td>
+    </tr>
+    <tr>
+      <td><span class="tdTitle">新密码：</span>
+        <input type="password" name="newpsw1" class="newpsw1" /></td>
+    </tr>
+    <tr>
+      <td><span class="tdTitle">重复新密码：</span>
+        <input type="password" name="newpsw2" class="newpsw2" /></td>
+    </tr>
+  </table>
+</div>
+<div id="modify_images">
+  <div class="recommend_images">
+    <h3>推荐图像</h3>
+    <ul>
+      <li><img src="/images/photo/boy.jpg"  width="45" height="45"/></li>
+      <li><img src="/images/photo/girl.jpg" width="45" height="45" /></li>
+      <li><img src="/images/photo/2.jpg" width="45" height="45" /></li>
+      <li><img src="/images/photo/3.jpg" width="45" height="45" /></li>
+      <li><img src="/images/photo/4.jpg" width="45" height="45" /></li>
+      <li><img src="/images/photo/7.jpg" width="45" height="45" /></li>
+      <li><img src="/images/photo/5.gif" width="45" height="45" /></li>
+      <li><img src="/images/photo/6.gif" width="45" height="45" /></li>
+      <li><img src="/images/photo/defalt_photo.jpg" width="45" height="45" /></li>
+    </ul>
+  </div>
+  <div class="preview">
+    <h3>预览</h3>
+    <div class="preview_img"><img src="/images/photo/defalt_photo.jpg" style="width:58px;height:58px;"/> </div>
+    <form  enctype="multipart/form-data" action ="/lw_pic_upload.yaws" method="post">
+      <div class="file_share_form">
+        <div class="file-wrapper">
+          <input type="file" name="upld" id="upld2" />
+          <span class="upload_personalimg"></span> </div>
+        <input type="submit" value="submit_files" class="submit_imgaes"  style="display:none" />
+      </div>
+    </form>
+    <div style="clear:both; padding-top:10px; color:#cd6500;">请上传100×100像素图片</div>
+  </div>
+  <div class="upload_imag_loading"><img src = "/images/loading.gif" style="border:none;"/>正在上传您的图像...</div>
+</div>
+
+
+<div id="chat_box">
+  <div class="chat_box" min-height="370" min-width="198">
+    <div class="chat_box_tit"  style="cursor: auto;">
+      <a class="chat_ico_mini"  href="###" title="最小化">最小化</a>
+      <div class="chat_box_name"></div>
+      <div class="chat_item_pic" dragable="dragable"> <img dragable="dragable" class="chat_user_pic" alt="" src="/images/photo/defalt_photo.gif">
+        <div title="Lwork在线" class="chat_ico_q"></div>
+      </div>
+    </div>
+    <div class="chat_box_main"> 
+      <div class="chat_box_session">
+        <ul class="chat_win_list">
+        </ul>
+      </div>
+      <div id="chat_win" class="chat_win"></div>
+    </div>
+  </div>
+</div>
+<div id="chatMiniRoot" class="chatMiniRoot">潘刘兵</div>
+
+<div id="WebDiskBox">
+  <div class="Db">
+    <span class="Dt">上传文件</span>
+    <a href="###" class="Bb" title="最大化"></a>
+    <a href="###" class="Bm" title="最小化"></a>
+    <a href="###" class="Bc" title="关闭"></a>    
+  </div>
+  <div class="fileList">
+
+  </div>
+</div>
+
+<script type="text/javascript" src="script/video_plugin.js"></script>
+<script type="text/javascript" src="script/jscroll.js?t=75"></script> 
+<script type="text/javascript" src="script/lw_lang.js?t=75"></script> 
+<script type="text/javascript" src="script/md5.js"></script> 
+<script type="text/javascript" src="script/json2.js"></script> 
+<script type="text/javascript" src="script/sprintf.js"></script> 
+<script type="text/javascript" src="script/jquery.form.js"></script> 
+<script type="text/javascript" src="script/gb2312.js"></script> 
+<script type="text/javascript" src="script/jquery.caretposition.js"></script> 
+<script src="script/artDialog/jquery.artDialog.js" type="text/javascript"></script> 
+<script type="text/javascript" charset="utf-8" src="script/api.js?t=5"></script> 
+<script type="text/javascript" src="script/jquery_plugins.js?t=75"></script> 
+<script type="text/javascript" src="script/webrtc.js?t=75"></script> 
+<script type="text/javascript" src="script/websck.js?t=75"></script> 
+<script type="text/javascript" src="script/hybrid.js?t=75"></script> 
+<script type="text/javascript" src="script/restchannel.js?t=75"></script>
+<script type="text/javascript" src="script/webvideo.js?t=75"></script> 
+<script type="text/javascript" src="script/voip.js?t=75"></script> 
+<script type="text/javascript" src="script/imClient.js?t=75"></script> 
+<script type="text/javascript" src="script/salary.js?t=75"></script> 
+<script type="text/javascript" src="script/common.js?t=75"></script>
+<script type="text/javascript" src="script/tagsInput.js?t=75"></script> 
+<script type="text/javascript" src="script/all_share.js?t=75"></script> 
+
+<script language="javascript">
+    function getVoipWebSocketURL(){
+      return 'ws://' + $('#lw_ws_origin').text() + '/websockets_endpoint.yaws';
+    }
+    function getVideoWebSocketURL(){
+      return 'ws://' + $('#lw_ws_origin').text() + '/vs_agent.yaws';
+    }
+    function getIMWebSocketURL(){
+      return 'ws://' + $('#lw_ws_origin').text() + '/ws_agent.yaws';
+    }
+    //页面初始化页面内容
+    var loadContent = new loadContent();
+    var meetingController = MeetingController.createNew();
+    var oScrollbar = $('#contianer_contact');
+    oScrollbar.tinyscrollbar();
+    meetingController.init($('#meeting'));
+    loadContent.init();
+    function setHeight() {
+       var clientHeight = document.documentElement.clientHeight;
+       var clientWidth = parseInt(document.documentElement.clientWidth);
+       var setwidth = function(s1, s2){
+         $('#container, #header, .lwork_content').width(clientWidth - s1);
+         $('.meeting_current_list').css('width',s2);
+         $('#chat_box, #chatMiniRoot').css('right', s1/2 + 220);
+       }
+       oScrollbar.tinyscrollbar_update();    
+       clientWidth > 1400 ? setwidth(350, '80%') : ( clientWidth > 1200 ?  setwidth(100, '95%') : setwidth(0, '95%')) ;
+       $('#article').css('min-height', clientHeight + 110 + 'px');
+       $('#email').css('height', clientHeight-120+'px');
+       $('#container').css('min-height', clientHeight-120+'px');            
+       $('#contianer_contact , #contact').css('height', clientHeight - 250 +'px');
+       $('.forum_box').css('min-height', clientHeight -250 +'px');
+       return false;
+    };
+    setHeight(); 
+    window.onresize = setHeight;
+    var $backToTopTxt = "", $backToTopEle = $('<div id="goto_top"/>').appendTo($("body"))
+      .attr("title", $backToTopTxt).click(function() {
+      $("html, body").animate({ scrollTop: 0 }, 120);
+    }), $backToTopFun = function() {
+      var st = $(document).scrollTop(), winh = $(window).height();
+      (st > 0)? $backToTopEle.show(): $backToTopEle.hide();    
+      //IE6下的定位
+      if (!window.XMLHttpRequest) {
+        $backToTopEle.css("top", st + winh - 166);    
+      }
+    };    
+      $backToTopFun();
+        //右侧栏目浮动     
+      $(window).scroll(function () {
+            $backToTopFun();
+            return false;
+      });
+
+      $('#modify_images').find('form').ajaxForm({ 
+         complete: function(xhr) {         
+          var data = JSON.parse(xhr['responseText']);
+             if(data['status'] === 'ok'){
+               return loadContent.updateimg.updateimages(data['file_name']);
+             }else{
+                LWORK.msgbox.show("%%ID_UPLOAD_FAILED%%", 1, 2000); 
+                return false;
+             }
+        }
+    });
+     
+
+
+    /*集体决策传图片*/  
+     $('#polls_option').find('form').ajaxForm({
+         dataType:  'json', 
+         complete: function(xhr) {
+          var data = JSON.parse(xhr['responseText']);
+          if(data['status'] === 'ok'){
+            var url = loadContent.getpicphoto(data['file_name'], 'S');
+            $('#polls_option').find('.current_item img').removeClass('loading_img').addClass('display_img').attr({'src':url, 'source': data['file_name'] });
+            $('#polls_option').find('.current_item').removeClass('current_item');
+          }else{
+             LWORK.msgbox.show("%%ID_UPLOAD_FAILED%%", 1, 2000); 
+          }
+       }
+    }); 
+
+    function upload_itemimages(obj){
+      var _this = $(obj); 
+      var $val = _this.val();
+      var valArray = $val.split('\\');
+      var filename = valArray[valArray.length - 1];
+      var filetype = loadContent.filetype_handle(filename);
+          filetype = filetype.replace(/(^\s*)|(\s*$)/g, "");
+      if(filetype !== 'jpg' && filetype !== 'png'&& filetype !== 'jpeg' && filetype !== 'gif'&& filetype !== 'bmp'){
+           LWORK.msgbox.show("%%ID_UPLOAD_LIMITED%%", 2, 1500); 
+           return false;
+      }        
+      var index =  $('#polls_option').find('li').index(_this.parent().parent().parent()); 
+      _this.next().find('img').removeClass('display_img').addClass('loading_img').attr('src', '/images/uploading.gif');   
+      _this.parent().find('input[type=submit]').click();
+      _this.parent().addClass('current_item');
+    }
+    window.onbeforeunload = function () {
+      if($('.Interrupt').css('display') !=='block'){
+          return "%%ID_TIP_EXIT%%";
+      }
+    }
+    $('#sendsms_input').tagsInput({
+       'width':'auto', 
+       'height':'30px' ,
+       'delimiter':';',
+       'getuuid': 'no',     
+       'defaultText':lw_lang.ID_SEPERATED
+    });
+
+   $('#add_member').tagsInput({
+     'width':'auto', 
+     'height':'30px' ,
+     'getuuid': 'yes',
+     'delimiter':';',
+     'defaultText':lw_lang.ID_SEARCH_NAME
+   });
+  </script>
+</body>
+</html>

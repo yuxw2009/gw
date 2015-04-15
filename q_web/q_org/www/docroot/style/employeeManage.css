@@ -1,0 +1,57 @@
+@charset "utf-8";
+/* CSS Document */
+body,ul,li,h3,h4{ margin:0; padding:0;}
+li{ list-style:none;}
+a{ text-decoration:none;outline:none;}
+body{font-size:12px;}
+#container{ padding:1px 1px;}
+#container h4{ background:#fff7b6; height:50px; line-height:50px; font-size:16px; padding-left:15px; }
+/*#tab1{overflow-x:hidden;overflow-y:auto;margin:0 auto;}*/
+#container .dlgTable{overflow-x:hidden;overflow-y:auto;margin:0 auto;background-color: #CCC;}
+#container .dlgTable tbody{font-size:11px;}
+#container .necessarilyItem{color:#ff0101;}
+#container .dlgTable input{width:100%; height:22px; border:none; background-color: transparent; text-align:center;line-height:22px;}
+#container .dlgTable select{background-color:transparent;}
+#container .dlgTable td,#container .dlgTable th{background-color: #FFF;height:25px;line-height:25px;text-align:center;}
+#container .dlgTable td{color:#2da600;}
+#container .dlgTable th.prsnName{width:90px;}
+#container .dlgTable th.prsnID{width:120px;}
+#container .dlgTable th.pw{width:90px;}
+#container .dlgTable th.mblNum{width:150px;}
+#container .dlgTable th.emailA{width:180px;}
+#container .dlgTable th.monthLimit{width:70px;}
+#container .dlgTable th.serviceAuth{width:60px;}
+#container select{border:none; line-height:23px;-moz-border-radius: 1px;-webkit-border-radius: 1px; border-radius: 1px;}
+#container .button{border-top:1px solid #DADEE5;bottom:10px;position:absolute; width:98%;padding-top:10px;text-align:right;}
+#container .aui_buttons{ float:right;}
+#container .aui_buttons button { margin-left:15px; padding: 6px 8px; cursor: pointer; display: inline-block; text-align: center; line-height: 1; *padding:4px 10px; *height:2em; letter-spacing:2px; font-family: Tahoma, Arial/9!important; width:auto; overflow:visible; *width:1; color: #333; border: solid 1px #999; border-radius: 5px; background: #DDD; filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#FFFFFF', endColorstr='#DDDDDD'); background: linear-gradient(top, #FFF, #DDD); background: -moz-linear-gradient(top, #FFF, #DDD); background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#FFF), to(#DDD)); text-shadow: 0px 1px 1px rgba(255, 255, 255, 1); box-shadow: 0 1px 0 rgba(255, 255, 255, .7),  0 -1px 0 rgba(0, 0, 0, .09); -moz-transition:-moz-box-shadow linear .2s; -webkit-transition: -webkit-box-shadow linear .2s; transition: box-shadow linear .2s; }
+#container .aui_buttons button::-moz-focus-inner{ border:0; padding:0; margin:0; }
+#container .aui_buttons button:focus { outline:none 0; border-color:#426DC9; box-shadow:0 0 8px rgba(66, 109, 201, .9); }
+#container .aui_buttons button:hover { color:#000; border-color:#666;}
+#container .aui_buttons button:active { border-color:#666; filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#DDDDDD', endColorstr='#FFFFFF'); background: linear-gradient(top, #DDD, #FFF); background: -moz-linear-gradient(top, #DDD, #FFF); background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#DDD), to(#FFF)); box-shadow:inset 0 1px 5px rgba(66, 109, 201, .9), inset 0 1px 1em rgba(0, 0, 0, .3);}
+#container .aui_buttons button[disabled] { cursor:default; color:#666; background:#DDD; border: solid 1px #999; filter:alpha(opacity=50); opacity:.5; box-shadow:none;}
+#totips{background-image:url(../images/button_bg.png); background-repeat:no-repeat;}
+#totips{background-position:-165px -553px; background-color:#FFFFE0; color:#000; border: 1px solid #F7CE39;line-height: 25px;color:#7A6F6F;text-align:left;padding-left:30px;width:110px;position:absolute;left:50px; display:none;}
+.float_corner_top {line-height: 14px;}
+.float_corner_top, .float_corner_bottom {height: 8px; width: 16px;}
+.float_corner {font-size: 18px;left: 100px; position: absolute;top: 39px;z-index: 1000; display:none;}
+.float_corner_top .corner_1 { bottom: 0;}
+.float_corner_top .corner, .float_corner_bottom .corner {left: 0;}
+.float_corner .corner_1 { color: #CCCCCC;}
+.float_corner .corner { position: absolute;}
+.float_corner_top .corner_2 {bottom: 1px;}
+.float_corner_top .corner, .float_corner_bottom .corner {left: 0;}
+.float_corner .corner_2 {color: #FFFFFF;}
+.float_corner .corner {position: absolute;}
+.modi_cont{width:240px;}
+.btn{ background:url(../images/btn.png) no-repeat left top;height:32px;width:62px;display:inline-block; text-align:center; color:#FFF; line-height:30px; cursor:pointer;}
+.btn:hover{ background-position:-70px top;color:#000;}
+table.tell_count td{height:40px;line-height:40px; text-align:center;width:140px;}
+.tell_count{background:#fff7b6;border:1px dashed #ccc;width:100%;}
+#monthNav{text-align: center; width:80%; margin:15px auto;}
+#monthNav .flleft{float:left;}
+#monthNav .flright{float:right;}
+#monthNav .tblSum{clear:right; margin:20px 40px 10px;}
+#totalCost{margin-right:30px;}
+.clearboth{clear:both;}
+

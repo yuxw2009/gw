@@ -1,0 +1,98 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style/login.css" />
+<title>Lwork员工管理系统-登录</title>
+</head>
+<body>
+<div id="contianer">
+  <div class="logo"> </div>
+  <ul>
+    <li>
+      <label>超级管理员账号</label>
+      <input class="superadminname" type="text" value="" />
+    </li>
+    <li class="userNameTips">
+      <span>* 账号不能为空！</span>
+    </li>
+    <li>
+      <label>超级管理员密码</label>
+      <input class="password" type="password" value="" />
+    </li>
+     <li class="passwordTips">
+      <span>* 密码不能为空！</span>
+    </li>
+  </ul>
+  <a type="submit" id="submit" class="btn" />登录 </a>
+</div>
+</body>
+<script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script> 
+<script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>  
+<script type="text/javascript" src="script/sprintf.js?t=20120528"></script> 
+<script type="text/javascript" src="script/api.js?t=20120528"></script>
+<script type="text/javascript" src="script/md5.js?t=20120528"></script>        
+<script type="text/ecmascript">
+	 var setHeight=function(){
+		 var clientHeight = document.documentElement.clientHeight > document.body.clientHeight ? document.documentElement.clientHeight :document.body.clientHeight;
+		 $('#contianer').css('margin-top',(clientHeight-260)/2).show();
+	 }
+	var getCookieFields = function(){
+		var superAdminName = $.cookie("superAdminName");
+		if (superAdminName && superAdminName.length > 0){
+			$('input.superadminname').val(superAdminName);
+		}
+	}
+	setHeight();
+	getCookieFields();
+
+	//调试用，免登陆，直接跳到管理界面
+	$.cookie("superAdminName", "god", {expires: 30});
+	$.cookie("godToken", "realtimeToken");
+	window.location = "superAdmin.html";
+
+	$('#contianer').find('input:first').focus();
+	window.onresize = function () { 
+	   setHeight()
+	};
+	$('input.superadminname').keyup(function(){			 
+		$('.userNameTips').css('visibility','hidden');
+	})		  
+	$('input.password').keyup(function(){			 
+		$('.passwordTips').css('visibility','hidden');
+	})
+	
+	$('#submit').click(function(){
+		var superAdminName = $('input.superadminname').val();
+		var password = $('input.password').val();	  		 
+		if(''===superAdminName){
+		  $('.userNameTips').text('* 账号不能为空！').css('visibility','visible');
+		  $('input.superadminname').focus();
+		  return false;
+		}
+		if(''===password){
+		  $('.passwordTips').css('visibility','visible');
+		  $('input.password').focus();
+		    return false;
+		}
+	    api.godLogin(superAdminName, md5(password), markName, function (data) {
+			    $.cookie("superAdminName", superAdminName, {expires: 30});
+			    $.cookie("godToken", "realtimeToken");
+				window.location = "superAdmin.html";				
+			},
+            function (failed){              
+                $('.userNameTips').text('管理员账号或密码有误，请重新输入！').css('visibility','visible');
+                $('input.superadminname').focus();
+            }
+	    );	  
+	})
+	
+    document.onkeydown = function (event) {
+        e = event ? event : (window.event ? window.event : null);
+        if (e.keyCode == 13) {
+            $('#submit').click()
+            return false;
+        }
+    }
+</script>
+</html>

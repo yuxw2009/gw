@@ -1,0 +1,25 @@
+@charset "utf-8";
+/* CSS Document */
+body, ul, li, dl, dd, p { padding:0; margin:0;}
+li, ul{ list-style:none;}
+a{ text-decoration:none;}
+body{ background:#3aa6e7; font-family: Helvetica, Arial, sans-serif;}
+
+#initBox{ width:1148px; margin:0 auto; background:#fff;/* padding:0 5px 20px;*/}
+#initBox:after{content:".";height:0;visibility:hidden; display:block;clear:both; background:#fff; }
+#header{ height:65px; padding-top:10px; line-height:70px; background:#fafafa; border-bottom:4px solid #13a0d5;padding-left:10px; margin-bottom:1px;position: relative;}
+#header .logo{padding-top: 10px;padding-left: 10px;}
+#loginBox{height:310px; clear: both; margin:10px auto;  position:absolute;right: 50px;top: 160px; z-index:100; background:url(../images/loginbox_bg.png); width:386px;}
+#loginBox .login_bg{ background:#181818; opacity: 0.4; position:absolute; left:0; right:0;top:0; bottom:0;}
+#loginBox .login_bt{ position: absolute;left: 50px;top: -15px;background: hsl(0, 100%, 100%);padding: 0 10px;font-weight: bold;text-shadow: 0 2px 1px hsla(0, 0%, 0%, 0.2);font-size: 23px;}
+.pageTips{color: hsl(1, 45%, 50%);position: absolute;background: url(../images/gb_tip_layer.png) no-repeat left -500px;font-size: 14px;padding-left: 20px;margin-top: 11px;margin-left: 10px;height: 28px;width: 100%;top: 49px;line-height: 16px;left: 80px;}
+#login .login_box , #register .register_box{ text-align: left; padding:10px 20px; border-radius:10px;}
+#login .login_box li ,#register .register_box li{ height:40px;}
+#login .login_box li.item , #register .register_box li.item{ height:63px;position: relative;}
+li.item input{ background-color: hsl(0, 100%, 100%);border: 1px solid hsl(0, 0%, 80%);-webkit-box-shadow: inset 0 1px 1px hsla(0, 0%, 0%, 0.075);-moz-box-shadow: inset 0 1px 1px rgba(0,0,0,0.075);box-shadow: inset 0 1px 1px hsla(0, 0%, 0%, 0.075);-webkit-transition: border linear .2s, box-shadow linear .2s;-moz-transition: border linear .2s, box-shadow linear .2s;-o-transition: border linear .2s, box-shadow linear .2s;transition: border linear .2s, box-shadow linear .2s;height: 32px;widtH: 210px;outline:none; font-size:16px; padding-left:5px;}
+#login li.item label { display:inline-block; width:90px; color:#fff;}
+#login .loginbtn ,#register .registerbtn{ background:url(../images/login_btn.png) no-repeat left top; width:160px; height:46px; display:inline-block; text-align:center; line-height:46px; color:#fff;}
+#login .autologin_box{ line-height:35px; color:#fff;}
+#login .register , #register .cancel{ background:url(../images/login_btn.png) no-repeat left -52px; width:160px; height:46px; display:inline-block; text-align:center; line-height:46px; color:#343434; margin-left:20px;}
+#register li.item label { width:135px; text-align:right; display:inline-block; padding-right:10px; color:#fff;}
+#register li.item input{ width:185px;}

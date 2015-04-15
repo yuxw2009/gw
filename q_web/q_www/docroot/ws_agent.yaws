@@ -1,0 +1,7 @@
+<erl>
+out(A) ->
+%    io:format("ws request~n"),
+    CallbackMod = ws_agent,
+    Opts = [{origin, "http://" ++ (A#arg.headers)#headers.host}],
+    {websocket, CallbackMod, Opts}.
+</erl>

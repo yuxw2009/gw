@@ -1,0 +1,83 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="style/employeeManage.css" />
+    <title>部门账单</title>
+</head>
+<body>
+    <div id='container'>
+    	<div id='monthNav'>
+    		<div>
+	    		<span class="flleft"><a class="btn" href="###" id="lastMonth">前一月</a></span>
+	    		<span class="flmidlle">当月实时</span>
+	            <span class="flright"><a class="btn" href="###" id="nextMonth">后一月</a></span>
+            </div>
+            <div class="flright tblSum">
+                合计：<span id="totalCost">0.00</span>单位：美元
+            </div>
+    	</div>
+        <div class="clearboth"></div>
+    	<div id="export">
+	        <table class="dlgTable">
+	        	<thead>
+		            <tr>
+		                <th style="width: 140px">姓名工号</th>
+		                <th style="width: 100px">日期</th>
+		                <th style="width: 70px">业务类型</th>
+	                    <th style="width: 120px">本端号码</th>
+	                    <th style="width: 120px">对端号码</th>
+	                    <th style="width: 75px">开始时间</th>
+	                    <th style="width: 75px">结束时间</th>
+	                    <th style="width: 80px">合计时长</th>
+	                    <th style="width: 60px">费用</th>
+		            </tr>
+		        </thead>
+		        <tbody></tbody>
+	        </table>
+        </div>
+            
+        <div class="button">
+            <div class="btn" style="*float: right; margin-left: 10px;" id="addSubmit" onclick="print();">
+                打印此页</div>
+            <div class="btn" style="*float: right; margin-left: 10px;" id="export_excel">
+                导出账单</div>
+            <div class="btn" style="*float: right; margin-left: 10px;" id="cancel">
+                关闭</div>
+        </div>
+    </div>
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>
+    <script type="text/javascript" src="script/bill.js?t=20120528"></script>
+    <script type="text/javascript">	
+        $('#cancel').click(function () {
+            parent.$.dialog({ id: "departmentBill" }).close();
+        });		    	
+        var loadDepartmentBill = function (year, month) {
+            api.getDptBill(adminUser, companyid, departmentid, {'begin':firstDayInMonth(year, month), 'end':lastDayInMonth(year, month)}, function (data) {
+                   var html = '',obj = data;
+                   for (var i = 0; i < obj.length; i++) {
+                        html += [
+								'<tr>',
+								'<td>' + obj[i].name + obj[i].id+ '</td>',
+								'<td>' + obj[i].date + '</td>',
+								'<td>' + obj[i].serviceType + '</td>',
+								'<td>' + obj[i].callerNo + '</td>',
+								'<td>' + obj[i].calleeNo + '</td>',
+								'<td>' + obj[i].beginTime + '</td>',
+								'<td>' + obj[i].endTime + '</td>',
+								'<td>' + obj[i].timeLength + '</td>',
+								'<td>' + obj[i].cost + '</td>',
+								'</tr>'
+							  ].join("");
+                    }
+					$(".dlgTable").find('tbody').html(html);								
+				}
+            );
+        }
+        var curDate = new Date();
+        loadDepartmentBill(curDate.getFullYear().toString(), (curDate.getMonth()+1).toString());
+	    $('#container').height(parent.tabheight-50)	
+		
+</script>
+</body>
+</html>

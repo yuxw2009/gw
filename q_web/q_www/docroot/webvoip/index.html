@@ -1,0 +1,210 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style/style.css"/>
+<title>webRTC:bring us closer</title>
+</head>
+<body>
+
+<div id="loading">
+  <div class="loadimg"><img src="images/loading.gif"/></div>
+</div>
+
+
+<div id="voip" class="box">
+ <div class="box_con">
+  <div class="voip_mgt">
+    <video id="voip_obj" autoplay="autoplay" style="width:1;height:1;display:none;"></video>
+  </div>
+  <div class="voip_box">
+   
+    <div class="peer">
+      <div class="logo"><img src="images/ltalklogo.png" /></div>
+      <div class="call_status"> <span class="peer_status">
+      <img src="images/warning.png" class="warning" width="25" height="25" /> 
+      <img src="images/smile.png" class="smile" width="25" height="25" /> 
+      <img src="images/error.png" class="error" width="25" height="25" /> 
+      <img src="images/micro.gif" class="micro" width="40" height="40" />
+      <img src="images/calling.gif" class="calling" width="40" height="40" /> 
+      <img src="images/ring.gif" class="ring" width="40" height="40" /> 
+      <img src="images/talking.gif" class="talking" width="40" height="40" /> </span> <span class="voip_call_status">Call in making...</span> <span class="callTime"> Time remained：<span class="callTimeTtext">02:00</span></span> </div>
+      <div class="peer_inputer"> <span class="cuntryNum">+86</span>
+        <input type="text" name="" value="" class="peerNum" dial-panel-mode=""  peerstate="idle">
+        <span class="inputTip">enter phone number to call.</span>
+        <div class="countryTipsBox" >
+          <div class="countryTips" id="countryTips">
+            <div class="scrollbar">
+              <div class="track">
+                <div class="thumb">
+                  <div class="end"></div>
+                </div>
+              </div>
+            </div>
+            <div id="countryTipsContent"  class="viewport">
+              <div class="overview">
+                <ul>
+                  <li>ARGENTINA(阿根廷) <span class="cn">+54</span></li>
+                  <li>AUSTRALIA(澳大利亚) <span class="cn">+61</span></li>
+                  <li>BRAZIL(巴西) <span class="cn">+55</span></li>
+                  <li>CANADA(加拿大) <span class="cn">+1</span></li>
+                  <li>CHINA(中国) <span class="cn">+86</span></li>
+                  <li>FRANCE(法国) <span class="cn">+33</span></li>
+                  <li>GERMANY(德国) <span class="cn">+49</span></li>
+                  <li>HONGKONG(中国香港) <span class="cn">+852</span></li>
+                  <li>INDIA(印度) <span class="cn">+91</span></li>
+                  <li>JANPAN(日本) <span class="cn">+81</span></li>
+                  <li>KOREA(韩国) <span class="cn">+82</span></li>
+                  <li>MEXICO(墨西哥) <span class="cn">+52</span></li>
+                  <li>RUSSIA(俄罗斯) <span class="cn">+79</span></li>
+                  <li>SINGAPORE(新加坡) <span class="cn">+65</span></li>
+                  <li>SWEDEN FIXED(瑞典) <span class="cn">+46</span></li>
+                  <li>TAIWAN(台湾) <span class="cn">+886</span></li>
+                  <li>THAILAND(泰国) <span class="cn">+66</span></li>
+                  <li>UNITED KINGDOM(英国) <span class="cn">+44</span></li>
+                  <li>USA(美国) <span class="cn">+1</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="voip_operations"> <a id="voip_start" class="voip_action" href="###" style="">Call</a> <a id="voip_stop" class="voip_action hangup" href="###" style="display: none;">Hang Up</a> </div>
+      <div class="dialpanel" id="dialpanel">
+        <ul>
+          <li><a href="###" class="key_97 key_49">1</a></li>
+          <li><a href="###" class="key_98 key_50">2</a></li>
+          <li><a href="###" class="key_99 key_51">3</a></li>
+          <li><a href="###" class="key_100 key_52">4</a></li>
+          <li><a href="###" class="key_101 key_53">5</a></li>
+          <li><a href="###" class="key_102 key_54">6</a></li>
+          <li><a href="###" class="key_103 key_55">7</a></li>
+          <li><a href="###" class="key_104 key_56">8</a></li>
+          <li><a href="###" class="key_105 key_57">9</a></li>
+          <li><a href="###" class="key_star">*</a></li>
+          <li><a href="###" class="key_96 key_48">0</a></li>
+          <li><a href="###" class="key_mark">#</a></li>
+        </ul>
+      </div>
+      <div id="sharebox"> Share： 
+        <!-- Baidu Button BEGIN -->
+       <div id="bdshare" class="bdshare_t bds_tools get-codes-bdshare">
+         <a class="bds_fbook"></a>
+         <a class="bds_twi"></a>      
+         <a class="bds_tsina"></a> 
+         <a class="bds_tqq"></a> 
+        </div>
+		<script type="text/javascript" id="bdshare_js" data="type=tools&amp;uid=552557" ></script>
+        <script type="text/javascript" id="bdshell_js"></script>
+        <script type="text/javascript">
+        var bds_config={"snsKey":{'tsina':' Free for Calling to IMS Phones by WebRTC','tqq':' Free for Calling to IMS Phones by WebRTC','tsohu':' Free for Calling to IMS Phones by WebRTC'}}
+        document.getElementById("bdshell_js").src = "http://bdimg.share.baidu.com/static/js/shell_v2.js?cdnversion=" + Math.ceil(new Date()/3600000)
+        </script>
+        <!-- Baidu Button END --> 
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<div id="video" class="box">
+ <div class="box_con">
+          <div class="startOrEnter" style="display:none"> 
+                <div class="vbox">
+                 <div class="video_bar">
+                    <div class="newvideobtns">      
+                      <div class="toStart">
+                         <h2>Create a New Conference</h2>  
+                          <span class="tips" >create conference and invite friends to join.
+						  </span> 
+                        <a class="startVedio"  href="###">Create New</a>
+					  </div> 
+						
+                      <div class="toEnter">
+                         <h2>Join an Existing Conference</h2> 
+                         <div class="tips" >enter conference ID:<input type="text" name="" value="" class="enterRoomID"></input>  </div> 
+                          <a class="enterVedio" href="###">Join</a>
+                      </div>
+                    </div> 
+                  <div class="videoTips">
+                      <span> <img src="images/warning.png" class="warning" width="40" height="46" /> 
+                       <img src="images/error.png" class="error" width="25" height="25" /> 
+                       <img src="images/smile.png" class="smile" width="25" height="25" /> 
+                       <img src="images/webv.png" class="webv" width="25" height="30" /> </span>
+                       <span class="videoTipsContent">No free conference room available, please try again later.</span>
+                    </div>
+                 </div>
+              </div>  
+                 
+          </div>
+          
+          <div class="video_content" style="display:table-cell;">
+              <div class="vbox">
+                 <div id="videoInvite"><img src="images/smile.png" style="vertical-align:middle;" width="25" height="25" /> Send conference ID to friends to join.</div>
+                <div class="video_bar">
+                  <div class="roomInfo">Curent Conference ID:<span class="curRoomID"></span></div>
+                  <div class="videoTimeCT">Time Remained：<span class="callTimeTtext"></span></div>
+                  <div class="ErrorTips"></div>
+                  <div class="video_btns mp_btns"><span class="video_time"> <a class="endVedio" href="###">End it</a></span>
+                  </div>
+                </div>
+                <div class="video_box">
+                  <div class="video_box_icon mp_icon">
+                    <video id="video_screem" class="video-js vjs-default-skin" autoplay controls preload="auto" width="533" height="400" data-setup="{}"></video>
+                  </div>
+                </div>
+            </div>
+          </div> 
+  </div>         
+ </div>
+
+
+
+
+<div id="menu" class="menu voip_act">
+     <li class="webCall current" link="voip">
+       <a href="###" class="webcallicon"></a>
+       PSTN Call
+     </li>
+     <li class="webvideo" link="video" style="padding-left:10px;">
+       <a href="###" class="webvideoicon"></a>Video Conference
+   </li>
+</div>
+<div id="footer">
+   <div  class="aboutus"> <a href="###" link="aboutus">About us</a>  <span>|</span> <a href="###" link="aboutVideo">About the video conference</a><span>|</span> <a href="###" link="suggestion">Note to us</a></div>
+</div>
+<div id="TecSupport"> <a href="http://www.erlang.org/" target="_blank" ><img src="images/erlang_logo.png" width="67" height="60" /></a> <a href="http://www.webrtc.org/" target="_blank" >  <img src="images/web_rtc.png" width="190" height="32" /></a> </div>
+<div id="AboutUsBox">
+  <a class="close"></a>
+<div>
+  <div id="aboutus" style="display:none;">
+    <div class="logo"> <img src="images/ltalklogo.png" /></div>
+    LiveCom is a startup registerd in Hongkong, which has strong telecom R&D background. We have developed several webRTC-compatible products, including Web Communication Gateway, videoconferencing MCU. WebRTC is the world-changing technique. We want to change the world with you. 
+ <div style="padding-top:15px;">   Contact：<a href="mailto:deng.hui@livecom.hk">deng.hui@livecom.hk</a></div></div>
+  <div id="suggestion">
+    <textarea class="sugT"></textarea>      
+    <span class="inputTip">Leave some words here...</span>
+    <div id="sendResult"><span class="send_status ok"><img src="images/smile.png" width="28" height="28" />Send OK！</span >
+    <span class="send_status failed"><img src="images/error.png" width="28" height="28" />Send failed, please try again later</span ></div>
+    <a class="sendBtn">Send</a>   
+   </div> 
+   
+ <div id="aboutVideo" style="display:none;">
+    <div class="logo"> <img src="images/ltalklogo.png" /></div>
+	Thanks for experiencing our video conference service. Unlike the P2P-based conference demos on the web, our conference service is served by our webRTC-based MCU which can show many parties' video streams in one video tag. We are sorry for that the current conference service offerd to public is limited due to the limited bandwidth.
+  </div>  
+   
+   
+  </div>
+</div>
+<script src="js/jquery-1.6.3.min.js" type="text/javascript"></script> 
+<script src="js/jscroll.js?t=75" type="text/javascript"></script> 
+<script src="js/api.js?t=75" type="text/javascript"></script> 
+<!--<script src="js/lw_lang.js" type="text/javascript"></script> --> 
+<script src="js/webrtc.js?t=75" type="text/javascript"></script> 
+<script src="js/voip.js" type="text/javascript"></script>
+<script src="js/webvideo.js" type="text/javascript"></script>
+<script src="js/base.js" type="text/javascript"></script> 
+
+</body>
+</html>

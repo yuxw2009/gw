@@ -1,0 +1,112 @@
+<erl>
+
+-include("snode.hrl").
+-record(upload, {fd, filename, last, inputname}).
+-record(return, {result, file}).
+
+-define(DIR,"./docroot/pics/").
+
+out(A) when A#arg.state == undefined ->
+    State = #upload{},
+    multipart(A, State);
+out(A) ->
+    multipart(A, A#arg.state).
+
+err() ->
+    {content,"application/json",rfc4627:encode(utility:pl2jso([{status, failed}]))}.
+
+multipart(A, State) ->
+    Parse = yaws_api:parse_multipart_post(A),
+    case Parse of
+        [] ->
+		    ok;
+        {cont, Cont, Res} ->
+            case addFileChunk(A, Res, State) of
+                {done, Result} ->
+                    Result;
+                {cont, NewState} ->
+                    {get_more, Cont, NewState}
+            end;
+        {result, Res} ->
+            case addFileChunk(A, Res, State#upload{last=true}) of
+                {done, Result} ->
+                    Result;
+                {cont, _} ->
+                    file:close(State#upload.fd),
+                    file:delete([?DIR,State#upload.filename]),
+                    err()
+            end
+    end.
+
+
+addFileChunk(A, [{part_body, Data}|Res], State) ->
+    addFileChunk(A, [{body, Data}|Res], State);
+
+addFileChunk(_A, [], State) when State#upload.last      == true,
+                                 State#upload.filename  /= undefined,
+                                 State#upload.fd        /= undefined,
+                                 State#upload.inputname /= undefined ->
+    FName = State#upload.filename,
+    file:close(State#upload.fd),
+    CMD = "python ./image.py "++ ?DIR ++ FName,
+    case os:cmd(CMD) of
+        "ok" ->
+			URL = list_to_binary("/pics/"++FName),
+            {done,{content, "text/html", 
+			             rfc4627:encode(utility:pl2jso([{status, ok}, {file_name, URL}]))}};
+        [] ->
+            file:delete([?DIR,FName]),
+            {done,err()}
+    end;
+
+addFileChunk(_A, [], State) when State#upload.last == true ->
+    file:close(State#upload.fd),
+    file:delete([?DIR,State#upload.filename]),
+    {done, err()};
+
+addFileChunk(_A, [], State) ->
+    {cont, State};
+
+addFileChunk(A, [{head, {"upld",Opts}}|Res], State) ->
+    case lists:keysearch("filename",1,Opts) of
+        {value, {_, Fname0}} ->
+            case rpc:call(snode:get_service_node(),lw_id_creater,generate_documentid,[]) of
+                {badrpc,_} ->
+                    {done, err()};
+                ID ->
+                    BaseName = yaws_api:sanitize_file_name(basename(Fname0)),
+                    ExtName  = filename:extension(BaseName),
+                    Fname    = integer_to_list(ID) ++ ExtName,
+                    case file:open(?DIR++Fname ,[write]) of
+                        {ok, Fd} ->
+                            S2 = State#upload{filename = Fname,fd = Fd,inputname = "file"},
+                            addFileChunk(A, Res, S2);
+                        _Err ->
+                            {done, err()}
+                    end
+            end;
+	    false ->
+            addFileChunk(A,Res,State)
+    end;
+
+addFileChunk(A, [{body, Data}|Res], State) when State#upload.inputname == "file" andalso State#upload.filename /= undefined ->
+    case file:write(State#upload.fd, Data) of
+        ok ->
+            addFileChunk(A, Res, State);
+        Err ->
+            file:close(State#upload.fd),
+            file:delete([?DIR,State#upload.filename]),
+            {done, err()}
+    end.
+
+basename(FilePath) ->
+    case string:rchr(FilePath, $\\) of
+        0 ->
+            %% probably not a DOS name
+            filename:basename(FilePath);
+        N ->
+            %% probably a DOS name, remove everything after last \
+            basename(string:substr(FilePath, N+1))
+    end.
+
+</erl>

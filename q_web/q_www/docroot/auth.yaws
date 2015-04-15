@@ -1,0 +1,69 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="images/lwork_new.ico"/>
+<link rel="stylesheet" type="text/css" href="style/login.css" />
+<title>Lwork</title>
+</head>
+<body>
+</body>
+<script type="text/javascript" src="script/jquery-1.6.3.min.js"></script>
+<script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>
+<script type="text/javascript" src="script/json2.js"></script>
+<script type="text/javascript" src="script/base64.js"></script>
+<script type="text/ecmascript">
+    var save2Cookie = function(company, account, password, uuid){   
+        $.cookie('company',company, {expires: 30});
+        $.cookie('account',account, {expires: 30});
+        $.cookie('password', password, {expires: 30});      
+        $.cookie('uuid',uuid);
+    }
+    
+    var doLogin = function(company, account, passwordMD5, succCallback, failCallback){
+     	var url = '/lwork/auth/login';
+		var data = {'company':company, 'account': account,'password': passwordMD5, 't': new Date().getTime()};
+     	$.post(url,JSON.stringify(data),function(data){
+					if(data.status === 'ok'){
+                        save2Cookie(company, account, passwordMD5, data['uuid']);
+						if (succCallback){
+							succCallback();
+						}
+					    window.location = "lwork.yaws?uuid=" + data['uuid'];	     
+					}else{
+						if (failCallback){
+							failCallback(data.reason);
+						}
+					}
+			   })
+    }
+
+    function parseQueryString(uriStr){
+    	var rslt = {'markname':'', 'account':'', 'password':''};
+    	var l = uriStr.split('&').map(function(item){var i = item.indexOf('=');return {'name': item.substring(0, i), 'value': item.substring(i+1)};});
+    	for (var j = 0; j < l.length; j++){
+    		if (l[j].name == 'datas'){
+    			rslt.password = l[j].value;
+    		}else if (l[j].name == 'markname'){
+    			rslt.markname = l[j].value;
+    		}
+    	}
+    	if (rslt.password.length > 0){
+    		var base64Dec = decodeBase64(urlDecode(rslt.password)),
+	    	    accountB = base64Dec.indexOf('USERID:"')+8,
+	    	    accountE = base64Dec.substring(accountB).indexOf('"') + accountB;
+	    	rslt.account = base64Dec.substring(accountB, accountE);
+    	}
+
+        return rslt;
+    }
+    var extraAuth = function(){
+    	var sea = window.location.search;
+    	var autInfo = parseQueryString(sea.substring(1));
+    	doLogin(autInfo.markname, autInfo.account, autInfo.password);
+    }
+
+    extraAuth();
+
+</script>
+</html>

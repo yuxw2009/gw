@@ -1,0 +1,234 @@
+<erl>
+
+-include("jsonerl.hrl").
+
+-record(message,{status,reason = <<"">>,self = <<"">>,unread = <<"">>,friends = <<"">>,msg = <<"">>,reply = <<"">>}).
+-record(body,{id,date,from,to,content,reply}).
+
+-define(SERVICE,'lwsms_service@caspar-PC').
+
+my_postvar(Request,CommandID) ->
+    {ok,Value} = yaws_api:postvar(Request,CommandID),
+    Value.
+
+combine_str2({MsgID,Num}) ->
+    integer_to_list(MsgID) ++ ";" ++ integer_to_list(Num).
+
+combine_str3({UUID,Name,EID}) ->
+    integer_to_list(UUID) ++ ";" ++ Name ++ ";" ++ EID.
+
+combine_str4({UUID,Name,EID,Status}) ->
+    integer_to_list(UUID) ++ ";" ++ Name ++ ";" ++ EID ++ ";" ++ atom_to_list(Status).
+
+build_date({{Year,Month,Day},{Hour,Minute,Second}}) ->
+    StrYear    = integer_to_list(Year),
+    StrMonth   = integer_to_list(Month),
+    StrDay     = integer_to_list(Day),
+    StrHour    = integer_to_list(Hour),
+    StrMinute  = integer_to_list(Minute),
+    StrSecond  = integer_to_list(Second),
+    string:join([StrYear,StrMonth,StrDay,StrHour,StrMinute,StrSecond],";").
+
+build_reply({UUID,{{Year,Month,Day},{Hour,Minute,Second}},MsgContent}) ->
+    StrUUID = integer_to_list(UUID),
+    StrDate = build_date({{Year,Month,Day},{Hour,Minute,Second}}),
+    string:join([StrUUID,StrDate,MsgContent],":").
+
+batch_build_reply(Reply) ->
+    L = lists:map(fun(X) -> build_reply(X) end,Reply),
+    string:join(L,"/").
+
+back_2_front_num({lw_message,ID,_,{{Year,Month,Day},{Hour,Minute,Second}},From,To,Content,Reply,_}) ->
+    StrID      = list_to_binary(integer_to_list(ID)),
+    StrDate    = list_to_binary(build_date({{Year,Month,Day},{Hour,Minute,Second}})),
+    StrFrom    = list_to_binary(integer_to_list(From)),
+    StrTo      = list_to_binary(string:join([integer_to_list(X)||X<-To],";")),
+    StrReply   = list_to_binary(integer_to_list(length(Reply))),
+    #body{id=StrID,date=StrDate,from=StrFrom,to=StrTo,content=Content,reply=StrReply}.
+
+back_2_front({lw_message,ID,_,{{Year,Month,Day},{Hour,Minute,Second}},From,To,Content,Reply,_}) ->
+    StrID      = list_to_binary(integer_to_list(ID)),
+    StrDate    = list_to_binary(build_date({{Year,Month,Day},{Hour,Minute,Second}})),
+    StrFrom    = list_to_binary(integer_to_list(From)),
+    StrTo      = list_to_binary(string:join([integer_to_list(X)||X<-To],";")),
+    StrReply   = list_to_binary(batch_build_reply(Reply)),
+    #body{id=StrID,date=StrDate,from=StrFrom,to=StrTo,content=Content,reply=StrReply}.
+
+out(A) ->
+    handle_request(my_postvar(A,"command"),A).
+
+handle_request("log_in",A) ->
+    CID = my_postvar(A,"company"),
+    EID = my_postvar(A,"employee_id"),
+    MD5 = my_postvar(A,"md5"),
+    case rpc:call(?SERVICE,lwsms_service,log_in,[{CID,EID},MD5]) of
+    	{badrpc, _} ->
+    	    Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+    	    {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+    	{UUID,Name,EID} ->
+    	    Message = #message{status=list_to_binary("ok"),self=list_to_binary(combine_str3({UUID,Name,EID}))},
+    	    {content,"application/json",?record_to_json(message,Message)};
+    	error ->
+    	    Message = #message{status=list_to_binary("error"),reason=list_to_binary("not_match")},
+    	    {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("log_out",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,log_out,[UUID]) of
+        {badrpc, Error} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{status=list_to_binary("ok")},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("dispatch_msg",A) ->
+    From       = list_to_integer(my_postvar(A,"from")),
+    To         = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"to"),":")],
+    MsgContent = my_postvar(A,"msg_content"),
+    case rpc:call(?SERVICE,lwsms_service,dispatch_msg,[From,To,MsgContent]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{status=list_to_binary("ok")},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("finish_msg",A) ->
+    UUID  = list_to_integer(my_postvar(A,"uuid")),
+    MsgID = list_to_integer(my_postvar(A,"msgid")),
+    case rpc:call(?SERVICE,lwsms_service,finish_msg,[UUID,MsgID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{status=list_to_binary("ok")},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("reply_msg",A) ->
+    UUID  = list_to_integer(my_postvar(A,"uuid")),
+    MsgID = list_to_integer(my_postvar(A,"msgid")),
+    Reply = my_postvar(A,"reply"),
+    case rpc:call(?SERVICE,lwsms_service,reply_msg,[UUID,MsgID,Reply]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{status=list_to_binary("ok")},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("interval",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,interval,[UUID]) of
+        {badrpc, Reason} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        {NewReply,UnRead,FriendsInfo} ->
+            Str1    = string:join(lists:map(fun({A,B,C,D})-> combine_str4({A,B,C,D}) end,FriendsInfo),":"),
+            Str2    = integer_to_list(UnRead),
+            Str3    = string:join(lists:map(fun({A,B})-> combine_str2({A,B}) end,NewReply),":"),
+            Message = #message{status=list_to_binary("ok"),unread=list_to_binary(Str2),friends=list_to_binary(Str1),reply=list_to_binary(Str3)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("load_friends",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,load_friends,[UUID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        FriendsInfo ->
+            Str = string:join(lists:map(fun({A,B,C,D})-> combine_str4({A,B,C,D}) end,FriendsInfo),":"),
+            Message = #message{status=list_to_binary("ok"),friends=list_to_binary(Str)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("load_send_msg",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,load_send_msg,[UUID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Msgs ->
+            MsgBody  = ?list_records_to_json(body,lists:map(fun(Msg) -> back_2_front_num(Msg) end,Msgs)),
+            Message  = #message{status=list_to_binary("ok"),msg=list_to_binary(MsgBody)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("load_finish_msg",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,load_finish_msg,[UUID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Msgs ->
+            MsgBody = ?list_records_to_json(body,lists:map(fun(Msg) -> back_2_front_num(Msg) end,Msgs)),
+            Message = #message{status=list_to_binary("ok"),msg=list_to_binary(MsgBody)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("load_current_msg",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,load_current_msg,[UUID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Msgs ->
+            MsgBody = ?list_records_to_json(body,lists:map(fun(Msg) -> back_2_front_num(Msg) end,Msgs)),
+            Message = #message{status=list_to_binary("ok"),msg=list_to_binary(MsgBody)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("load_reply_msg",A) ->
+    UUID  = list_to_integer(my_postvar(A,"uuid")),
+    MsgID = list_to_integer(my_postvar(A,"msgid")),
+    case rpc:call(?SERVICE,lwsms_service,load_reply_msg,[UUID,MsgID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Msgs ->
+            MsgBody = ?list_records_to_json(body,lists:map(fun(Msg) -> back_2_front(Msg) end,Msgs)),
+            Message = #message{status=list_to_binary("ok"),msg=list_to_binary(MsgBody)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end;
+handle_request("load_unread_msg",A) ->
+    UUID = list_to_integer(my_postvar(A,"uuid")),
+    case rpc:call(?SERVICE,lwsms_service,load_unread_msg,[UUID]) of
+        {badrpc, _} ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("service")},
+            {content,"application/json",?record_to_json(message,Message)};
+        instance_dead ->
+            Message = #message{status=list_to_binary("error"),reason=list_to_binary("dead")},
+            {content,"application/json",?record_to_json(message,Message)};
+        Msgs ->
+            MsgBody = ?list_records_to_json(body,lists:map(fun(Msg) -> back_2_front_num(Msg) end,Msgs)),
+            Message = #message{status=list_to_binary("ok"),msg=list_to_binary(MsgBody)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+</erl>
