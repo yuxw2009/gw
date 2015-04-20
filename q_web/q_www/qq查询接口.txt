@@ -1,12 +1,49 @@
-1 账户登录
-req:post /login
-    params: [{acc,Acc},{pwd,Pwd},{time,Time}]   %Pwd:md5(password+time)
-ack: [{status,ok},{uuid,UUID}]  [{status,failed},{reason,Reason}]
-2 上传号码:
-req:post /upload_qno
+0 注册   ok
+post aqqq/qv/register
+params: {auth_code:a, name:a, pwd:p}
+ack: {status:ok,balance:b}   {status:failed, reason:r}
+
+1 账户登录   ok
+req:post /aqqq/qv/login
+    params: [{acc,Acc},{pwd,Pwd},{time,Time}]   
+ack: [{status,ok},{uuid,UUID},{balance,b},{cookie,c},{deadline,"2015-1-1"}]  
+     [{status,failed},{reason,Reason}]
+
+2 充值
+req:post /aqqq/qv/recharge
+    params: [{uuid,UUID},{auth_code,Code}]   
+ack: [{status,ok},{uuid,UUID},{balance,b},{cookie,c},{deadline,"2015-1-1"}]  
+     [{status,failed},{reason,please_relogin}]
+
+3 上传号码:   ok
+req:post /aqqq/qv/query_qno_status
      params: [{uuid,UUID},{qno,Qno}]
-ack: [{status,ok},{auth_code,Code}]     [{status,no_money},{jpg,JpgBin}]    [{status,faild},{reason,Reason}]
-3 退出登录
-req:post /logout
+ack: 
+       [{status,ok},{state,lock/unlock},{time,T},{loc,Loc},{reason,R},{jfcode,Code},{addinfo,"已被冻结|改密立即恢复登录|申诉成功立即恢复登录"},{balance,b}] 
+       [{status,no_money},{jpg,JpgBin}]    
+       [{status,faild},{reason,Reason},{jpg,Jpgbin}]     
+    
+4 手工上传号码:  ok
+req:post /aqqq/qv/manual_upload
+     params: [{uuid,UUID}]
+ack: 
+       [{status,ok},{state,manual},{jpg,JpgBin},{clidata,C}]  % 手工输入验证码后发送手工查询命令,参考命令5
+    
+5 手工验证码查询  ok
+req:post /aqqq/qv/manual_query
+     params: [{uuid,UUID},{qno,Qno},{verify_code,code},{clidata,Clidata}]
+ack: 
+       [{status,ok},{state,lock/unlock},{time,T},{loc,Loc},{reason,R},{jfcode,Code},{addinfo,"已被冻结|改密立即恢复登录|申诉成功立即恢复登录"}] 
+       [{status,faild},{reason,Reason},{balance,b}]     
+
+5 退出登录    ok
+req:post /aqqq/qv/logout
      params: [{uuid,UUID}]
 ack: [{status,ok}]  
+
+6 查询余额
+req get   /aqqq/qv/query_balance?uuid=u
+ack: [{status,ok},{balance,B}]
+
+7 消息推送
+8 版本升级

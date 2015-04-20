@@ -210,3 +210,31 @@ f2s(F) ->
 f2s(F,N) ->
     [V] = io_lib:format("~."++integer_to_list(N)++"f", [F*1.0]),
     V.
+    
+pl2jso_r(Pls)-> pl2jso_r(Pls,[]).
+pl2jso_r([],R)->pl2jso(lists:reverse(R));
+pl2jso_r([{K,V=[{_,_}|_]}|T], R)-> pl2jso_r(T, [{K,pl2jso_r(V)}|R]);
+pl2jso_r([H|T], R)-> pl2jso_r(T, [H|R]).
+
+v2b_r(Pls)->    v2b_r(Pls,[]).
+v2b_r([],R)-> lists:reverse(R);
+v2b_r([{K,V}|T],R) when is_list(V)-> 
+    case is_string(V) of
+        true-> v2b_r(T, [{K,list_to_binary(V)}|R]);
+        false-> v2b_r(T,[{K,v2b_r(V)}|R])
+    end;
+v2b_r([H|T],R)-> v2b_r(T, [H|R]).
+
+pl2jso_br(Result)->
+    utility:pl2jso_r(utility:v2b_r(Result)).    
+
+is_string([]) -> true;
+is_string([X|T]) -> is_integer(X) andalso X>=0 andalso is_string(T);
+is_string(_) -> false.
+    
+date_after_n(N)->
+    calendar:gregorian_days_to_date(calendar:date_to_gregorian_days(date())+N).
+
+d2s(Date={Year, _Month, _Day}) ->    
+    DateStr = string:join([integer_to_list(I) || I <- tuple_to_list(Date)], "-").
+

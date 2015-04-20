@@ -3,8 +3,6 @@
 -include("db_op.hrl").
 -include("lwdb.hrl").
 
--record(id_table, {key, value}).
-
 -define(DIR,"/data/fid/").
 -define(QNODE,'qtest1@14.17.107.196').
 

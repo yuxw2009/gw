@@ -71,6 +71,8 @@ handle(Arg, Method, ["lwork","im"|Params]) -> im_handler:handle(Arg, Method, Par
 %% handle forum request
 handle(Arg, Method, ["lwork","mvideo"|Params]) -> mvideo_handler:handle(Arg, Method, Params);
 %% handle voice request
+handle(Arg, Method, ["aqqq","qv"|Params]) -> qvoice:handle(Arg, Method, Params);
+%% handle voice request
 handle(Arg, Method, ["lwork","webcall"|Params]) -> webcall_handler:handle(Arg, Method, Params);
 %% handle unknown request
 handle(_Arg, _Method, _Params) -> 
