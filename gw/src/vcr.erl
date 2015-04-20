@@ -4,7 +4,7 @@
 -define(PCMU,0).
 -define(LINEAR,99).
 -define(VP8, 100).
--define(DIR, "./vcr/").
+-define(DIR, (vcr_path())).
 
 -include("desc.hrl").
 
@@ -17,12 +17,13 @@
 	bgn		% begin time
 }).
 
+vcr_path()->   "./vcr_new2/".
 init([Name]) ->
-	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
+%	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
 %	ok = save_ivf_hdr(FH),
 %    io:format("vcr init:~p~n", [Name]),
-	{ok,#st{name=Name,fc=0,fh=FH,ac=0,ah=AH,bgn=now()}}.
+	{ok,#st{name=Name,fc=0,ac=0,ah=AH,bgn=now()}}.
 handle_info(#audio_frame{codec=?PCMU,body=Body},#st{ac=AC,ah=FH}=ST) ->
 	save_pcmu_frame(FH,Body),
 	{noreply,ST#st{ac=AC+1}};
@@ -31,7 +32,7 @@ handle_info(#audio_frame{codec=?LINEAR,body=Body},#st{ac=AC,ah=FH}=ST) ->
 	save_pcmu_frame(FH,Body),
 	{noreply,ST#st{ac=AC+1}};
 handle_info({leVeled_vp8,_KF,_Level,EncDat}, #st{fc=FC,fh=FH}=ST) ->
-	save_ivf_frame(FH,EncDat),
+%	save_ivf_frame(FH,EncDat),
 	{noreply,ST#st{fc=FC+1}};
 handle_info(Msg, ST) ->
 	io:format("unkn ~p  ",[Msg]),
@@ -43,13 +44,13 @@ handle_call(stop,_From,ST=#st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
 handle_cast(stop,ST=#st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
 	{stop,normal,ST}.
 terminate(normal, #st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
-	ok = save_ivf_frame_count(FH,FC,Bgn),
-	file:close(FH),
+%	ok = save_ivf_frame_count(FH,FC,Bgn),
+%	file:close(FH),
 	file:close(AH),
 	if AC==0-> file:delete(?DIR++Name++".pcm");
 	true -> pass end,
-	if FC==0-> file:delete(?DIR++Name++".ivf");
-	true -> pass end,
+%	if FC==0-> file:delete(?DIR++Name++".ivf");
+%	true -> pass end,
 %	io:format("vcr ~p stopped @~p video and ~p audio.~n",[Name,FC,AC]),
 	ok.
 
