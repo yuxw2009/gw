@@ -1,0 +1,16 @@
+说吧web呼叫接口
+1 start call
+post: /lwork/voices1/fzdvoip/
+params:{uuid:g_lw_uuid, phone:curObj.peerNum, userclass:curObj.userclass, sdp:sdp,t:t}
+ack: {status:ok,session_id:sid, sdp:sdp}  or {status:failed, reason:r}
+
+2 stop call
+delete: /lwork/voices1/fzdvoip/
+params:{uuid:uuid, session_id:sessionID, 't': t}
+ack: {status:ok}  or {status:failed, reason:r}
+
+3 get status
+get: /lwork/voices1/fzdvoip/
+params:{uuid:uuid, session_id:sessionID, 't': t}
+ack: {status:ok,state:state}  or {status:failed, reason:r}
+

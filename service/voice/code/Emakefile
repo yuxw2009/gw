@@ -1,0 +1,14 @@
+{"yxa/src/config/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/cpl/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/database/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/eldap/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/event/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/event_handler/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/local/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/mysql/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/sipuserdb/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/transactionlayer/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/transportlayer/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
+{"yxa/src/*", [{outdir, "yxa/ebin/"},{i,"yxa/src/include"},{i,"yxa/src/eldap"}]}.
+{"src/*",      [{outdir, "ebin/"},{i,"include"},{i,"yxa/src/include"}]}.
+{"yxa/yaws/src/*", [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.

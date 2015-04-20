@@ -1,0 +1,13 @@
+<html>
+<erl>
+out(A)->
+    Req = A#arg.req,
+    L = case Req#http_request.method of
+              'POST'-> yaws_api:parse_post(A);
+              _-> []
+          end,
+    io:format("*************************************yaws"),
+    {html, f("received post: ~p", [L])}.
+</erl>
+
+</html>

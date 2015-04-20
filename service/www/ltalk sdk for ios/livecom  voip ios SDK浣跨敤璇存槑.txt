@@ -1,0 +1,122 @@
+1. sdk使用者要在自己的XCode项目中添加如下动态库
+
+   libsqlite3.dylib
+   libc++.dylib
+   libstdc++.Dylan
+
+   添加方法 Targets->Build Phases->Link Binary With Libraries中点击“+”，输入动态库名字后添加
+2. sdk使用者要在自己的XCode项目中添加ltalkLib.a和ltalkLib.h
+3. 在AppDelegate.m中#import "ltalkLib.h"，然后在didFinishLaunchingWithOptions函数中调用
+   [WebRTCLib initRTCSSL];
+
+
+
+／＊＊＊＊＊＊＊＊＊voip拨打＊＊＊＊＊＊＊＊＊／
+
+4. 在使用者要使用sdk的.m文件中首先
+   #import "ltalkLib.h"
+   #import <AVFoundation/AVFoundation.h>
+
+
+4. 然后在使用者自己定义的类中实现Protocol DialProcessHandle中的三个函数
+   例如：
+
+   @interface ViewController () <DialProcessHandle>
+   @end
+   - (void)peerRing{
+       NSLog(@"ring");
+   }
+   - (void)onCalling{
+       NSLog(@"calling");
+   }
+   - (void)finish{
+       NSLog(@"finish");
+   }
+
+   - (void)callfailed:(NSString*)reason{
+      NSLog(@"callfailed%@", reason);  
+   }
+
+   callfailed会在发起呼叫失败试调用，  reason 为呼叫失败的原因
+
+
+   这四个回调帮助sdk使用者进行界面显示等方面的定制
+
+5. 然后在使用者自己定义的类中添加一个成员变量
+   例如：
+   @implementation ViewController{
+        WebRTCLib* _connectionManager;
+    }
+    或者
+    @property(nonatomic, strong) WebRTCLib* connectionManager;
+    推荐后者
+
+6. _connectionManager初始化的方法如下
+   _connectionManager = [[WebRTCLib alloc] initWithHandler:self];
+   self指的是自身实现了Protocol DialProcessHandle的sdk使用者设计的类
+   本文档中指的就是ViewController类
+   如果是@property(nonatomic, strong) WebRTCLib* connectionManager;
+   则self.connectionManager = [[WebRTCLib alloc] initWithHandler:self];
+
+7. 发起呼叫
+   [_connectionManager startCallFrom:@"1891111111"  //主叫号码
+                       userclass:@"userclass"   //传userclass    
+                                dial:@"137111111"];  //被叫号码
+8. 主动结束呼叫
+   disconnect;
+
+
+
+
+／＊＊＊＊＊＊＊＊＊回拨＊＊＊＊＊＊＊＊＊／
+
+9. 在使用者要使用sdk的.m文件中首先
+   #import "ltalkLib.h"
+   #import <AVFoundation/AVFoundation.h>
+
+10. 然后在使用者自己定义的类中实现Protocol CallbackProcessHandle中的三个函数
+   例如：
+
+@interface ViewController () <CallbackProcessHandle>
+
+@end
+
+- (void)callstatus:(NSString*)msg{
+    NSLog(@"callstatus%@", msg);
+}
+
+   callstatus 会在发起回拨返回结果的调用， msg 返回OK表示回拨成功，等待主叫振铃，返回其他字符，表示呼叫失败，返回内容则表示失败原因
+
+   这个回调帮助sdk使用者进行界面显示等方面的定制
+
+
+11. 然后在使用者自己定义的类中添加一个成员变量
+   例如：
+   @implementation ViewController{
+       Calllback* _connectionManager;
+    }
+
+12. _connectionManager初始化的方法如下
+
+   _connectionManager = [[Calllback alloc] initWithHandler:self];  
+
+
+13. 发起呼叫
+    
+    [_connectionManager startCallbackFrom:@"13711111111”    //主叫号码
+                                     dial:@"18011111111”];  //被叫号码
+  
+
+
+／＊＊＊＊＊＊＊＊＊注意事项＊＊＊＊＊＊＊＊＊／
+
+14. 在sdk使用者的app退出前，不要忘记调用
+   [WebRTCLib deInitRTCSSL];
+
+15.如何支持程序切到后台后依旧可以通话(比如点击home键)
+   在info.plist中添加键值:Required background modes
+   在这个键值下添加:App provides Voice over IP services
+   因为Library Project中没有info.plist设置(查阅了一些资料，自己添加也是无效的)
+   所以这个要在sdk使用者的app中设置
+
+

@@ -1,0 +1,1 @@
+yaws --sname mwcg --conf yaws.conf --erlarg "-setcookie hkxyz" 

@@ -1,0 +1,8 @@
+CFLAGS = -fPIC -shared -Werror 
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include
+
+i2c:
+	gcc -fPIC -Werror  -c i2c.c $(INCLUDE)
+
+nif:
+	gcc $(CFLAGS) i2c.o -o i2c.so

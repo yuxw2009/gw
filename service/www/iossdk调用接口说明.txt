@@ -1,0 +1,51 @@
+to shuobar ios sdk 调用接口
+1. 提供2个文件libWebRTCLib.a和WebRTCLib.h
+2. sdk使用者要在自己的XCode项目中添加libWebRTCLib.a和WebRTCLib.h
+3. 在AppDelegate.m中#import "WebRTCLib.h"，然后在didFinishLaunchingWithOptions函数中调用
+   [WebRTCLib initRTCSSL];
+4. 在使用者要使用sdk的.m文件中首先
+   #import "WebRTCLib.h"
+   #import <AVFoundation/AVFoundation.h>
+4. 然后在使用者自己定义的类中实现Protocol DialProcessHandle中的三个函数
+   例如：
+   @interface ViewController () <DialProcessHandle>
+   @end
+   - (void)peerRing{
+       NSLog(@"ring");
+   }
+   - (void)onCalling{
+       NSLog(@"calling");
+   }
+   - (void)finish{
+       NSLog(@"finish");
+   }
+   peerRing会在振铃时被调用
+   onCalling会在接通后被调用
+   finish会在通话结束时被调用
+   这三个回调帮助sdk使用者进行界面显示等方面的定制
+
+5. 然后在使用者自己定义的类中添加一个成员变量
+   例如：
+   @implementation ViewController{
+        WebRTCLib* _connectionManager;
+    }
+    或者
+    @property(nonatomic, strong) WebRTCLib* connectionManager;
+    推荐后者
+
+6. _connectionManager初始化的方法如下
+   _connectionManager = [[WebRTCLib alloc] initWithHandler:self];
+   self指的是自身实现了Protocol DialProcessHandle的sdk使用者设计的类
+   本文档中指的就是ViewController类
+   如果是@property(nonatomic, strong) WebRTCLib* connectionManager;
+   则self.connectionManager = [[WebRTCLib alloc] initWithHandler:self];
+
+7. 发起呼叫
+   [_connectionManager startCallFrom:@"1891111111"  //主叫号码
+                       dialuserclass:@"userclass"   //传userclass    
+                                dial:@"137111111"];  //被叫号码
+8. 主动结束呼叫
+   disconnect;
+
+9. 在sdk使用者的app退出前，不要忘记调用
+   [WebRTCLib deInitRTCSSL];

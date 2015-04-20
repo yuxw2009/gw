@@ -1,0 +1,2 @@
+ulimit -n 409600
+yaws --name www_t@58.221.60.37 --conf yaws.conf  --erlarg "-setcookie yxw_abc  +K true"  --runmod wcg_manager --daemon 

@@ -1,0 +1,250 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="images/lwrok_new.ico"/>
+<link rel="stylesheet" type="text/css" href="style/common.css?t=75" />
+<link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+<title>测试平台</title>
+<script type="text/javascript" src="script/jquery-1.7.2.min.js"></script>
+<script type="text/javascript" src="script/jquery.cookie.js"></script>
+<link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+<script src="script/artDialog/jquery.artDialog.js?t=20120528" type="text/javascript"></script> 
+<script type="text/javascript" src="script/restchannel.js"></script>
+</head>
+<body>
+  <li>
+  <span id="test"  containdom="no" align='center'>
+    <div class="sendmessage1">
+      <div class="voip_box">
+        <div class="peer">
+          <textarea name="" cols="100"  rows="2" id="url" sendid="">输入url</textarea>
+        </div>
+        <p>             </p>
+        <div class="peer">
+          <textarea name="" cols="100"  rows="10" id="data" sendid="">输入json数据</textarea>
+        </div>
+        <p> </p>
+        <div class="">
+          <span><a id="post" class="voip_action" href="###">post  </a>
+          <a id="get" class="voip_action" href="###">get  </a>
+          <a id="put" class="voip_action" href="###">put  </a>
+          <a id="delete" class="voip_action" href="###">delete</a></span>
+        </div>
+        <span class="meeting_box" align='center'>
+            <ul id="meeting_current_list">
+            
+          </ul>
+        </span>
+        
+        <div class="peer">
+          <textarea name="" cols="100"  rows="50" id="result" sendid="">结果</textarea>
+        </div>
+   
+      </div>
+    </div>
+  </span>
+
+  </li>
+
+<script language="javascript">
+    function act_button(act) {
+      return '<button id="member_button" value ="' +act+'" onclick="executeCookieDataBy(this.value)">'+act+'</button>'
+    }
+
+    function addActButton(name) {
+      $('#meeting_current_list').append(act_button(name))
+    }
+
+    function removeAllButton() {
+      $('#meeting_current_list').children().remove()
+    }
+    
+    function request() {
+        var url = $("#url").val()=== "输入url" ? "" : $("#url").val();
+        var data = $("#data").val() ==="输入json数据" ? "" : $("#data").val();
+        try {data= (data==="" ? "" :eval("("+data+")"));} 
+        catch(ex) { 
+            alert(ex);
+            return;
+        }
+        return {url:url, data:data};
+    };
+    
+    var handler = function(method) {
+        needToSave(method);
+        do_handler(method);
+    };
+
+var conf_session_id = 1;
+var callback_session_id = 1;
+var voip_session_id = 1;
+
+    function set_session_id(data) {
+      if (!data.session_id) return;
+      var url = $("#url").val()
+      if(url.search("meetings") != -1) {
+        conf_session_id=data.session_id;
+      }else if(url.search("voip") != -1) {
+          voip_session_id = data.session_id;
+      } else if(url.search("callback") != -1) {
+        callback_session_id = data.session_id;
+      }
+    }
+
+    function get_session_id(url) {
+      if(url.search("meetings") != -1) {
+        return conf_session_id;
+      }else if(url.search("voip") != -1) {
+        return voip_session_id;
+      } else if(url.search("callback") != -1) {
+        return callback_session_id;
+      }
+      return 0;
+    }
+
+    function replace_session_id(url) {
+      session_id = get_session_id(url);
+      return url.replace(/session_id([^&$]*)/i, "session_id="+session_id)
+    }
+    function handle_result(data){
+      $("#result").val(JSON.stringify(data));
+      set_session_id(data);
+    }
+
+    var do_handler = function(method) {
+        //[]
+        var req = request();
+        if (req) {
+            RestChannel[method](req.url, req.data, 
+                function(data) {
+                    handle_result(data);
+                },
+                function(err) {
+                    $("#result").val(JSON.stringify(err));
+                });
+        }
+        $.cookie('last_url', $("#url").val());
+        $.cookie('last_data', $("#data").val());
+    };
+    $("#get").click(function() {handler("get");});
+    $("#put").click(function() {handler("put")});
+    $("#post").click(function() {handler("post")});
+    $("#delete").click(function() {handler("delete")});
+    $("#url").val($.cookie('last_url'));
+    $("#data").val($.cookie('last_data'));
+    
+    function sdp() {
+    return ["v=0",
+"o=- 293443412 2 IN IP4 127.0.0.1",
+"s=-",
+"t=0 0",
+"a=group:BUNDLE audio video",
+"m=audio 1 RTP/SAVPF 103 104 0 8 106 105 13 126",
+"c=IN IP4 0.0.0.0",
+"a=rtcp:1 IN IP4 0.0.0.0",
+"a=ice-ufrag:A0hIgcMgbymRuLIR",
+"a=ice-pwd:nsQahjo4DpoNNW9GsjMcnAus",
+"a=ice-options:google-ice",
+"a=sendrecv",
+"a=mid:audio",
+"a=rtcp-mux",
+"a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:I1dGjR7HkFei/MrSGsrc4AWDrM9v7NFf54K4yhPN",
+"a=rtpmap:103 ISAC/16000",
+"a=rtpmap:104 ISAC/32000",
+"a=rtpmap:0 PCMU/8000",
+"a=rtpmap:8 PCMA/8000",
+"a=rtpmap:106 CN/32000",
+"a=rtpmap:105 CN/16000",
+"a=rtpmap:13 CN/8000",
+"a=rtpmap:126 telephone-event/8000",
+"a=ssrc:2981855042 cname:z6llY8nA9onaOyLh",
+"a=ssrc:2981855042 mslabel:3KTbQ0JJweVJRObDhUvJgrgbPWjRBYNKZfne",
+"a=ssrc:2981855042 label:3KTbQ0JJweVJRObDhUvJgrgbPWjRBYNKZfne00",
+"m=video 1 RTP/SAVPF 100 101 102",
+"c=IN IP4 0.0.0.0",
+"a=rtcp:1 IN IP4 0.0.0.0",
+"a=ice-ufrag:A0hIgcMgbymRuLIR",
+"a=ice-pwd:nsQahjo4DpoNNW9GsjMcnAus",
+"a=ice-options:google-ice",
+"a=sendrecv",
+"a=mid:video",
+"a=rtcp-mux",
+"a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:I1dGjR7HkFei/MrSGsrc4AWDrM9v7NFf54K4yhPN",
+"a=rtpmap:100 VP8/90000",
+"a=rtpmap:101 red/90000",
+"a=rtpmap:102 ulpfec/90000"].join("\r\n")
+}
+
+function loadActionNamesCookie() {
+  var actions_str=$.cookie('actions');
+  if (actions_str) {
+    var actions = eval('('+actions_str+')');
+    return actions;
+  } else
+  {
+    return {};
+  }
+}
+var operate_cmds = loadActionNamesCookie();
+function showActButtons() {
+  removeAllButton();
+  var i = 0;
+  for(name in operate_cmds) {
+    if(++i%10==0) $('#meeting_current_list').append("<br/>");
+    addActButton(name);
+  }
+}
+showActButtons()
+function saveCookie(method, action_name) {
+  if (action_name.length > 0) {
+    operate_cmds[action_name]=1;
+    var actions_str = JSON.stringify(operate_cmds);
+    $.cookie('actions',actions_str, {expires: 30});
+    var data = {url:$("#url").val(), data:$("#data").val(), method:method};
+    var data_str = JSON.stringify(data);
+    $.cookie(action_name, data_str, {expires:30});
+
+    showActButtons();
+  }
+}
+
+function executeCookieDataBy(action_name) {
+  var str = $.cookie(action_name);
+  if(!str) return;
+  var msg = eval('('+str+')');
+  var url = replace_session_id(msg.url);
+  var data_str = msg.data;
+  var method = msg.method;
+  $('#url').val(url);
+  $('#data').val(data_str);
+  do_handler(method);
+}
+
+function needToSave(method) {
+var dialog = art.dialog({
+        title: '要保存吗？',
+        content: '保存名： <textarea name="" cols=""  rows="1" class="lwork_mes" id="content"></textarea>',
+        id: 'upload_filecontent_dialog',
+        lock: true,
+        fixed: true,
+        width: 400,
+        height: 100,
+        button: [{
+          name: '保存',
+          focus: true,
+          callback:  function(){
+                saveCookie(method, $('#content').val());
+            }},
+            {
+          name: '取消',
+          focus: false,
+          callback:  function(){      }
+            }
+        ]			
+       });
+}    
+</script>
+      
+</body>
+</html>      

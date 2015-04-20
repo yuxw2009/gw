@@ -1,0 +1,202 @@
+1 mobile start call接口修改:
+req:  {user_id:uuid,caller_phone: s,callee_phone: s,sdp: {ip: ip, port: i},userclass: game,dev_id:d,type:p2p, acc:a, clidata:clidata}
+ack: {status:ok,session_id:sid, ip:ip, port:PeerPort, codec_name:"AMR",payload_mode:m,rssrc:rs}
+     {status:failed,reason:no_logind/not_actived}
+2 phone event接口
+post lwork/mobile/voip/dtmf
+req: {session_id:s,num:s}
+ack: {status:ok}
+
+
+3 logout接口
+post lwork/mobile/logout
+req: {uuid: s, device_id:did, clidata:{os_type:"android"}}
+ack: {status,ok}
+
+4 被叫呼叫传送消息接口
+python push.py "++Acount++" "++CustomContent
+CustomConent:   [{event,"p2p_inform_called"},{caller, Caller}, {opdata,Opdata}]  
+
+5 p2p terminal available消息接口
+post lwork/mobile/p2p_ringing
+req: {opdata:Opdata}
+ack: {status:ok}
+     {status:failed, reason:"already_call_real_phone"}
+
+6 p2p 接听消息接口
+post lwork/mobile/p2p_answer
+req: {caller_phone: s, callee_phone: s,sdp: {ip: ip, port: i},userclass: s,opdata:Opdata,clidata:clidata}
+ack: {status:ok,session_id:sid, ip:ip, port:PeerPort, codec_name:"AMR",payload_mode:m,rssrc:rs}
+     {status:failed, reason:"already_call_real_phone"}     
+
+7 p2p 拒绝消息接口
+post lwork/mobile/p2p_reject
+req: {opdata:Opdata}
+ack: {status:ok}
+     {status:failed, reason:"already_call_real_phone"}          
+
+8 被叫p2p_poll接口
+post lwork/mobile/p2p_poll
+req: {opdata:Opdata}
+ack:  [{status, ok}, {peer_status, Status}];   Status: idle/ring/hookoff/p2p_idle/p2p_ring/p2p_hookoff/release
+
+9 注册百度push
+post lwork/mobile/baidu_push_register
+req: [{caller, s}, {account, s},{user_id, User_id},{channel_id,Channel_id}]
+ack: [{status,ok}]
+
+9 dth version
+get lwork/mobile/version_dth_no
+ack: [{status,ok}...]
+
+9 common version
+get lwork/mobile/version_commont_no
+ack: [{status,ok}...]
+
+10 start callback
+post lwork/mobile/callback
+req: [{uuid,i},{local,s},{remote,s}]
+ack: [{status, ok}, {session_id, SID}]
+
+11 stop callback
+delete lwork/mobile/callback
+req: [{session_id, SID}]
+ack: [{status,ok}]
+
+12 长连接推送接口
+post channel/push_service
+req: {acc:acc,device_id:did,self_phone:phone}
+ack: {status:ok, data:push_data}  or {status:failed, reason:reason}
+    其中push_data是个json的数组,包括以下几种情况：
+    1 服务器推送呼叫被叫消息 [{event,"p2p_inform_called"},{caller, Caller}, {opdata,Opdata}]
+    2 [{event, "login_otherwhere"}]
+    3 [{event,"shake_hand"}]
+
+   
+客户端poll服务：收到[]/unlogined/login_otherwhere则
+
+13 sip呼叫终端app消息，推送
+push:  [{event,"p2p_inform_called"},{caller, Caller},{opdata,[{event,"sip_call_in"},{caller, Caller}, {callee,Callee},{session_id, sid}, {ip,ip}, {port, PeerPort},{codec_name, cn},{payload_mode, pm},{rssrc, rs}] ]
+
+
+
+
+
+//以下不要
+13 sip呼叫终端app消息，推送
+push:  [{event,"sip_call_in"},{caller, Caller}, {callee,Callee},{session_id, sid}, {ip,ip}, {port, PeerPort},{codec_name, cn},{payload_mode, pm},{rssrc, rs}] 
+
+14 sip_ringing  terminal available消息接口
+post lwork/mobile/sip_ringing
+req: {session_id, sid}
+ack: {status:ok}
+     {status:failed, reason:"session_not_exist"}
+
+15 sip_call 接听消息接口
+post lwork/mobile/sip_answer
+req: {session_id:sid,clidata:clidata}
+ack: {status:ok}
+     {status:failed, reason:"session_not_exist"}     
+
+16 sip_call 拒绝消息接口
+post lwork/mobile/sip_reject
+req: {session_id:sid}
+ack: {status:ok}
+     {status:failed, reason:"session_not_exist"}          
+
+17 被叫sip_call 查询接口 和voip呼叫一样
+get lwork/mobile/voip/calls?session_id=sid
+
+ack:  [{status, ok}, {peer_status, Status}]idle/ring/hookoff/p2p_idle/p2p_ring/p2p_hookoff/release
+
+获取状态的ack改为：
+
+ack:  [{status, ok}, {peer_status, Status},{stats,Stats}]
+      Status: idle/ring/hookoff/p2p_idle/p2p_ring/p2p_hookoff/release
+      Stats: 对象[{ip, IP},{pr, CumuR}, {pl, CumuL}, {avgIJ, AvgIJms},{jitter, Jitter}, {avgrttms, AvgRTTms},{rttms,Rttms},{lostrate,Lostrate}
+    ]
+
+    界面上实时显示Jitter，Rttms
+
+
+18 发送验证码
+post lwork/sms/auth_code
+params: {uuid:UUID, device_id:did,type:"register" or "resetpwd"}
+ack: {status:ok}   {status:failed, reason:R}
+
+19 register:
+post lwork/mobile/register
+params: {type: "sms" or "delegate",uuid:u,device_id:D, auth_code:a, name:n, pwd:p}
+ack: {status:ok}   {status:failed, reason:r}
+
+20 forget pwd:
+post lwork/mobile/forget_pwd
+params: {type:"sms" or "delegate", uuid:u,device_id:D, auth_code:a,  pwd:p,name:n}
+ack: {status:ok}   {status:failed, reason:r}
+
+21 modify pwd:
+post lwork/mobile/modify_pwd
+params: {type:"sms" or "delegate", uuid:u,device_id:D, old_pwd:a,  pwd:p}
+ack: {status:ok}   {status:failed, reason:r}
+
+22 add user info :
+post lwork/mobile/add_info
+params: {uuid:u,device_id:D, info:info}
+ack: {status:ok}   {status:failed, reason:r}
+
+login 修改
+3 login接口
+post lwork/mobile/login
+req: {acc: a, pwd: s,device_id:did, clidata:{os_type:"android"},name:n,group_id:g}
+ack: {status:ok, uuid:u,info:info}
+
+12 查询被叫在线状态
+post lwork/mobile/query_status
+req: {users:[{acc:acc,phone:phone}]}
+ack: {status:ok, data:[{acc:acc,phone:phone,state:s}]}  or {status:failed, reason:reason}
+ state: online/offline/unregistered
+
+
+1   dth相关运营工作，包括以下接口实现：
+   接口：
+1 营帐系统=》lwork  （和羊总相关）
+开通：字段  group（填dth） account   pwd
+激活： account  
+去激活： account
+绑定上海联通号码：  account  phone
+2  lwork=》营帐系统（和羊总相关）
+查询剩余分钟数：   字段：  account  
+查询详单：   字段：   account，start/end起始日期/结束日期
+
+3 app=》lwork （和羊总无关）
+注册：  字段 account/pwd/username/
+注册成功后强制要求用户设置登录密码
+登录：      使用username登录，username/pwd
+修改密码：  account/oldpwd/newpwd
+
+
+加密接口
+1 原有的json字符串，进行base64编码，前面加7个字符，作为新的json的value
+req: {data_enc:NewJson}
+返回值，方式如下：
+原有的json字符串base64编码后的第三个字符后面，插入2个字符，作为新的json的value
+ack： {data_enc:NewJson}
+
+自支付相关：
+1 查询金币：
+post lwork/mobile/get_coin
+req: {uuid: u}
+ack: {status:ok, coins:c, gift_coins:gc,month_consumed:mc}
+
+
+2 获取支付订单
+post lwork/mobile/get_payid
+req: {uuid:u,device_id:dvid,money:m,coins:coins}
+ack: {status:ok, payid:payid,uuid:uuid}
+
+3 获取支付明细
+post lwork/mobile/get_recharges
+req: {uuid:u,device_id:dvid}
+ack: {status:ok, recharges:[{year:y,month:m,date:d,hour:h,minute:min,second:s,money:money,coins:coins}]}
+
+

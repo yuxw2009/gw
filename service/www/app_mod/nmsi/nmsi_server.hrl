@@ -1,0 +1,5 @@
+-define(MSG_HEAD,<<16#AA55AA55:32>>).
+-define(MSG_VERSION,<<1:32>>).
+-define(MSG_MML_TYPE,<<1:8>>).
+-define(MSG_ACK_TYPE,<<2:8>>).
+-define(MSG_HEART_TYPE,<<3:8>>).

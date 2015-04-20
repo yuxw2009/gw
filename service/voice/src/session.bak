@@ -1,0 +1,229 @@
+-module(session).
+-compile(export_all).
+
+-record(state,{uuid,
+                          group_id,
+                          caller_name,
+                          caller_pid,
+               caller_phone,
+               caller_rate,
+               caller_status,
+               callee_name,
+               callee_pid,
+               callee_phone,
+               callee_rate,
+               callee_status,
+               session_valid = false,
+               start_time,        %% calendar:local_time()
+               max_talking_time,  %% seconds
+               timer_ref
+               }). 
+               
+-define(DETECTING_INTERVAL, 5000).
+
+start_monitor(call_back, Msg)->
+    spawn_monitor(fun()-> init(call_back, Msg) end).
+
+start_monitor(UUID,{Phone1,Rate1},{Phone2,Rate2},MaxTalkingTime) when is_float(Rate1),is_float(Rate2),is_integer(MaxTalkingTime)->
+    spawn_monitor(fun()-> init(UUID,{Phone1,Rate1},{Phone2,Rate2},MaxTalkingTime) end).
+
+stop(Session) ->
+    Session ! stop.
+    
+get_status(Session, Receiver) ->
+    Session ! {get_status, Receiver}.
+
+notify(Session,Event) ->
+    Session ! Event.
+
+init(call_back, {UUID, GroupId, {Name1, Phone1, Rate1}, 
+                                                        {Name2, Phone2, Rate2}, MaxTalkingTime})->
+    {Caller,Callee} = start_uas(Phone1,Phone2,UUID),
+    sipua:invite(Caller),
+    loop(#state{uuid=UUID,group_id=GroupId, 
+                        caller_name=Name1, caller_pid=Caller,caller_phone=Phone1,caller_rate=Rate1,caller_status=idle,
+                    callee_name=Name2, callee_pid=Callee,callee_phone=Phone2,callee_rate=Rate2,callee_status=idle,
+                          max_talking_time=MaxTalkingTime}).
+    
+init(UUID,{Phone1,Rate1},{Phone2,Rate2},MaxTalkingTime) ->
+    {Caller,Callee} = start_uas(Phone1,Phone2,UUID),
+    sipua:invite(Caller),
+    loop(#state{uuid=UUID,caller_pid=Caller,caller_phone=Phone1,caller_rate=Rate1,caller_status=idle,
+                          callee_pid=Callee,callee_phone=Phone2,callee_rate=Rate2,callee_status=idle,
+                          max_talking_time=MaxTalkingTime}).
+    
+loop(State) ->
+    receive
+        {status_change,Role,Status,SDP,_} ->
+            io:format("Session receive ~p: ~p, SDP:~p~n",[Role,Status,SDP]),
+            NewState = handle_status_change(Role,Status,SDP,State),
+            loop(NewState);             
+        {get_status, Receiver} ->
+            Receiver ! {status,{State#state.caller_phone,State#state.caller_status},
+            {State#state.callee_phone,State#state.callee_status}},
+            loop(State);
+        detecting_timer ->
+            case can_continue_talking(State) of
+            true  -> continue;
+            false ->
+            sipua:stop(State#state.caller_pid),            
+            timer:cancel(State#state.timer_ref)
+            end,
+            loop(State);
+        stop ->
+            sipua:stop(State#state.caller_pid),
+            loop(State);
+        {'DOWN', _Ref, process, Pid, _Reason} ->
+            io:format("ua over ~p.~n",[Pid]),
+            %%   logger:log(debug, "UserAgent Die, reason: ~p ~n",[Reason]),
+            case peer_ua_status(Pid,State) of
+            {die,_}     -> 
+                io:format("session over.~n"),
+                generator_cdr(State),
+                session_over;
+            {_,PeerPid} -> 
+                sipua:stop(PeerPid),
+                loop(ua_die(Pid,State))
+            end;
+        Unexpected ->
+            io:format("Session receive unexpected message: ~p~n",[Unexpected]),
+            loop(State)
+        end.    
+    
+start_uas(Phone1,Phone2,UUID) ->
+    Session = self(),
+%     Prefix1 = callee_phone_prefix(Phone1, Phone2),
+%     Prefix2 = callee_phone_prefix(Phone2, Phone1),
+%    {Caller,_} = sipua:start_monitor(Session,caller,caller_addr(Phone2),callee_addr(Prefix2 ++Phone1)),    
+%    {Callee,_} = sipua:start_monitor(Session,callee,caller_addr(Phone1),callee_addr(Prefix1 ++Phone2)),
+    {Caller,_} = sipua:start_monitor(Session,caller,caller_addr(trans_caller_phone(Phone1,Phone2)),callee_addr(trans_callee_phone(Phone1,UUID))),    
+    {Callee,_} = sipua:start_monitor(Session,callee,caller_addr(trans_caller_phone(Phone2,Phone1)),callee_addr(trans_callee_phone(Phone2,UUID))),
+    
+    {Caller,Callee}.
+            
+peer_ua_status(Pid,State) ->
+    if 
+        Pid == State#state.caller_pid -> {State#state.callee_status,State#state.callee_pid};
+        Pid == State#state.callee_pid -> {State#state.caller_status,State#state.caller_pid}
+    end.
+
+ua_die(Pid,State) ->
+    if 
+        Pid == State#state.caller_pid -> State#state{caller_status=die};
+        Pid == State#state.callee_pid -> State#state{callee_status=die}
+    end.
+
+handle_status_change(Role,Status,SDP,State) ->
+    case {Role,Status} of
+        {caller,ready} ->
+            sipua:invite(State#state.callee_pid,SDP),
+            State#state{caller_status=ready};        
+        {callee,ring} ->
+            sipua:invite_in_dialog(State#state.caller_pid,SDP),
+            State#state{callee_status=ring};
+        {callee,ready} ->
+            {ok,TRef} = timer:send_interval(?DETECTING_INTERVAL,detecting_timer),    
+            State#state{callee_status=ready,start_time=calendar:local_time(),
+                session_valid=true, timer_ref=TRef};
+        {caller,Status} ->
+            State#state{caller_status=Status};
+        {callee,Status} ->
+            State#state{callee_status=Status}
+    end.
+
+generator_cdr0(State) ->
+    if
+        State#state.session_valid ->
+            StartTime = State#state.start_time,
+            EndTime = calendar:local_time(),            
+            UUID = State#state.uuid,
+            CallerInfo = {State#state.caller_name,State#state.caller_phone,State#state.caller_rate},
+            CalleeInfo = {State#state.callee_name,State#state.callee_phone,State#state.callee_rate},
+            TimeInfo   = {StartTime,EndTime,time_diff(StartTime,EndTime)},
+            cdrserver:new_cdr(callback, {UUID,State#state.group_id, {CallerInfo,CalleeInfo},TimeInfo});
+        true -> 
+            no_cdr_needed
+    end.        
+
+generator_cdr(St) ->
+	case St#state.uuid of
+	{"fzd",_}-> generate_cdr4shuobar(St);
+	{_,_}-> generator_cdr0(St)
+	end.
+
+generate_cdr4shuobar(State)->
+    if
+        State#state.start_time =/= undefined ->
+            upload_cdr(cdr_url_paras(State)),
+            ok;
+        true -> 
+            no_cdr_needed
+    end.
+
+cdr_url_paras(State)->
+    Start = voip_ua:seconds(State#state.start_time),
+    End=voip_ua:seconds(calendar:local_time()),
+    {_,UUID_STR} = State#state.uuid,
+    %            Phone = State#state.phone,
+    CdrId=integer_to_list(www_xengine:bill_id(shuobar)),
+    Stime=integer_to_list(Start),
+    Etime=integer_to_list(End),
+    MyIp=sipcfg:myip(),
+    Key="lwfzdcdr",
+    Sign=hex:to(erlang:md5([CdrId,UUID_STR,Stime,Etime,MyIp,Key])),
+    Paras=[{"cdrid", CdrId},{"uuid",UUID_STR},{"stime",Stime},{"etime",Etime},{"ip",MyIp},{"sign",Sign}],
+    ParaStrs=[K++"="++V||{K,V}<-Paras],
+    string:join(ParaStrs,"&").
+upload_cdr(Body) ->  upload_cdr(Body, "http://openapi.shuobar.cn/cdr/wcgreport.html").
+upload_cdr(Body,URL) ->
+    inets:start(),
+    Result = httpc:request(get, {URL++"?"++Body,[]},[{timeout,10 * 1000}],[]),
+%%    utility:log("cdr req:~p~n",[Body]),
+
+    case Result of
+        {ok, {_,_,_Ack}} -> 
+        ok;
+        _ -> failed
+    end.
+    
+can_continue_talking(State) ->
+    Now = calendar:local_time(),
+    ElapseTime = time_diff(State#state.start_time, Now),
+%    (ElapseTime + ?DETECTING_INTERVAL/1000) < State#state.max_talking_time.    
+    true.
+    
+time_diff(T1,T2) ->
+    calendar:datetime_to_gregorian_seconds(T2)-calendar:datetime_to_gregorian_seconds(T1).
+    
+ssip() -> "202.122.107.42". %zte ss public    % "121.14.38.110". alpha
+myip() -> siphost:myip().    
+
+trans_caller_phone(_Callee="0086"++_, "0086"++Caller)->  filter_phone(Caller);
+trans_caller_phone(_Callee="+86"++_,"0086"++Caller)->  filter_phone(Caller);
+trans_caller_phone(_Callee="00"++_,Caller)->  filter_phone(Caller);
+trans_caller_phone(_Callee,"0086"++Caller)->  filter_phone(Caller);
+trans_caller_phone(_Callee,Caller)->  filter_phone(Caller).
+
+trans_callee_phone("*"++Phone,{"ml",_}=UUID)->  "*000001"++filter_phone(Phone);
+trans_callee_phone("+"++Phone,{"ml",_}=UUID)->  trans_callee_phone("00"++Phone,UUID);
+trans_callee_phone(Phone="00"++_,{"ml",_}=UUID)->  "00088818"++filter_phone(Phone);
+trans_callee_phone(Phone,{"ml",_}=_UUID)->  "000888180086"++filter_phone(Phone);
+trans_callee_phone(Phone,_)-> "000888180086"++filter_phone(Phone).
+    
+filter_phone(Phone)->  [I||I<-Phone, lists:member(I, "0123456789*#")].
+
+caller_addr(Phone) -> 
+    [Addr] = contact:parse(["<sip:"++Phone++"@"++myip()++">"]),
+    Addr.
+callee_addr(Phone) ->
+    [Addr] = contact:parse(["<sip:"++Phone++"@"++ssip()++">"]),
+    Addr.
+
+callee_phone_prefix("008610"++_, "0086"++_) -> "11";
+callee_phone_prefix("00861"++_ , "0086"++_) -> "10";
+callee_phone_prefix("0086"++_  , "0086"++_) -> "11";
+callee_phone_prefix(_Caller, _Callee)       -> "".
+
+meeting_phone_prefix(_, "0086"++_) -> "12";
+meeting_phone_prefix(_Caller, _Callee) -> "".
+

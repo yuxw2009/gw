@@ -1,0 +1,69 @@
+<erl>
+
+-define(WRTC,'lr@WCG02').
+
+out(A) -> 
+	Params = yaws_api:parse_post(A),
+	case hd(Params) of
+		{_,"offer"} ->
+			[_,{"sdp",SDP},{"uid",UID}] = Params,
+			case rpc:call(?WRTC,lrswap,offer,[list_to_integer(UID),list_to_binary(SDP)]) of
+				{ok,Session} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,successful},
+									{session,list_to_binary(Session)}]})};
+				{failed,Reason} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,failure},{reason,Reason}]})}
+			end;
+		{_,"poll_call"} ->
+			[_,{"session",Session}] = Params,
+			case rpc:call(?WRTC, lrswap,polling, [Session]) of
+				{ok,Session,OfferSDP} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,successful},
+									{session,list_to_binary(Session)},
+									{sdp,OfferSDP}]})};
+				{failed,Reason} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,failure},{reason,Reason}]})}
+			end;
+		%
+		%
+		{_,"wait_call"} ->
+			[_,{"uid",UID}] = Params,
+			case rpc:call(?WRTC, lrswap,waiting, [list_to_integer(UID)]) of
+				{ok,Session,OfferSDP} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,successful},
+									{session,list_to_binary(Session)},
+									{sdp,OfferSDP}]})};
+				{failed,Reason} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,failure},{reason,Reason}]})}
+			end;
+		{_,"answer"} ->
+			[_,{"sdp",SDP},{"uid",UID}] = Params,
+			case rpc:call(?WRTC,lrswap,answer,[list_to_integer(UID),list_to_binary(SDP)]) of
+				{ok,Session} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,successful},
+									{session,list_to_binary(Session)}]})};
+				{failed,Reason} ->
+					{content,"application/json",
+					 rfc4627:encode({obj,[{type,failure},{reason,Reason}]})}
+			end;
+		%
+		%
+		{_,"release"} ->
+			[_,{"session",Session}] = Params,
+			ok = rpc:call(?WRTC, lrswap,release, [Session]),
+			{content,"application/json",
+			 rfc4627:encode({obj,[{type,successful}]})};
+		{_,"get_conf_status"} ->
+			[_,{"uid",UID}] = Params,
+			{ok,Res} = rpc:call(?WRTC,lrswap,get_room_status,[list_to_integer(UID)]),
+			{content,"application/json",
+					 rfc4627:encode({obj,[{type,status},{ack,unknow}]})}
+	end.
+</erl>

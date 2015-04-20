@@ -1,0 +1,206 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=0.95, user-scalable=no" />
+  <title>运维管理平台</title>
+  <link rel="stylesheet" type="text/css" href="style/style.css" />
+  <link rel="stylesheet" type="text/css" href="style/wcglist.css" />
+  <link rel="stylesheet" type="text/css" href="style/lwDialog.css" />
+  <link rel="stylesheet" type="text/css" href="style/chart.css"/>
+</head>
+<body>  
+<div class="container">
+  <div id="header">
+    <div class="wrapper">
+      <div class="title"><img SRC="images/logo.png"/><span class="logoname">运维管理系统</span></div>
+      <div class="topnav">欢迎您<b id="admin"></b> <span>|</span> <a id="modifypassword" href="#">修改密码</a> <span>|</span> <a href="#" id="goback">退出</a> </div>
+    </div>
+  </div>
+  <div id="navbox">
+     <a link="wcgBox" class="current" style="margin-left:30px;" href="###" >WCG管理</a>
+     <a link = "callBox" href="###">并发统计</a>
+     <a link = "wsBox" href="###"> 应用WS管理</a>
+     <a link = "daikuanBox" href="###">带宽监控</a>    
+  </div>
+  <div class="page_info">
+    <div class="page_title_box">
+      <p class="result_count">共<span class="result_num">0</span>条记录</p>
+      <div class="seabox">
+        <input type="text" value="输入WCG标识筛选数据" id="filterWcgCharts">
+        <span class="sea_icon"></span> 
+      </div>
+      <div class="viewmode">
+        <a link ="wcgGird" class="layout-grid current" href="###"></a>
+        <a link ="wcgList" class="layout-list" href="###"></a>
+      </div>
+       <p class="page_opts"><a class="btn btn-success addwcgbtn">添加</a></p>
+    </div>
+  </div>
+  <div class="line"></div>
+  <div id="content">
+      <div id="wcgBox" class="box" style=" margin-top:0">
+        
+        <div id="wcgGird" class="listbox" style="display:block;">
+       	 <div class="base_info">
+         </div>
+        </div>
+
+        <div id="wcgList" class="listbox">
+  		   <table class="tablist" width="100%" border="0" cellpadding="0" cellspacing="0">
+            <thead>
+              <tr class="tr_3">
+               <th width="">WCG标识</th>
+               <th width="">CPU</th>
+               <th width="">并发数 </th>
+               <th width="">内存 </th>                       
+               <th width="">硬盘</th> 
+               <th width="">状态</th>  
+               <th width="">操作</th>                       
+              </tr> 
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        </div>        
+      </div>
+
+      <div id="callBox" class="box" style="display:none">
+        <div class="base_info">
+
+          <div class="row">
+            <div class="clear"></div>
+            <div class="col1">
+              <div class="text">最大并发数总和:</div>
+              <label id="requestNumberTotal" class="label-value">2000</label>              
+              <div class="text">当前并发数总和:</div>
+              <label id="currequestNumberTotal" class="label-value">126</label>
+            </div>
+            <div id="RequestChartTotalContainer">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div id="wsBox" class="box" style="display:none">
+        <div class="base_info">
+          <table class="tablist" width="100%" border="0" cellpadding="0" cellspacing="0">
+             <thead>
+              <tr class="tr_3">
+                <th width="30%">域名 </th>
+                <th width="25%">网站名称</th>
+                <th width="25%">IP地址</th>
+                <th width="20%">操作</th>
+              </tr>
+             </thead>
+             <tbody>
+              <tr>
+                <td width=""><a href="http://www.10086china.com" target="_blank">http://www.10086china.com</a></td>
+                <td width="">中国话</td>
+                <td width="">121.0.0.1</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td width=""><a href="http://localhost/"  target="_blank">http://localhost/</a></td>
+                <td width="">本地服务器</td>
+                <td width="">127.0.0.21</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td width=""><a href="http://lwork.hk/"  target="_blank">http://www.lwork.hk/</a></td>
+                <td width="">Lwork工作平台</td>
+                <td width="">10.32.6.52</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+     <div id = "daikuanBox" class="box" style="display:none">
+
+        <div class="base_info">
+          <table class="tablist" width="100%" border="0" cellpadding="0" cellspacing="0">
+             <thead>
+              <tr class="tr_3">
+                <th width="100">主机名 </th>
+                <th>带宽</th>
+              </tr>
+             </thead>
+             <tbody>
+              
+            </tbody>
+          </table>
+        </div>
+     </div>
+    </div>
+</div>
+
+<div style="top: 130px; display:none;" id="loading" class="zeng_msgbox_layer_wrap">
+  <span id="mode_tips_v2" style="z-index: 10000;" class="zeng_msgbox_layer">
+  <span class="gtl_ico_clear"></span>
+  <img alt="" src="images/loading.gif"/>正在加载...<span class="gtl_end"></span></span>
+</div>
+
+<div id="wcgchart" class="light" style="display:none;">
+ <div class="layout">
+  <div class="header-text">wcg@58.221.60.118</div>
+  <div class="img-theme"></div>
+  <div class="content helth">
+    <div class="slide-button right-button"></div>
+    
+    <div class="row">
+      <div class="legend-row">
+        <div class="legend">当前并发数</div>
+        <div class="hr"></div>
+      </div>
+      <div class="clear"></div>
+      <div class="col1">
+        <div class="text">最大并发数：<span id="reqTol">250</span></div>
+        <label id="requestNumber" class="label-value"></label>
+      </div>
+      <div class="col3" id="RequestChartContainer">
+      </div>
+    </div>
+    <div class="row">
+      <div class="legend-row">
+        <div class="legend">CPU占有率, %</div>
+        <div class="hr" style="width:700px;"></div>
+      </div>
+      <div class="clear"></div>
+      <div class="col1">
+        <div class="text"></div>
+        <label id="CPU" class="label-value">85</label>
+      </div>
+      <div class="col3" id="CPUChartContainer">
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="legend-row">
+        <div class="legend">内存消耗, G</div>
+        <div class="hr"></div>
+      </div>
+      <div class="clear"></div>
+      <div class="col1">
+        <div class="text">wcg内存：<span id="Totalmemory"></span></div>
+        <label id="memoryConsumption" class="label-value"></label>
+      </div>
+       <!--<div class="col2"></div>-->
+      <div class="col3" id="memoryChartContainer">
+
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+<script type="text/javascript" src="script/jquery-1.6.3.min.js"></script>
+<script type="text/javascript" src="script/jquery.flot.min.js"></script>
+<script type="text/javascript" src="script/api.js"></script> 
+<script type="text/javascript" src="script/jquery.lwDialog.js"></script>
+<script type="text/javascript" src="script/lw.chat.js"></script> 
+<script type="text/javascript" src="script/tipsplugin.js"></script>
+<script type="text/javascript" src="script/common.js"></script>
+</body>
+</html>

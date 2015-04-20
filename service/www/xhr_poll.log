@@ -1,0 +1,614 @@
+2014-12-27 15:45:28: login_processor logout:did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_test" 
+
+2014-12-27 15:45:28: push_service:failed:overtime 
+
+2014-12-27 15:45:58: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",54}]}
+
+2014-12-27 15:45:58: xhr_poll:fetch_msg:<0.10616.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               54}]}}]
+
+2014-12-27 15:46:8: login_processor logout:did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051" 
+
+2014-12-27 15:46:8: push_service:failed:overtime 
+
+2014-12-27 15:46:41: push_service:"862180245516" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_test"
+ clidata:{obj,[{"reqCount",55}]}
+
+2014-12-27 15:46:41: xhr_poll:fetch_msg:<0.10616.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_test">>},
+                                                           {"self_phone",
+                                                            <<"862180245516">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               55}]}}]
+
+2014-12-27 15:47:44: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",8}]}
+
+2014-12-27 15:47:44: {{2014,12,27},{15,47,44}} on_up_msg rec {fetch_msg,
+                                                              <0.10609.0>}
+
+2014-12-27 15:47:44: xhr_poll:fetch_msg:<0.10609.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               8}]}}]
+
+2014-12-27 15:49:37: push_service:failed:overtime 
+
+2014-12-27 15:49:37: push_service:[] did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:[]
+ clidata:{obj,[{"reqCount",56}]}
+
+2014-12-27 15:49:37: push_service unlogined from {[],[],
+                                                  "fa96c3bb-b604-410e-97d4-5c1635634b3b"}
+
+2014-12-27 15:49:37: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",57}]}
+
+2014-12-27 15:49:37: xhr_poll:fetch_msg:<0.10638.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               57}]}}]
+
+2014-12-27 15:52:11: push_service:failed:overtime 
+
+2014-12-27 15:52:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",58}]}
+
+2014-12-27 15:52:13: xhr_poll:fetch_msg:<0.10659.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               58}]}}]
+
+2014-12-27 15:52:40: push_service:msg:[] 
+
+2014-12-27 15:52:44: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",9}]}
+
+2014-12-27 15:52:44: {{2014,12,27},{15,52,44}} on_up_msg rec {fetch_msg,
+                                                              <0.10670.0>}
+
+2014-12-27 15:52:44: xhr_poll:fetch_msg:<0.10670.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               9}]}}]
+
+2014-12-27 15:57:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",59}]}
+
+2014-12-27 15:57:13: {{2014,12,27},{15,57,13}} on_up_msg rec {fetch_msg,
+                                                              <0.10687.0>}
+
+2014-12-27 15:57:13: xhr_poll:fetch_msg:<0.10687.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               59}]}}]
+
+2014-12-27 15:57:40: push_service:msg:[] 
+
+2014-12-27 15:57:53: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",1}]}
+
+2014-12-27 15:57:53: {{2014,12,27},{15,57,53}} on_up_msg rec {fetch_msg,
+                                                              <0.10670.0>}
+
+2014-12-27 15:57:53: xhr_poll:fetch_msg:<0.10670.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               1}]}}]
+
+2014-12-27 15:58:19: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",2}]}
+
+2014-12-27 15:58:19: xhr_poll:fetch_msg:send overtime to <0.10670.0>  new from:<0.10694.0>
+
+2014-12-27 15:58:19: xhr_poll:fetch_msg:<0.10694.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               2}]}}]
+
+2014-12-27 15:58:19: push_service:failed:overtime 
+
+2014-12-27 16:2:13: push_service:msg:[] 
+
+2014-12-27 16:2:14: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",60}]}
+
+2014-12-27 16:2:14: {{2014,12,27},{16,2,14}} on_up_msg rec {fetch_msg,
+                                                            <0.10659.0>}
+
+2014-12-27 16:2:14: xhr_poll:fetch_msg:<0.10659.0> attrs:[{"device_id",
+                                                           <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                          {"acc",
+                                                           <<"livecom_0131000051">>},
+                                                          {"self_phone",
+                                                           <<"18017813673">>},
+                                                          {"clidata",
+                                                           {obj,
+                                                            [{"reqCount",
+                                                              60}]}}]
+
+2014-12-27 16:2:37: xhr_poll:on_down_msg1:[{event,<<"p2p_inform_called">>},
+                                           {caller,<<"18017813673">>},
+                                           {opdata,
+                                            {obj,
+                                             [{status,ok},
+                                              {session_id,
+                                               <<"gw_copy1@119.29.9.55@@18">>},
+                                              {ip,<<"119.29.9.55">>},
+                                              {port,55038},
+                                              {codec,102},
+                                              {codec_name,'ILBC'},
+                                              {payload_mode,normal},
+                                              {rssrc,<<"123">>}]}}]
+
+2014-12-27 16:2:37: push_service:msg:[[{event,<<"p2p_inform_called">>},
+                                       {caller,<<"18017813673">>},
+                                       {opdata,
+                                        {obj,
+                                         [{status,ok},
+                                          {session_id,
+                                           <<"gw_copy1@119.29.9.55@@18">>},
+                                          {ip,<<"119.29.9.55">>},
+                                          {port,55038},
+                                          {codec,102},
+                                          {codec_name,'ILBC'},
+                                          {payload_mode,normal},
+                                          {rssrc,<<"123">>}]}}]] 
+
+2014-12-27 16:2:37: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",3}]}
+
+2014-12-27 16:2:37: {{2014,12,27},{16,2,37}} on_up_msg rec {fetch_msg,
+                                                            <0.10946.0>}
+
+2014-12-27 16:2:37: xhr_poll:fetch_msg:<0.10946.0> attrs:[{"device_id",
+                                                           <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                          {"acc",
+                                                           <<"livecom_0131000032">>},
+                                                          {"self_phone",
+                                                           <<"13788927293">>},
+                                                          {"clidata",
+                                                           {obj,
+                                                            [{"reqCount",
+                                                              3}]}}]
+
+2014-12-27 16:6:50: push_service:msg:[] 
+
+2014-12-27 16:6:50: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",4}]}
+
+2014-12-27 16:6:50: {{2014,12,27},{16,6,50}} on_up_msg rec {fetch_msg,
+                                                            <0.10986.0>}
+
+2014-12-27 16:6:50: xhr_poll:fetch_msg:<0.10986.0> attrs:[{"device_id",
+                                                           <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                          {"acc",
+                                                           <<"livecom_0131000032">>},
+                                                          {"self_phone",
+                                                           <<"13788927293">>},
+                                                          {"clidata",
+                                                           {obj,
+                                                            [{"reqCount",
+                                                              4}]}}]
+
+2014-12-27 16:7:13: push_service:msg:[] 
+
+2014-12-27 16:7:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",61}]}
+
+2014-12-27 16:7:13: {{2014,12,27},{16,7,13}} on_up_msg rec {fetch_msg,
+                                                            <0.10982.0>}
+
+2014-12-27 16:7:13: xhr_poll:fetch_msg:<0.10982.0> attrs:[{"device_id",
+                                                           <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                          {"acc",
+                                                           <<"livecom_0131000051">>},
+                                                          {"self_phone",
+                                                           <<"18017813673">>},
+                                                          {"clidata",
+                                                           {obj,
+                                                            [{"reqCount",
+                                                              61}]}}]
+
+2014-12-27 16:11:50: push_service:msg:[] 
+
+2014-12-27 16:11:50: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",5}]}
+
+2014-12-27 16:11:50: {{2014,12,27},{16,11,50}} on_up_msg rec {fetch_msg,
+                                                              <0.10963.0>}
+
+2014-12-27 16:11:50: xhr_poll:fetch_msg:<0.10963.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               5}]}}]
+
+2014-12-27 16:12:13: push_service:msg:[] 
+
+2014-12-27 16:12:18: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",62}]}
+
+2014-12-27 16:12:18: {{2014,12,27},{16,12,18}} on_up_msg rec {fetch_msg,
+                                                              <0.11028.0>}
+
+2014-12-27 16:12:18: xhr_poll:fetch_msg:<0.11028.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               62}]}}]
+
+2014-12-27 16:16:50: push_service:msg:[] 
+
+2014-12-27 16:16:50: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",6}]}
+
+2014-12-27 16:16:50: {{2014,12,27},{16,16,50}} on_up_msg rec {fetch_msg,
+                                                              <0.11058.0>}
+
+2014-12-27 16:16:50: xhr_poll:fetch_msg:<0.11058.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               6}]}}]
+
+2014-12-27 16:17:13: push_service:msg:[] 
+
+2014-12-27 16:17:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",63}]}
+
+2014-12-27 16:17:13: {{2014,12,27},{16,17,13}} on_up_msg rec {fetch_msg,
+                                                              <0.11053.0>}
+
+2014-12-27 16:17:13: xhr_poll:fetch_msg:<0.11053.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               63}]}}]
+
+2014-12-27 16:21:50: push_service:msg:[] 
+
+2014-12-27 16:21:50: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",7}]}
+
+2014-12-27 16:21:50: {{2014,12,27},{16,21,50}} on_up_msg rec {fetch_msg,
+                                                              <0.11028.0>}
+
+2014-12-27 16:21:50: xhr_poll:fetch_msg:<0.11028.0> attrs:[{"device_id",
+                                                            <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000032">>},
+                                                           {"self_phone",
+                                                            <<"13788927293">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               7}]}}]
+
+2014-12-27 16:22:13: push_service:msg:[] 
+
+2014-12-27 16:22:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",64}]}
+
+2014-12-27 16:22:13: {{2014,12,27},{16,22,13}} on_up_msg rec {fetch_msg,
+                                                              <0.11075.0>}
+
+2014-12-27 16:22:13: xhr_poll:fetch_msg:<0.11075.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               64}]}}]
+
+2014-12-27 16:26:50: push_service:msg:[] 
+
+2014-12-27 16:27:0: push_service:"13788927293" did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032"
+ clidata:{obj,[{"reqCount",8}]}
+
+2014-12-27 16:27:0: {{2014,12,27},{16,27,0}} on_up_msg rec {fetch_msg,
+                                                            <0.11063.0>}
+
+2014-12-27 16:27:0: xhr_poll:fetch_msg:<0.11063.0> attrs:[{"device_id",
+                                                           <<"11925489-ea1b-44a8-b0de-c8a37c02547f">>},
+                                                          {"acc",
+                                                           <<"livecom_0131000032">>},
+                                                          {"self_phone",
+                                                           <<"13788927293">>},
+                                                          {"clidata",
+                                                           {obj,
+                                                            [{"reqCount",
+                                                              8}]}}]
+
+2014-12-27 16:27:13: push_service:msg:[] 
+
+2014-12-27 16:27:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",65}]}
+
+2014-12-27 16:27:13: {{2014,12,27},{16,27,13}} on_up_msg rec {fetch_msg,
+                                                              <0.11056.0>}
+
+2014-12-27 16:27:13: xhr_poll:fetch_msg:<0.11056.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               65}]}}]
+
+2014-12-27 16:28:6: login_processor logout:did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032" 
+
+2014-12-27 16:28:6: push_service:failed:overtime 
+
+2014-12-27 16:31:24: login_processor logout:did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_test" 
+
+2014-12-27 16:32:13: push_service:msg:[] 
+
+2014-12-27 16:32:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",66}]}
+
+2014-12-27 16:32:13: {{2014,12,27},{16,32,13}} on_up_msg rec {fetch_msg,
+                                                              <0.11028.0>}
+
+2014-12-27 16:32:13: xhr_poll:fetch_msg:<0.11028.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               66}]}}]
+
+2014-12-27 16:32:42: login_processor logout:did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032" 
+
+2014-12-27 16:33:22: login_processor logout:did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_test1" 
+
+2014-12-27 16:36:48: login_processor logout:did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_test2" 
+
+2014-12-27 16:37:13: push_service:msg:[] 
+
+2014-12-27 16:37:13: push_service:"18017813673" did:"fa96c3bb-b604-410e-97d4-5c1635634b3b" acc:"livecom_0131000051"
+ clidata:{obj,[{"reqCount",67}]}
+
+2014-12-27 16:37:13: {{2014,12,27},{16,37,13}} on_up_msg rec {fetch_msg,
+                                                              <0.11186.0>}
+
+2014-12-27 16:37:13: xhr_poll:fetch_msg:<0.11186.0> attrs:[{"device_id",
+                                                            <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                           {"acc",
+                                                            <<"livecom_0131000051">>},
+                                                           {"self_phone",
+                                                            <<"18017813673">>},
+                                                           {"clidata",
+                                                            {obj,
+                                                             [{"reqCount",
+                                                               67}]}}]
+
+2014-12-27 16:42:13: push_service:msg:[] 
+
+2014-12-27 16:44:1: login_processor logout:did:"a42a08a6-6544-4b2f-b5fd-2b13457b62bb" acc:"livecom_0131000051" 
+
+2014-12-27 16:45:17: login_processor logout:did:"a42a08a6-6544-4b2f-b5fd-2b13457b62bb" acc:"livecom_test" 
+
+2014-12-27 16:46:23: xhr_poll:on_shake_time out, attrs:[{"device_id",
+                                                         <<"fa96c3bb-b604-410e-97d4-5c1635634b3b">>},
+                                                        {"acc",
+                                                         <<"livecom_0131000051">>},
+                                                        {"self_phone",
+                                                         <<"18017813673">>},
+                                                        {"clidata",
+                                                         {obj,
+                                                          [{"reqCount",67}]}}]
+
+2014-12-27 16:49:18: xhr_poll:on_shake_time out, attrs:[]
+
+2014-12-27 16:54:40: xhr_poll:on_shake_time out, attrs:[]
+
+2014-12-27 18:5:38: login_processor logout:did:"a42a08a6-6544-4b2f-b5fd-2b13457b62bb" acc:"livecom_0131000051" 
+
+2014-12-27 18:11:32: login_processor logout:did:"a42a08a6-6544-4b2f-b5fd-2b13457b62bb" acc:"livecom_test" 
+
+2014-12-27 18:20:56: xhr_poll:on_shake_time out, attrs:[]
+
+2014-12-27 18:26:33: login_processor logout:did:"11925489-ea1b-44a8-b0de-c8a37c02547f" acc:"livecom_0131000032" 
+
+2014-12-27 18:27:2: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                           {caller,<<"18017813673">>},
+                                           {opdata,
+                                            {obj,
+                                             [{event,<<"sip_call_in">>},
+                                              {caller,<<"18017813673">>},
+                                              {callee,<<"862180245516">>},
+                                              {session_id,
+                                               <<"gw_copy1@119.29.9.55@@38">>},
+                                              {ip,<<"119.29.9.55">>},
+                                              {port,55078},
+                                              {codec_name,'ILBC'},
+                                              {payload_mode,normal},
+                                              {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:29:21: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                            {caller,<<"18017813673">>},
+                                            {opdata,
+                                             {obj,
+                                              [{event,<<"sip_call_in">>},
+                                               {caller,<<"18017813673">>},
+                                               {callee,<<"862180245516">>},
+                                               {session_id,
+                                                <<"gw_copy1@119.29.9.55@@39">>},
+                                               {ip,<<"119.29.9.55">>},
+                                               {port,55080},
+                                               {codec_name,'ILBC'},
+                                               {payload_mode,normal},
+                                               {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:31:1: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                           {caller,<<"18017813673">>},
+                                           {opdata,
+                                            {obj,
+                                             [{status,ok},
+                                              {session_id,
+                                               <<"gw_git@202.122.107.66@@17">>},
+                                              {ip,<<"202.122.107.66">>},
+                                              {port,55036},
+                                              {codec,102},
+                                              {codec_name,'AMR'},
+                                              {payload_mode,normal},
+                                              {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:31:18: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                            {caller,<<"18017813673">>},
+                                            {opdata,
+                                             {obj,
+                                              [{status,ok},
+                                               {session_id,
+                                                <<"gw_git@202.122.107.66@@18">>},
+                                               {ip,<<"202.122.107.66">>},
+                                               {port,55038},
+                                               {codec,102},
+                                               {codec_name,'AMR'},
+                                               {payload_mode,normal},
+                                               {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:34:2: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                           {caller,<<"18017813673">>},
+                                           {opdata,
+                                            {obj,
+                                             [{status,ok},
+                                              {session_id,
+                                               <<"gw_git@202.122.107.66@@20">>},
+                                              {ip,<<"202.122.107.66">>},
+                                              {port,55042},
+                                              {codec,102},
+                                              {codec_name,'AMR'},
+                                              {payload_mode,normal},
+                                              {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:34:17: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                            {caller,<<"18017813673">>},
+                                            {opdata,
+                                             {obj,
+                                              [{status,ok},
+                                               {session_id,
+                                                <<"gw_git@202.122.107.66@@21">>},
+                                               {ip,<<"202.122.107.66">>},
+                                               {port,55044},
+                                               {codec,102},
+                                               {codec_name,'AMR'},
+                                               {payload_mode,normal},
+                                               {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:34:43: login_processor logout:did:"a42a08a6-6544-4b2f-b5fd-2b13457b62bb" acc:"livecom_0131000051" 
+
+2014-12-27 18:35:2: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                           {caller,<<"2180246001">>},
+                                           {opdata,
+                                            {obj,
+                                             [{status,ok},
+                                              {session_id,
+                                               <<"gw_copy1@119.29.9.55@@40">>},
+                                              {ip,<<"119.29.9.55">>},
+                                              {port,55082},
+                                              {codec,102},
+                                              {codec_name,'ILBC'},
+                                              {payload_mode,normal},
+                                              {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:35:16: xhr_poll:on_down_msg3:[{event,<<"p2p_inform_called">>},
+                                            {caller,<<"2180246001">>},
+                                            {opdata,
+                                             {obj,
+                                              [{status,ok},
+                                               {session_id,
+                                                <<"gw_copy1@119.29.9.55@@41">>},
+                                               {ip,<<"119.29.9.55">>},
+                                               {port,55084},
+                                               {codec,102},
+                                               {codec_name,'ILBC'},
+                                               {payload_mode,normal},
+                                               {rssrc,<<"123">>}]}}]
+
+2014-12-27 18:36:4: xhr_poll:on_shake_time out, attrs:[]
+

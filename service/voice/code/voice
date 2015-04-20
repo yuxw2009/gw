@@ -1,0 +1,1 @@
+erl -name fzdvoice@ubuntu.livecom -setcookie hkabc -pa ./ebin -pa ./yxa/ebin -s xengine

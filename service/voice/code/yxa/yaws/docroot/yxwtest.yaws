@@ -1,0 +1,68 @@
+<html>
+<head>
+<script type="text/javascript">
+function loadXMLDoc(P)
+{
+var xmlhttp;
+if (window.XMLHttpRequest)
+  {// code for IE7+, Firefox, Chrome, Opera, Safari
+  xmlhttp=new XMLHttpRequest();
+  }
+else
+  {// code for IE6, IE5
+  xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+  }
+xmlhttp.onreadystatechange=function()
+  {
+  if (xmlhttp.readyState==4 && xmlhttp.status==200)
+    {
+    alert(xmlhttp.responseText);
+    document.getElementById("myDiv").innerHTML=xmlhttp.responseText;
+    }
+  }
+xmlhttp.open("POST",'add_member.yaws',true);
+var phone =document.getElementById(P).value;
+xmlhttp.send("phone="+phone);
+}
+function add()
+{
+    document.getElementById("myDiv").innerHTML = document.getElementById("myDiv").innerHTML+ "<br />";
+    document.getElementById("myDiv").innerHTML =document.getElementById("myDiv").innerHTML+ "<input id=\"phone\"  name=\"phone\" type=\"text\" > " ;
+    document.getElementById("myDiv").innerHTML =document.getElementById("myDiv").innerHTML+ "<button type=\"button\" onclick=\"add()\">add</button>";
+}
+</script>
+</head>
+
+<body>
+<form action="/yxwtest.yaws" method="post" >
+ conference system
+<br />
+<erl>
+out(A)->
+%    {html, "hello"}.
+    parse(A).
+uuid(A)->
+    {ClientIp,_} = A#arg.client_ip_port,
+    list_to_atom(lists:flatten(io_lib:format("~p", [ClientIp]))).
+parse(A) ->
+    Req = A#arg.req,
+    L = case Req#http_request.method of
+              'POST'-> yaws_api:parse_post(A);
+              _-> []
+          end,
+    Phones = meeting_yaws:accept(uuid(A), L),
+    Ids = lists:seq(1, length(Phones)),
+    PhoneFunc =fun({P,I})->  "<input id=\"phone"++integer_to_list(I)++"\" name=\"phone\" type=\"text\" value = \"" ++ P ++ "\"> " end,
+    ButtonFunc = fun({P,I})-> "<button type=\"button\" onclick=\"loadXMLDoc('phone"++ integer_to_list(I) ++"')\">add</button>" end,
+    {html, [PhoneFunc(P)++ButtonFunc(P)++"<br />" || P<- lists:zip(Phones,Ids)]}.
+</erl>
+
+<input type="submit" value="conference call">
+</form>
+
+<button type="button" onclick="add()">add</button>
+<br />
+<span id="myDiv"> </span>
+
+</body>
+</html>

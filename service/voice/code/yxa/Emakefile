@@ -1,0 +1,12 @@
+{"src/config/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/cpl/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/database/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/eldap/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/event/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/event_handler/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/local/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/mysql/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/sipuserdb/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/transactionlayer/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/transportlayer/*",      [{outdir, "ebin/"},{i,"src/include"}]}.
+{"src/*",      [{outdir, "ebin/"},{i,"src/include"},{i,"src/eldap"}]}.

@@ -1,0 +1,6 @@
+Time:{{2012,3,8},{15,11,38}},Event:inquiry,Content:timeout.
+Time:{{2012,3,8},{15,11,38}},Event:"receive unexpected msg",Content:{'DOWN',
+                                                                     #Ref<0.0.0.173>,
+                                                                     process,
+                                                                     <0.136.0>,
+                                                                     normal}.

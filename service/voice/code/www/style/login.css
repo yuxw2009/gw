@@ -1,0 +1,28 @@
+﻿@charset "utf-8";
+/* CSS Document */
+body,ul,li,h3{ margin:0; padding:0;}
+body{ background:url(../images/body.gif) repeat left top;}
+li{ list-style:none; }
+a{ text-decoration:none;outline:none;}
+.clear{ clear:both;}
+body { font-family:"微软雅黑"; color:#6ea3c5; font-size:14px;}
+#contianer ul:after{content:".";height:0;visibility:hidden; display:block;clear:both; }
+#contianer .top{ background:url(../images/container_bg.png) repeat-x left top; height:40px;}
+#contianer .logo{ background:url(../images/loginbtn.png) no-repeat center top; height:100px; width:100%;  position:fixed }
+#contianer .bottom{ background:url(../images/container_bg.png) repeat-x left -52px #3b5998; height:250px; position:absolute; width:100%; bottom:0;}
+#contianer ul{ padding-top:50px; padding-left:20px; width:920px; margin:0 auto; position:relative; height:80px;}
+#contianer li{ height:30px;float:left; width:300px; position:relative;}
+#contianer li.userNameTips,#contianer li.passwordTips{ height:30px; line-height:20px; color:#ffd201; padding-left:60px; visibility:hidden;}
+#contianer input{ width:230px; height:45px; line-height:45px; font-size:18px;font-family:"微软雅黑"; border:none; background:url(../images/loginbtn.png) no-repeat left -163px; padding-left:10px;outline:none; vertical-align:top;}
+#contianer a.btn{ background:url(../images/loginbtn.png) no-repeat left -110px;height:45px;width:165px;display:block; text-align:center; cursor:pointer; border:none;}
+#contianer .submit_con{ width:200px; margin:0 auto;}
+#contianer label{ vertical-align:top;}
+#contianer .person{ background:url(../images/loginbtn.png) no-repeat -45px -216px; width:45px; height:45px; display:inline-block;}
+#contianer .comp_icon{ background:url(../images/loginbtn.png) no-repeat -95px -214px; width:45px; height:45px; display:inline-block;}
+#contianer .pas_tip{ background:url(../images/loginbtn.png) no-repeat left -214px; width:45px; height:45px; display:inline-block;}
+#contianer .link{   font-weight:normal; font-family:Verdana, Geneva, sans-serif; clear:both; padding-left:50px; padding-top:3px;}
+#contianer .link a{ color:#6ea3c5; }
+#contianer .at_icon{color:#FFF; font-size: 20px; font-weight: bold; }
+#tips{ position:absolute; top:105px; left:400px; color:red; display:none; font-size:16px;}
+.copyright{ color:#fff; font:12px/1.125 Arial,Helvetica,sans-serif;  width:400px; margin:0 auto; text-align:left; padding-top:30px;}
+.pssword_tip{ position:absolute; left:59px; top:13px; font-size:18px; color:#999;}

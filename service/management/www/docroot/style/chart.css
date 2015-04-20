@@ -1,0 +1,199 @@
+.layout
+{
+    width: 840px;
+    position: relative;
+    font-family: 'Segoe UI', Helvetica, 'Droid Sans', Tahoma, Geneva, sans-serif;
+    font-weight: 400;
+    margin: 0 auto;
+}
+.dark .layout{background-color: #363e5b;}
+.light .layout{background-color: white;}
+.header-text{margin-left: 5px;font-size: 23px;
+    font-family: 'Segoe UI Light', 'Helvetica Neue Light', 'Segoe UI', 'Helvetica Neue', Helvetica, 'Trebuchet MS', 'Droid Sans', Tahoma, Geneva, sans-serif;
+    font-weight: 200;}
+
+.dark .header-text{color: white;}
+.light .header-text
+{
+    color: #43474b;
+}
+.img-theme
+{
+   /* background-image: url(sprite.png); */
+    position: absolute;
+    right: 100px;
+    top: 60px;
+    z-index: 101;
+    cursor: pointer;
+    width: 60px;
+    height: 50px;
+    background-position: -90px 0;
+}
+.light .img-theme{
+    background-position: 0 0;
+}
+.content{    
+    padding: 2px 10px;
+}
+.slide-button{
+    position: absolute;
+    top: 430px;
+    width: 40px;
+    height: 80px;
+    cursor: pointer;
+}
+.slide-button.right-button{
+    right: 0;
+    background-position: -90px -55px;
+}
+.light .slide-button.right-button{
+    background-position: 0px -55px;
+}
+.slide-button.left-button
+{
+    left: 0;
+    background-position: -135px -55px;
+}
+.light .slide-button.left-button{ background-position: -45px -55px;}
+.row{ height: 170px;margin-top: 5px; position: relative; clear: both;}
+#callBox .row{ height: auto;}
+.traffic .row{ height: 340px; }
+.legend-row{position: relative;height: 17px;}
+.row::after .legend-row::after{
+    content: ' ';
+    display: block;
+    height: 0;
+    clear: both;
+    visibility: hidden;
+}
+
+.legend
+{
+    font-family:微软雅黑;
+    font-weight: 400;
+    font-size: 15px;
+    margin-right: 3px;
+    z-index: 10;
+    float: left;
+    color: white;
+}
+
+.light .legend
+{
+    color: #43474b;
+}
+
+.hr
+{
+    width: 720px;
+    height: 10px;
+    border-bottom: 1px solid #6b7289;
+    float: left;
+}
+
+.light .hr
+{
+    border-bottom: 1px solid #c0c0c0;
+}
+
+.clear
+{
+    clear: both;
+}
+
+.helth .row .col1{
+    width: 150px;
+    height: 170px;
+    float: left;
+}
+
+
+.traffic .row .col1{
+    float: left;
+    width: 420px;
+    height: 320px;
+    overflow: hidden;
+}
+
+.helth .row .col2{
+    width: 210px;
+    height: 175px;
+    float: left;
+    margin: -10px 0 0 0;
+}
+
+.traffic .row .col2{
+    width: 600px;
+    height: 320px;
+    float: right;
+    overflow: hidden;
+}
+
+.helth .row .col3{
+    height: 153px;
+    float: left;
+    width: 650px;
+    overflow: hidden;
+}
+
+.col1 .text{
+    -ms-word-wrap: normal;
+    word-wrap: normal;
+    font-size: 11px;
+    color: #8e93a7;
+    width: 200px;
+    margin-top: 20px;
+}
+
+.col1 .label-value{
+    font-family: 'SegoeUI-Semibold', 'Segoe UI Semibold', 'HelveticaNeue-Medium', 'Helvetica Neue Medium','SegoeUI', 'Segoe UI', 'HelveticaNeue', 'Helvetica Neue', Verdana;
+    font-size: 60px;
+    line-height: 60px;
+    font-weight: 600;
+}
+
+label#requestNumber, label#requestNumberTotal{
+    color: #7cd2c7;
+}
+
+#currequestNumberTotal{ 
+    color: #da542e;
+}
+
+
+.light label#requestsNumber{
+    color: #76c8bd;
+}
+
+label#CPU{
+    color: #75c0e0;
+}
+
+label#memoryConsumption
+{
+    color: #7e8ab6;
+}
+
+.light label#memoryConsumption
+{
+    color: #96a3d4;
+}
+
+.traffic .chart-container
+{
+    width: inherit;
+    height: 300px;
+}
+
+.traffic .chartContainer
+{
+    width: inherit;
+    height: 300px;
+}
+#RequestChartTotalContainer{width: 1300px;
+float: left;
+height: 460px;
+z-index: 1000}
+
+#callBox .col1{ float: left; width: 180px;}
+#callBox .col1 .text{ font-size: 13px;}

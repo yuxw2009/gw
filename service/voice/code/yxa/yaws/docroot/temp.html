@@ -1,0 +1,126 @@
+<HTML><HEAD><TITLE>无标题文档</TITLE><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=gb2312"><META HTTP-EQUIV="imagetoolbar" CONTENT="no">
+<STYLE TYPE="text/css"><!--
+a, a:link{text-decoration: none; color:#000000; font-size:9pt;}    a:visited{text-decoration: none; color:#000000;}    a:hover{text-decoration: underline; color:red;}
+BODY, TD, SELECT{FONT-SIZE:9pt; FONT-FAMILY:"宋体";}
+--></STYLE>
+<script language="javascript" type="text/JavaScript">
+var i=1;
+var mole=false;
+var EditObj=null;
+var oClickTR;
+    function add_on_click(strObjName, strUserName){
+        (!mole)?InsertTR(strObjName, strUserName):EditSave(strObjName, strUserName);
+    }
+    function InsertTR(strObjName, strUserName){
+        if(!strObjName || !strUserName)return;
+        var obj=document.getElementById('SWlist');
+        var TR= obj.insertRow(obj.rows.length);
+        var TD1 = TR.insertCell(0), TD2 = TR.insertCell(1), TD3 = TR.insertCell(2), TD4 = TR.insertCell(3), TD5 = TR.insertCell(4), TD6 = TR.insertCell(5);
+        TR.align='center';
+        TR.id="ListTR";
+        TR.bgColor="#eeeeee";
+        TD1.innerHTML=i.toString();
+        //TD2.innerHTML=strObjName;
+        TD2.innerHTML="<input type=\"text\" value='"+strObjName+"' maxLength='30'/>";
+        TD3.innerHTML=strUserName;
+        TD4.innerHTML='<a href=\"#\" onclick=\"EditTR(this);\">修</a>';
+        TD5.innerHTML="<a href=\"#\" onclick=\"DelTR(this);\">删</a>";
+        TD6.innerHTML='<a href=\"#\" onclick=\"MoveTR();\">上移</a>&nbsp;&nbsp;<a href=\"#\" onclick=\"MoveTR();\">下移</a>';
+        form1.t1.value='';
+        form1.t2.value='';
+        form1.t1.focus();
+        i++;
+    };
+
+    function EditTR(o){
+        alert(1);
+        alert(event);
+        form1.t1.value=event.srcElement.parentElement.parentElement.children[1].innerText;
+        alert(2);
+        form1.t2.value=event.srcElement.parentElement.parentElement.children[2].innerText;
+        alert(3);
+        EditObj=o;
+        mole=true;
+    };
+
+    function EditSave(strObjName, strUserName){
+        alert("EditSave");
+        if(!strObjName || !strUserName)return;
+        var obj=EditObj.parentElement.parentElement;
+        var TD2=obj.children[1];
+        var TD3=obj.children[2];
+        TD2.innerText=strObjName;
+        TD3.innerText=strUserName;
+        form1.t1.value='';
+        form1.t2.value='';
+        form1.t1.focus();
+        mole=false;
+        EditObj=null;
+    };
+
+    function DelTR(targ){
+        var row=targ.parentNode.parentNode;
+        var rowIndex = row.rowIndex;
+        row.parentNode.removeChild(row);
+        alert("deleted rowIndex:"+rowIndex.toString());
+        for(var i=2; i<SWlist.rows.length; i++)
+            SWlist.rows[i].cells[0].innerHTML=(i-1).toString();
+    };
+
+    function MoveTR(){
+  var CZobj=document.getElementById('SWlist');
+
+  var TrIndex=event.srcElement.parentElement.parentElement.rowIndex - 2;
+
+  if(event.srcElement.innerText=='上移' && TrIndex > 0){
+   CZobj.moveRow(TrIndex, TrIndex-1);
+   for(var i=0; i<ListTR.length; i++)
+    ListTR[i].children[0].innerText=i+1;
+  }
+  else if(event.srcElement.innerText=="下移" && TrIndex < ListTR.length-1){
+   CZobj.moveRow(TrIndex, TrIndex+1);
+   for(var i=0; i<ListTR.length; i++)
+    ListTR[i].children[0].innerText=i+1;
+  }else{
+   return;
+  }
+    };
+
+function ClickTR(){
+  if(oClickTR != null && oClickTR.tagName == "TR")oClickTR.bgColor="#eeeeee";
+  oClickTR = event.srcElement.parentElement;
+  if(oClickTR.tagName == "TR")oClickTR.bgColor=(oClickTR.bgColor=="#eeeeee")?"#ffffff":"#eeeeee";
+};
+
+    function Save(){
+        var hdINPUT='';
+        for(var i=0; i<ListTR.length; i++){
+            var strObjName=ListTR[i].children[1].innerText;
+            var strUserName=ListTR[i].children[2].innerText;
+            hdINPUT+="<input type=\"hidden\" name=\"strObjName[]\" value=\""+strObjName+"\"><input type=\"hidden\" name=\"strUserName[]\" value=\""+strUserName+"\">";
+        }
+        form1.insertAdjacentHTML("afterBegin", hdINPUT);
+        form1.b2.submit();
+        form1.b2.disabled=true;
+    };
+    function onclick() {
+        var mydiv=document.getElementById('div')
+        mydiv.innerHTML = 5+"5"
+    }
+</script>
+</HEAD>
+
+<BODY bgcolor="#FFFFFF" text="#000000" leftmargin="0" topmargin="0">
+<table width="600" border="0" align="center" cellpadding="0" cellspacing="0" bordercolor="#CCC" style="border-collapse:collapse;" id="SWlist" >
+    <caption> <font size="5"> meeting members </font> </caption>
+    <tr><th> seq </th><th> name </th><th> number </th><th> op </th></tr>
+    
+</table>
+<div align="center">
+<button onclick="onclick" align="center"> myclick </button> 
+</div>
+<br />
+<div id="div" align="center"> 666  </div>
+</BODY>
+</HTML>
+          

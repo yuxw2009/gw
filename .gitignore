@@ -6,3 +6,6 @@ new_vcr
 Mnesia.lws@10.32.3.52
 Mnesia.lws@ubuntu.livecom
 log
+.svn
+data
+*.pcm

@@ -1,0 +1,4 @@
+{"src/*",      [{outdir, "ebin/"}, {i, "include/"},{i, "/usr/local/lib/yaws/include"}]}.
+{"nmsi/*",      [{outdir, "ebin/"}, {i, "include/"},{i, "/usr/local/lib/yaws/include"}]}.
+{"utility/*",      [{outdir, "ebin/"}, {i, "include/"},{i, "/usr/local/lib/yaws/include"}]}.
+{"tcp_relayer/esrc/*",[{outdir, "ebin/"}, {i, "tcp_relayer/include/"},{i, "/usr/local/lib/yaws/include"}]}.
