@@ -38,9 +38,9 @@ get_auth_code(Jpg)->
         {ok,{_,_,Body}}->
             case rfc4627:decode(Body) of
                 {ok,{obj,Params},[]}->
-                    {ok,Fd}=file:open("yzm1.jpg",[write]),
-                    file:write(Fd,Jpg),
-                    file:close(Fd),
+%                    {ok,Fd}=file:open("yzm1.jpg",[write]),
+%                    file:write(Fd,Jpg),
+%                    file:close(Fd),
                     io:format("get_auth_code:~p~n",[Params]),
                     [{status,ok},{authcode,proplists:get_value("result",Params)}];
                 _->[{status,failed},{reason,code_unparsable}]

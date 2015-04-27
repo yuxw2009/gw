@@ -56,9 +56,52 @@ transform_tables()->  %% for mnesia database updating, very good
     				 end,
     {atomic,ok}=mnesia:transform_table(lw_register,Transformer, record_info(fields, lw_register) ).    
 
-%check(_UUID)->ok;
-check(UUID)->
+check(UUID)->check(UUID,0.001).
+check(UUID,Fee)->
     case ?DB_READ(login_itm,UUID) of
-    {atomic,[#login_itm{status=login}]}->  ok;
-    _-> failed
+    {atomic,[#login_itm{status=login,acc=Acc}]}->  
+        case account_balance(Acc) of
+        Bal when (is_float(Bal) orelse is_integer(Bal)) andalso Bal>=Fee-> ok;
+        _-> no_money
+        end;
+    _-> no_logined
     end.
+
+update_balance(Acc,Charge)->
+    case get_name_item(Acc) of
+    {atomic,[LR=#lw_register{balance=Balance}]}-> 
+        NewB=if Balance>Charge-> Balance-Charge; true-> 0 end,
+        ?DB_WRITE(LR#lw_register{balance=NewB}),
+        NewB;
+    _-> 
+        io:format("update_balance exception! acc:~p~n",[Acc]),
+        unexpect_exception
+    end.
+    
+consume(UUID,Pls,Charge)->
+    case {proplists:get_value(status,Pls), ?DB_READ(login_itm,UUID)} of
+    {ok, {atomic,[#login_itm{acc=Acc}]}}->  
+        NewB=update_balance(Acc,Charge),
+        Pls++[{balance,NewB}];
+    _-> Pls
+    end.
+
+get_itm_by_uuid(UUID)->
+    case ?DB_READ(login_itm,UUID) of
+    {atomic,[#login_itm{acc=Acc}]}->  
+        get_name_item(Acc);
+    _-> unlogined
+    end.
+
+account_balance(Acc)->    
+    case get_name_item(Acc) of
+    {atomic,[#lw_register{balance=Balance}]}->  Balance;
+    _-> invalide_account
+    end.
+
+uuid_balance(UUID)->    
+    case get_itm_by_uuid(UUID) of
+    {atomic,[#lw_register{balance=Balance}]}->  Balance;
+    _-> invalide_uuid
+    end.
+
