@@ -146,7 +146,7 @@ get_raw_qno(Fid)->
           [Qno|_]=string:tokens(Line," "),
           filter_num(Qno)
         end,
-        [F(Line)||Line<-Lines];
+        [Item||Item<-[F(Line)||Line<-Lines], length(Item)>0];
     _-> []
     end.
 
