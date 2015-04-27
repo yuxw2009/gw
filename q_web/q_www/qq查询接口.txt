@@ -1,6 +1,6 @@
 0 注册   ok
 post aqqq/qv/register
-params: {auth_code:a, name:a, pwd:p}
+params: {auth_code:a, acc:a, pwd:p}
 ack: {status:ok,balance:b}   {status:failed, reason:r}
 
 1 账户登录   ok
@@ -11,8 +11,8 @@ ack: [{status,ok},{uuid,UUID},{balance,b},{cookie,c},{deadline,"2015-1-1"}]
 
 2 充值
 req:post /aqqq/qv/recharge
-    params: [{uuid,UUID},{auth_code,Code}]   
-ack: [{status,ok},{uuid,UUID},{balance,b},{cookie,c},{deadline,"2015-1-1"}]  
+    params: [{acc,Acc},{auth_code,Code}]   
+ack: [{status,ok},{acc,Acc},{balance,b},{cookie,c},{deadline,"2015-1-1"}]  
      [{status,failed},{reason,please_relogin}]
 
 3 上传号码:   ok
