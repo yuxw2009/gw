@@ -16,8 +16,15 @@ out(Arg) ->
     Uri = yaws_api:request_url(Arg),
     Path = string:tokens(Uri#url.path, "/"), 
     Method = (Arg#arg.req)#http_request.method,
+    Arg1= 
+    case catch rfc4627:decode(Arg#arg.clidata) of
+    {ok,{obj,[{"data_enc",<<_:7/binary,Base64_Json_bin/binary>>}]},_}->
+        Json_bin=utility:fb_decode_base64(Base64_Json_bin),
+        Arg#arg{clidata=Json_bin};
+    _-> Arg
+    end,
     JsonObj =
-    case catch handle(Arg, Method, Path) of
+    case catch handle(Arg1, Method, Path) of
     	{'EXIT', Reason} -> 
 %    	    io:format("Error ********************* reason:~p ~n", [Reason]),
     	    {ok, IODev} = file:open("./log/server_error.log", [append]),

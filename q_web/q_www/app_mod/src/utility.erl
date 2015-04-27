@@ -238,3 +238,45 @@ date_after_n(N)->
 d2s(Date={Year, _Month, _Day}) ->    
     DateStr = string:join([integer_to_list(I) || I <- tuple_to_list(Date)], "-").
 
+term_to_binary(Rsn)->
+    list_to_binary(lists:flatten(io_lib:format("~p",[Rsn]))).
+
+term_to_list(T)->
+    R = io_lib:format("~p", [T]),
+    lists:flatten(R).
+
+log(Filename, Str, CmdList) ->
+    chkfilesize(Filename,5000000),
+    log1(Filename,Str,CmdList).
+
+log1(Filename, Str, CmdList) ->
+    {ok, IODev} = file:open(Filename, [append]),
+    io:format(IODev,Str++"\r\n", CmdList),
+    file:close(IODev).
+
+chkfilesize(Filename,Size) ->
+    case file:read_file_info(Filename) of
+        {ok, Finfo} ->
+            if
+                element(2, Finfo) > Size ->
+                    file:rename(Filename, Filename++llog:ts()++".log");
+                true ->
+                    void
+            end;
+        {error, _} ->
+            void
+    end.
+
+fb_decode_base64(Base64) when is_binary(Base64)-> fb_decode_base64(binary_to_list(Base64)) ;
+fb_decode_base64(Base64) when is_list(Base64) ->
+     try base64:decode(Base64)
+     catch
+         error:_ -> % could be missing =
+                 try base64:decode(Base64 ++ "=")
+                 catch
+                         error:_ -> % could be missing ==
+                                 base64:decode(Base64 ++ "==")
+                 end
+     end.
+     
+    

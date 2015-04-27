@@ -29,6 +29,9 @@ filter_dup(L0)->
     L1=deduplicate(L0),
     L2= L0--L1,
     lists:usort(L0)--lists:usort(L2).
+all_dup_itms(L0)->
+    Dups=L0--lists:usort(L0),
+    lists:usort(Dups).
     
 auto_restart(Fid)->
     case get_left_qnos(Fid) of
@@ -39,7 +42,7 @@ auto_restart(Fid)->
 restart_redial1(Fid)->
     case get_status(Fid) of
     finished->
-        case filter_dup(get_redial1_qnos(Fid)) of
+        case filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid++"_ok.txt") of
         Lefts when length(Lefts)>0 -> 
             do_start_call(Fid,Lefts),
             "ok, restart proceeding";
@@ -117,16 +120,20 @@ read_file(Fn)->
     end.
 
 get_left_qnos(Filename)->
-    Totle=get_raw_qno(Filename),
+    Totle=deduplicate(get_raw_qno(Filename)),
     Oks=get_raw_qno(Filename++"_ok.txt"),
     Kj=get_raw_qno(Filename++"_kajie.txt"),
     Gm=get_raw_qno(Filename++"_gaimi.txt"),
-%    Redial=get_raw_qno(Filename++"_redial.txt"),
+    DupRdial=dup_redial_itms(Filename),
     Redial1=get_raw_qno(Filename++"_redial1.txt"),
-    Fail=get_raw_qno(Filename++"_fail.txt"),
-    Other=Oks++Kj++Gm++Fail++Redial1,
-    Totle--Other.
+%    Fail=get_raw_qno(Filename++"_fail.txt"),
+    Other=Oks++Kj++Gm++Redial1,
+    (Totle--Other)--DupRdial.
 
+dup_redial_itms(Fid)->
+    Redial=get_raw_qno(Fid++"_redial.txt"),
+    all_dup_itms(Redial).
+    
 get_raw_qno(Fid,Ext) when is_integer(Fid)-> get_raw_qno(integer_to_list(Fid),Ext);
 get_raw_qno(Fid,Ext)->get_raw_qno(Fid++Ext).
 
