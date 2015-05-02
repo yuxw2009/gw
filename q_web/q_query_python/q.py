@@ -1,45 +1,46 @@
 # -*- coding: utf-8 -*-
 import cookielib, urllib2,urllib,socket
-import json,base64,time
+import json,base64,time,string,random
+import query_v004 as query
 
-'''
-url="http://captcha.qq.com/getimage?aid=2001601&0.5957661410793789"
-req = urllib2.Request(url) 
-req = urllib2.Request(url, postdata, header) 
-req.add_header('User-Agent', 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)')
-
-ckjar = cookielib.MozillaCookieJar(filename) 
-ckproc = urllib2.HTTPCookieProcessor(ckjar)
-
-opener = urllib2.build_opener(ckproc)
-
-f = opener.open(req) 
-htm = f.read() 
-f.close()
-
-ckjar.save(ignore_discard=True, ignore_expires=True)
-
-
-import cookielib, urllib2
-
-cookiejar = cookielib.CookieJar()
-urlOpener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
-values = {'redirect':", 'email':'abc@abc.com', 'password':'password', 'rememberme':", 'submit':'OK, Let Me In!'}
-data = urllib.urlencode(values)
-
-request = urllib2.Request(url, data)
-url = urlOpener.open(request)
-print url.info()
-page = url.read()
-
-request = urllib2.Request(url)
-url = urlOpener.open(request)
-page = url.read()
-print page
-'''
-
-cookiejar = cookielib.CookieJar()
-
+def get_all_info_2(uuid,qnos,type="no_jfcode"):
+	def query_status(qno,auth,cj):
+		Status=get_status(qno,auth,cj)
+		if type!="no_jfcode" and Status["state"]=="lock":
+			Status["jfcode"]=get_jfcode(qno,auth,cj)
+		return Status
+	cookiejar=cookielib.CookieJar()
+	Jpgbin=getimg(cookiejar)
+	cookie=get_cookie_from_cj(cookiejar)
+	if not cookie: return ({"status":"failed",reason:"imgcookie_empty"},{"status":"failed",reason:"imgcookie_empty"})
+	response=recognize_code_2(uuid,Jpgbin)
+	if dict.get(response,"status") == "ok":
+		AuthCode,imgId=response["authcode"],response["imgId"]
+		balance=dict.get(response,"balance")
+		if balance: query.set_balance(balance)
+		Status1= query_status(qnos[0],AuthCode,cookiejar)
+		if dict.get(Status1,"status")=="ok":
+			cookiejar.clear()
+			cookiejar.set_cookie(cookie)
+			time.sleep(1)
+			Status2=query_status(qnos[1],AuthCode,cookiejar)
+			if dict.get(Status2,"status")!="ok":
+				r=restore_fee(uuid,1)
+				print 'second query error restore 1 result:',r
+			return (Status1,Status2)
+		else:
+			r=restore_fee(uuid,2)
+			print 'query error restore 2 result:',r
+			r=report_authcode_err(uuid,imgId)
+			print 'report_authcode_err result:',r
+			return (Status1,Status1)
+	else:
+		return (response,response)
+def get_cookie_from_cj(cookiejar):
+	try:
+		return cookiejar._cookies['.qq.com']['/']['verifysession']
+	except:
+		return None
 def get_all_info(uuid,qno,type="no_jfcode"):
 	cookiejar=cookielib.CookieJar()
 	Jpgbin=getimg(cookiejar)
@@ -80,11 +81,27 @@ def getimg0():
 
 def getimg(cookiejar):
 	jpgurl="http://captcha.qq.com/getimage?aid=2001601&0.5957661410793789"
-	return my_get_form(jpgurl,cookiejar)
+	r= my_get_form(jpgurl,cookiejar)
+	return r
+
+def restore_fee(uuid,Qua):
+    Url="http://119.29.62.190:8180/aqqq/qv/restore_fee"
+    response=my_send_http(Url,{"uuid":uuid,"qua":Qua})
+    return response
+
+def report_authcode_err(uuid,imgId):
+    Url="http://119.29.62.190:8180/aqqq/qv/report_autherr"
+    response=my_send_http(Url,{"uuid":uuid,"imgId":imgId})
+    return response
 
 def recognize_code(uuid,JpgBin):
     Url="http://119.29.62.190:8180/aqqq/qv/get_code"
     response=send_form_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(JpgBin)})
+    return response
+
+def recognize_code_2(uuid,JpgBin):
+    Url="http://119.29.62.190:8180/aqqq/qv/get_code"
+    response=send_form_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(JpgBin),"qua":2})
     return response
 
 def get_verify_code0(Acc,Code):
@@ -104,6 +121,7 @@ def get_verify_code(Acc,Code,cookiejar):
 	return json.loads(rsp.read(),encoding='UTF-8')
 '''
 def get_verify_code(Acc,Code,cookiejar):
+        print "get_verify_code",Acc,Code
 	verifyurl="http://aq.qq.com/cn2/ajax/check_verifycode?verify_code="+Code+"&account="+Acc+"&session_type=on_rand"
 	return my_get_json(verifyurl,cookiejar)
 
@@ -179,13 +197,17 @@ def get_lock_detail(Body):
 		return ("","","",AddInfo)
 
 def get_jfcode(Acc,Code,cookiejar):
-    response=json.loads(getsms(Acc,Code,cookiejar))
-    jfcode=dict.get(response,"sms")
-    print jfcode
-    if len(jfcode)==6:
-    	return jfcode
-    else:
-        return ""
+	try:
+	    response=json.loads(getsms(Acc,Code,cookiejar))
+	    jfcode=dict.get(response,"sms")
+	    print jfcode
+	    if len(jfcode)==6:
+	    	return jfcode
+	    else:
+	        return ""
+	except:
+		print "except in getjfcode"
+		return ""
 
 # sms is post form format
 def getsms(Acc,Code,cookiejar):
@@ -201,11 +223,12 @@ def getsms(Acc,Code,cookiejar):
 #################################
 def my_send_http(url,values):
     payload = json.dumps(values)
-    jdata=json.dumps({"data_enc":base64.b64encode(payload)})
+    ranheader=string.join(random.sample(string.letters+string.digits, 7),"")
+    jdata=json.dumps({"data_enc":ranheader+base64.b64encode(payload)})
     req = urllib2.Request(url, jdata)
     req.add_header('Content-Type', "application/json")
     try:
-        response = urllib2.urlopen(req,timeout=15)
+        response = urllib2.urlopen(req,timeout=60)#4-28YJ修改超时为60
         response_dict = json.loads(response.read(),encoding='UTF-8')
         return response_dict
     except IndexError:
@@ -220,10 +243,11 @@ def my_send_http(url,values):
 
 def my_get_json(url,cookiejar,values={}):
 	payload=my_get_form(url,cookiejar,values)
-	if payload != '':
+	try:
 		return json.loads(payload,encoding='UTF-8')
-	else:
-		return {'status':'failed','reason':'network_exception'}
+	except:
+		print 'my_get_json ack ERROR'
+		return {'status':'failed','reason':'error_ack_no_json'}
 
 def my_get_form(url,cookiejar,values={}):
 	payload = urllib.urlencode(values)
@@ -233,7 +257,7 @@ def my_get_form(url,cookiejar,values={}):
 	req.add_header('User-Agent', 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)')
 	urlOpener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
 	try:
-		rr= urlOpener.open(req,timeout=30).read()
+		rr= urlOpener.open(req,timeout=60).read()#4-28YJ修改超时为60
 		return rr
 	except IndexError:
 		print u'服务器访问失败'
@@ -241,8 +265,8 @@ def my_get_form(url,cookiejar,values={}):
 	except socket.timeout:
 		print 'socket.timeout'
 		return ''
-	except:
-		print 'unknown except my_get_form'
+	except Exception as e:
+		print 'my_get_form excepttion is:',e
 		return ''
 
 
@@ -253,7 +277,7 @@ def send_form_http(url,values):
 	req = urllib2.Request(url, payload)
 	req.add_header('Content-Type', "application/x-www-form-urlencoded")
 	try:
-		response = urllib2.urlopen(req,timeout=30)
+		response = urllib2.urlopen(req,timeout=60)#4-28YJ修改超时为60
 		response_dict = json.loads(response.read(),encoding='UTF-8')
 		return response_dict
 	except IndexError:
@@ -288,5 +312,4 @@ def test1(Acc,Code):
 	urlOpener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
 	rsp=urlOpener.open(req)
 	return rsp.read()
-
 

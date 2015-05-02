@@ -2,7 +2,6 @@
 import wx
 import os
 import threading
-import Parserlinks25173tianchifujiangB1 as jk
 import time
 import urllib2
 import wx.grid
@@ -27,54 +26,21 @@ VERIFY_CODE = ''  #保存验证码，传入线程
 CLIDATA = ''     #保存clidata 传入线程
 LOAD_RESPONSE_DICT= {'uuid':'','balance':'','deadline':'','acc':''}  #保存登录界面登录之后的信息字典，包括uuid,余额，使用期限
 TODAY = str(time.localtime()[0])+'-'+str(time.localtime()[1])+'-'+str(time.localtime()[2])
+GRIDROWS = 20
+QUERY_FAIL_NUM = 0
+PAUSE_TIME = 0
 
-
-
-header_getimage = {
-        "Accept":"*/*",
-        "Referer": "http://aq.qq.com/cn2/login_limit/login_limit_index",
-        "Accept-Language": "zh-cn",
-        "User-Agent": "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)",
-        "Accept-Encoding": "gzip, deflate",
-        "Host": "captcha.qq.com",
-        "Connection": "Keep-Alive"
-
-        }
-header_getcheckverify = {
-        "X-Requested-With":"XMLHttpRequest",
-        "Accept":"image/gif, image/jpeg, image/pjpeg, */*",
-        "Referer": "http://aq.qq.com/cn2/login_limit/login_limit_index",
-        "Accept-Language": "zh-cn",
-        "User-Agent": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727)",
-        "Accept-Encoding": "gzip, deflate",
-        "Host": "aq.qq.com",
-        "Connection": "Keep-Alive",
-        "Content-Type":"application/x-www-form-urlencoded"
-        }
-
-header_getcheckstate = {
-        "X-Requested-With":"XMLHttpRequest",
-        "Accept":"image/gif, image/jpeg, image/pjpeg, */*",
-        "Referer": "http://aq.qq.com/cn2/login_limit/login_limit_index",
-        "Accept-Language": "zh-cn",
-        "User-Agent": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727)",
-        "Accept-Encoding": "gzip, deflate",
-        "Host": "aq.qq.com",
-        "Connection": "Keep-Alive",
-        "Content-Type":"application/x-www-form-urlencoded"
-        }
-
-
-
+def set_balance(bal):
+    LOAD_RESPONSE_DICT['balance']=bal
 class WorkerThread(threading.Thread):
-    def __init__(self,uuid,dict_qno,rows,window,arg=0):
+    def __init__(self,uuid,dict_qno,window,arg=0):
         threading.Thread.__init__(self)
         self.window = window
         self.timeToQuit = threading.Event()
         self.timeToQuit.clear()
         self.uuid = uuid
         self.dict_qno = dict_qno
-        self.rows = rows
+        self.rows = len(dict_qno)
         self.arg = arg
         #self.trend = u'' #为5173监控价格趋势添加
         #self.setName(name)#设置线程名为name
@@ -90,6 +56,13 @@ class WorkerThread(threading.Thread):
             self.Qyery_manual()
         elif self.arg==2:
             self.getimage2(LOAD_RESPONSE_DICT['uuid'])
+        #elif self.arg==3:
+            #self.Add_grid(self.rows)
+        #elif self.arg==4:
+            #self.Delete_grid(self.rows)
+
+    def connect_band(self,account,password):
+        cmd_str = "rasdial %s %s %s" % (self.name, self.username, self.password)
 
     def getimage2(self,uuid):
         response_dict = CS.upload_qno_manual(LOAD_RESPONSE_DICT['uuid'])
@@ -100,26 +73,80 @@ class WorkerThread(threading.Thread):
         self.img_out.save('pic/test.jpg')
         img1 = wx.Image('pic/test.jpg', wx.BITMAP_TYPE_ANY)
         wx.CallAfter(self.window.Change_image,img1)
-        #self.Change_image(img1)
         clidata = response_dict['clidata']
-        #clidata = 'verifysession=h01ebcc20325a4466bd25d674f4bd1515558a62e3b677013922130c5a65b0b692732ce29d7a7777c714; PATH=/; DOMAIN=qq.com;'
         global CLIDATA
         CLIDATA = clidata
 
-    def Query_auto(self):
-        for i in range(self.rows+1):
+    def update_response(self,i,response):
+        global QUERY_FAIL_NUM,PAUSE_TIME,LOAD_RESPONSE_DICT
+        if response['status'] == "failed":
+            if response["reason"]=="no_money":  # 4-27yj添加，增加no_money的判断
+                wx.CallAfter(self.window.ThreadFinished,self)# 4-27yj添加
+                LOAD_RESPONSE_DICT['currentstate'] = u'账户余额不足，请充值...'# 4-27yj添加
+                wx.CallAfter(self.window.Updatestatic)# 4-27yj添加
+                return False
+            #break# 4-27yj添加
+            if response["reason"]=="network_exception":  # 4-27yj添加，增加network_exception的判断
+                wx.CallAfter(self.window.ThreadFinished,self)# 4-27yj添加
+                LOAD_RESPONSE_DICT['currentstate'] = u'网络异常，本次查询失败...'# 4-27yj添加
+                wx.CallAfter(self.window.Updatestatic)# 4-27yj添加
+            QUERY_FAIL_NUM = QUERY_FAIL_NUM +1
+            if QUERY_FAIL_NUM == 5:
+                LOAD_RESPONSE_DICT['currentstate'] = u'IP被禁止，%d秒后继续查询..'%PAUSE_TIME
+                wx.CallAfter(self.window.Updatestatic)
+                QUERY_FAIL_NUM = 0
+                time.sleep(PAUSE_TIME)
+        if response['status'] == "ok":
+            QUERY_FAIL_NUM = 0
+            LOAD_RESPONSE_DICT['currentstate'] = u'正常查询中...'
+            print response
+#            LOAD_RESPONSE_DICT['balance'] = response['balance'] #5-1增加，实时增加余额显示
+            wx.CallAfter(self.window.Updatestatic)
+        #j = j+1
+        wx.CallAfter(self.window.Analyse_result,i,response)
+        return True
+
+    def Query_auto_bak(self):
+        print 'self.dict_qno=%s----%s\n'%(self.dict_qno,self.getName())
+        for i in self.dict_qno.keys():
             if self.timeToQuit.isSet():
                 wx.CallAfter(self.window.ThreadFinished,self)
-                break
-            elif i>= (self.rows):
-                wx.CallAfter(self.window.ThreadFinished,self)
+                print 'self.timeToQuit.isSet----%s\n'%self.getName()
                 break
             elif not self.window.grid.GetCellValue(i,1):
+                print 'xuliehao=%d------%s\n'%(i,self.getName())
                 response = CS.query_state(self.uuid,self.dict_qno[i])
-                wx.CallAfter(self.window.Analyse_result,i,response)
+                if not self.update_response(i,response):
+                    break
+        wx.CallAfter(self.window.ThreadFinished,self)
+            
+    def Query_auto(self):
+        print 'self.dict_qno=%s----%s\n'%(self.dict_qno,self.getName())
+        input=[]
+        for i,qno in self.dict_qno.items():
+            print "Query_auto_2",i,qno
+            if self.timeToQuit.isSet():
+                wx.CallAfter(self.window.ThreadFinished,self)
+                print 'self.timeToQuit.isSet----%s\n'%self.getName()
+                break
+            elif not self.window.grid.GetCellValue(i,1):
+                print 'xuliehao=%d------%s\n'%(i,self.getName()),2, input
+                input.append((i,qno))
+                if len(input)>=2:
+                    [(i1,qno1),(i2,qno2)]=input
+                    (response1,response2) = CS.query_state_2(self.uuid,(qno1,qno2))
+                    self.update_response(i1,response1)
+                    self.update_response(i2,response2)
+                    print '***************************',input
+                    del input[:]
+        for i,qno in input:
+            response = CS.query_state(self.uuid,qno)
+            self.update_response(i,response)
+        wx.CallAfter(self.window.ThreadFinished,self)          
 
 
     def Qyery_manual(self):
+        global QUERY_FAIL_NUM,PAUSE_TIME,LOAD_RESPONSE_DICT
         for i in range(self.rows+1):
             if not self.window.grid.GetCellValue(i,1):
                 break
@@ -127,16 +154,46 @@ class WorkerThread(threading.Thread):
         clidata = CLIDATA
         vercode = VERIFY_CODE
         response = CS.query_state_manual(self.uuid,self.dict_qno[i],vercode,clidata)
+        '''
+        if response['status'] == "failed":
+            QUERY_FAIL_NUM = QUERY_FAIL_NUM +1
+            if QUERY_FAIL_NUM == 5:
+                LOAD_RESPONSE_DICT['currentstate'] = u'IP被禁止，%d秒后继续查询..'%PAUSE_TIME
+                wx.CallAfter(self.window.Updatestatic)
+                QUERY_FAIL_NUM = 0
+                time.sleep(PAUSE_TIME)
+        if response['status'] == "ok":
+            QUERY_FAIL_NUM = 0
+            LOAD_RESPONSE_DICT['currentstate'] = u'正常查询中...'
+            wx.CallAfter(self.window.Updatestatic)
+        '''
         wx.CallAfter(self.window.Analyse_result,i,response)
         #wx.CallAfter(self.window.getimage2,LOAD_RESPONSE_DICT['uuid'])
         self.getimage2(LOAD_RESPONSE_DICT['uuid'])
         wx.CallAfter(self.window.ThreadFinished,self)
+'''
+    def Add_grid(self,rows):
+        while rows>GRIDROWS:
+            self.window.grid.AppendRows()
+            rows = rows-1
+        while rows<GRIDROWS:
+            self.window.grid.DeleteRows()
+            rows = rows+1
+        #wx.CallAfter(self.window.ThreadFinished,self)
+        #self.stop()
+    def Delete_grid(self,rows):
 
+        while rows > GRIDROWS:
+            self.window.grid.DeleteRows()
+            rows = rows-1
+        #wx.CallAfter(self.window.ThreadFinished,self)
+        #self.stop()
+'''
 
 
 class MainUi(wx.Frame):
-    colLabels = [u"帐号", u"结果", u"冻结原因", u"冻结时间"]
-    GRIDROWS = 20
+    colLabels = [u"帐号", u"结果", u"冻结原因", u"冻结时间",u'密码']
+    #GRIDROWS = 20
     staticText1_NUM = 0  #正常登录数量化初始化
     staticText2_NUM = 0  #短信
     staticText3_NUM = 0  #改密
@@ -159,21 +216,22 @@ class MainUi(wx.Frame):
         panel = wx.Panel(self, -1)
         sizer1=wx.BoxSizer(wx.HORIZONTAL)
         sizer5=wx.BoxSizer(wx.VERTICAL)
+        self.Bind(wx.EVT_CLOSE,self.OnCloseWindow)
                         
         #设置区
         self.radio1 = radio1 = wx.RadioButton(panel, -1, u"批量增加",style=wx.RB_GROUP)
         self.radio2 = radio2 = wx.RadioButton(panel, -1, u"单个增加")
-        radio_statictext1 = radio_statictext1 = wx.StaticText(panel, -1, u" 延时毫秒")
+        radio_statictext1 = radio_statictext1 = wx.StaticText(panel, -1, u" 暂停时间")
         radio_statictext2 = wx.StaticText(panel, -1, u" 输入号码")
-        text1 = wx.TextCtrl(panel, -1, u"1600", size=(78, 16),style=wx.ALIGN_CENTER_HORIZONTAL)
+        self.text1 = text1 = wx.TextCtrl(panel, -1, u"600", size=(78, 16),style=wx.ALIGN_CENTER_HORIZONTAL)
         self.text2 = text2 = wx.TextCtrl(panel, -1, u"", size=(78, 16),style=wx.ALIGN_CENTER_HORIZONTAL)
         self.radio_button1 = radio_button1 = buttons.GenButton(panel, -1, u'导入文件',size=(75,17))
         self.Bind(wx.EVT_BUTTON,self.Openfile,radio_button1)
         
         
         self.radio_button2 = radio_button2 = buttons.GenButton(panel, -1, u'导入QQ',size=(75,17))
-        radio_statictext3 = wx.StaticText(panel, -1, u"批量：点击导入QQ文件")
-        radio_statictext4 = wx.StaticText(panel, -1, u"单个：输入QQ点击导入")
+        radio_statictext3 = wx.StaticText(panel, -1, u"暂停时间指TX禁止此IP")
+        radio_statictext4 = wx.StaticText(panel, -1, u"时XX秒后继续自动查询")
         radio_statictext3.SetForegroundColour('red')
         radio_statictext4.SetForegroundColour('red')
         #self.Bind(wx.EVT_BUTTON,self.Querysingle,radio_button2)
@@ -206,7 +264,7 @@ class MainUi(wx.Frame):
         
         #账号区
         self.grid = wx.grid.Grid(panel,size=(420,400))
-        self.grid.CreateGrid(self.GRIDROWS,4)
+        self.grid.CreateGrid(GRIDROWS,5)
         
         
         self.submenu = wx.Menu()
@@ -239,7 +297,7 @@ class MainUi(wx.Frame):
 
 
         self.grid.Bind(wx.grid.EVT_GRID_CELL_RIGHT_CLICK,self.OnShowPopup)
-        for row in range(4):
+        for row in range(5):
             self.grid.SetColLabelValue(row, self.colLabels[row])
 
         self.grid.SetRowLabelSize(50)
@@ -251,6 +309,8 @@ class MainUi(wx.Frame):
         omm2=wx.StaticBox(panel,-1,u"账号区")     
         sizer3=wx.StaticBoxSizer(omm2,wx.VERTICAL)          
         sizer3.Add(self.grid)
+        #s='\xe5\x8f\x91\xe4\xb8\x8d\xe8\x89\xaf\xe4\xbf\xa1\xe6\x81\xaf'
+        #self.grid.SetCellValue(0,3,s.decode('utf-8').encode('gb2312'))
 
         
         #统计区
@@ -369,12 +429,12 @@ class MainUi(wx.Frame):
 
         #状态栏区
         self.statusbar=wx.StatusBar(panel,-1)
-        self.statusbar.SetFieldsCount(3)
-        self.statusbar.SetStatusWidths([-2,-3,-3])
+        self.statusbar.SetFieldsCount(4)
+        self.statusbar.SetStatusWidths([-4,-4,-4,-6])
         self.statusbar.SetStatusText(u'查询进度：')
         self.statusbar.SetStatusText(u'到期时间：%s'%LOAD_RESPONSE_DICT['deadline'],1)
-        self.statusbar.SetStatusText(u'账户名：%s'%LOAD_RESPONSE_DICT['acc'],2)
-        #self.statusbar.SetStatusText(u'账户余额：%s 元'%LOAD_RESPONSE_DICT['balance'],3)
+        self.statusbar.SetStatusText(u'余额：%s 元'%LOAD_RESPONSE_DICT['balance'],2)
+        self.statusbar.SetStatusText(u'网络状态正常',3)
 
 
 
@@ -397,9 +457,16 @@ class MainUi(wx.Frame):
         topsizer.Add(sizer1,0,wx.ALL,3)
         #topsizer.Add(load_sizer6_plat,0,wx.ALL,8)
         topsizer.Add(self.statusbar,0,wx.EXPAND|wx.TOP,15)
-        panel.SetSizer(topsizer)       
-        
+        panel.SetSizer(topsizer)
 
+        
+    def split_dicts(self,Dict0,N):
+        dicts=[dict() for i in range(N)]
+        index=0
+        for (k,v) in Dict0.items():
+            dicts[index][k]=v
+            index=(index+1)%N
+        return dicts
      
     def OnRadio(self, event):
         if self.selectedText:
@@ -411,6 +478,7 @@ class MainUi(wx.Frame):
         
     def Openfile(self, event):
         pat = re.compile('(\d{4,16}).*')  #识别出QQ
+        pat2 = re.compile('\d{4,16}(.*)') #识别出密码
         wildcard = u"文本文件 (*.txt)|*.txt"
         dialog = wx.FileDialog(None, u"打开", os.getcwd(),"", wildcard, wx.OPEN)
         if dialog.ShowModal() == wx.ID_OK:
@@ -420,15 +488,24 @@ class MainUi(wx.Frame):
                 d = f.readlines()
                 num = 0
                 c = {}
+                c2 = {} #装入密码
                 for i in d:
                     if pat.search(i):
                         c[num] = pat.findall(i)[0]
+                        try:
+                            c2[num] = pat2.findall(i)[0]  #装入密码
+                        except:
+                            pass
                         num = num+1
                 self.ALLQQNUM = rows = num
-            if rows>self.GRIDROWS:
+            if rows>GRIDROWS:
                 self.Dy_add_grid(rows)
             for row in range(rows):
-                self.grid.SetCellValue(row, 0, "%s"%(c[row]))
+                try:
+                    self.grid.SetCellValue(row, 0, "%s"%(c[row]))
+                    self.grid.SetCellValue(row, 4, "%s"%(c2[row]))#装入密码
+                except:
+                    pass
         self.Updatestatic()
         dialog.Destroy()
 
@@ -457,17 +534,30 @@ class MainUi(wx.Frame):
         return filename
 
     def Dy_add_grid(self,rows):
-        while rows>self.GRIDROWS:
+        '''
+        thread = WorkerThread('',{},rows,self,arg=3)  
+        self.threads.append(thread)
+        thread.start()
+        '''
+        while rows>GRIDROWS:
             self.grid.AppendRows()
             rows = rows-1
-        while rows<self.GRIDROWS:
+        while rows<GRIDROWS:
             self.grid.DeleteRows()
             rows = rows+1
+        
 
     def Reset_grid(self):
+        '''
         self.grid.ClearGrid() #自带的方法，替代下面几句带#的,清除grid所有内容
         rows = self.grid.GetNumberRows()
-        while rows > self.GRIDROWS:
+        thread = WorkerThread('',{},rows,self,arg=4)
+        self.threads.append(thread)
+        thread.start()
+        '''
+        self.grid.ClearGrid() #自带的方法，替代下面几句带#的,清除grid所有内容
+        rows = self.grid.GetNumberRows()
+        while rows > GRIDROWS:
             self.grid.DeleteRows()
             rows = rows-1
         self.staticText1_NUM = 0  #清空数据时，初始化统计数据
@@ -481,6 +571,7 @@ class MainUi(wx.Frame):
 
 
     def Reset_frame(self): #结束批量查询时恢复某些插件
+        raise Exception("dfsafsafsaf888888888888888888888888888888888888888888888888888888888888888888888888")
         self.radio_button1.Enable()
         self.radio_button2.Enable()
         self.radio1.Enable()
@@ -524,17 +615,22 @@ PS:\n\
         #pass
 
     def StartItemSelected(self, event):
+        global PAUSE_TIME
+        self.dict_qno={}
+        PAUSE_TIME = int(self.text1.GetValue())
         self.Start_frame()
         rows = self.grid.GetNumberRows()
         for i in range(rows):
             if self.grid.GetCellValue(i,0).startswith('\n') or len(self.grid.GetCellValue(i,0))==0:
                 break
             else:
-                self.dict_qno[i] = self.grid.GetCellValue(i,0)
+                self.dict_qno[i] = self.grid.GetCellValue(i,0)  
         if not len(self.dict_qno) == 0:
-            thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],self.dict_qno,i,self)   #UUID由登录界面传入
-            self.threads.append(thread)
-            thread.start()
+            dicts_qno = self.split_dicts(self.dict_qno,2)
+            for j in range(2):
+                thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],dicts_qno[j],self)   #UUID由登录界面传入
+                self.threads.append(thread)
+                thread.start()
         else:
             return 
 
@@ -550,8 +646,8 @@ PS:\n\
         while self.threads:
             thread=self.threads[0]
             thread.stop()
-            while thread.isAlive():
-                time.sleep(1)
+            #while thread.isAlive():   #4-29修改，防止点击批量停止后界面卡住
+                #time.sleep(1)         #4-29修改，防止点击批量停止后界面卡住
             self.threads.remove(thread)
 
 
@@ -572,12 +668,14 @@ PS:\n\
         if state_string == u'导出全部号码':
             for i in range(rows):
                 s = self.grid.GetCellValue(i,0)
-                self.Writefile(filename,s)
+                s2 = self.grid.GetCellValue(i,4) #获取密码
+                self.Writefile(filename,s+s2)
         else:
             for i in range(rows):
                 if self.grid.GetCellValue(i,1)==state_string:
                     s = self.grid.GetCellValue(i,0)
-                    self.Writefile(filename,s)
+                    s2 = self.grid.GetCellValue(i,4) #获取密码
+                    self.Writefile(filename,s+s2)
 
     def Selecte_normal_item(self, event):
         self.Choose_item(event,u'正常登录')
@@ -600,7 +698,8 @@ PS:\n\
         for i in range(rows):
             if self.grid.GetCellValue(i,2) == FROZEN_REASON_ILL_LOAD:
                 s = self.grid.GetCellValue(i,0)
-                self.Writefile(filename,s)
+                s2 = self.grid.GetCellValue(i,4) #获取密码
+                self.Writefile(filename,s+s2)
 
     def Querysingle(self, event):
         number = self.text2.GetValue().strip()
@@ -619,15 +718,15 @@ PS:\n\
         self.staticText5.SetValue('%d'%self.staticText5_NUM)
         self.statusbar.SetStatusText(u'查询进度：%d/%d'%(self.FINISHEDQQNUM,self.ALLQQNUM))
         self.statusbar.SetStatusText(u'到期时间：%s'%LOAD_RESPONSE_DICT['deadline'],1)
-        self.statusbar.SetStatusText(u'账户名：%s'%LOAD_RESPONSE_DICT['acc'],2)
-        #self.statusbar.SetStatusText(u'账户余额：%s元'%LOAD_RESPONSE_DICT['balance'],3)
+        self.statusbar.SetStatusText(u'余额：%s元'%LOAD_RESPONSE_DICT['balance'],2)
+        self.statusbar.SetStatusText(u'%s'%LOAD_RESPONSE_DICT['currentstate'],3)
 
     def Querymanual(self, event):  #由界面手动查询框框勾选或去勾选触发
         if self.manualcheck.IsChecked():
             self.image_button.Enable()
             self.image_text.Enable()
             self.image_textctrl.Enable()
-            thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],{},0,self,arg=2)
+            thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],{},self,arg=2) #4-28
             self.threads.append(thread)
             thread.start()
         else:
@@ -653,7 +752,7 @@ PS:\n\
                     temp = 1
                     break
         if temp == 1:
-            thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],self.dict_qno,i,self,arg=1) #登录界面传入UUID
+            thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],self.dict_qno,self,arg=1) #登录界面传入UUID  #4-28
             self.threads.append(thread)
             thread.start()
         else:
@@ -685,15 +784,15 @@ PS:\n\
         self.grid.SetCellValue(row, 1, u"%s"%result)
         self.FINISHEDQQNUM = self.FINISHEDQQNUM + 1
         qno = self.grid.GetCellValue(row, 0)
+        s2 = self.grid.GetCellValue(row,4) #获取密码
         string = u'查询缓存'
         if result==u'正常登录':
             filename = 'result_save/%s%s-%s.txt'%(TODAY,string,result)
-            with open(filename,'a')as f:
-                f.write(qno+'\n')
+            self.Writefile(filename,qno+s2)
+
         elif response["reason"]:
-            filename = 'result_save/%s%s-%s-%s.txt'%(TODAY,string,result,response["reason"])
-            with open(filename,'a')as f:
-                f.write(qno+'\n')
+            filename = 'result_save/%s%s-%s-%s.txt'%(TODAY,string,result,response["reason"])#修复BUG
+            self.Writefile(filename,qno+s2)
 
 
 
@@ -711,32 +810,24 @@ PS:\n\
                     #f.write(qno+'------normal')
                 
             elif response["state"] == 'lock':
-                self.grid.SetCellValue(row, 2, "%s"%response["reason"])
+                self.grid.SetCellValue(row, 2, "%s"%(response["reason"]))#修复BUG
                 self.grid.SetCellValue(row, 3, "%s"%response["time"].replace('&nbsp;',''))
                 if response["addinfo"] == FROZEN_REASON_RECYCLE:
                     self.staticText5_NUM = self.staticText5_NUM +1
                     result = u"冻结回收"
                     self.Query_cache(row,result,response)
-                    #self.grid.SetCellValue(row, 1, u"冻结回收")
-                    #self.FINISHEDQQNUM = self.FINISHEDQQNUM +1
                 elif response["addinfo"] == FROZEN_REASON_MOD_PASS:
                     self.staticText3_NUM = self.staticText3_NUM +1
                     result = u"改密解限"
                     self.Query_cache(row,result,response)
-                    #self.grid.SetCellValue(row, 1, u"改密解限")
-                    #self.FINISHEDQQNUM = self.FINISHEDQQNUM +1
                 elif response["addinfo"] == FROZEN_REASON_COMPLAIN:
                     self.staticText4_NUM = self.staticText4_NUM +1
                     result = u"申诉解限"
                     self.Query_cache(row,result,response)
-                    #self.grid.SetCellValue(row, 1, u"申诉解限")
-                    #self.FINISHEDQQNUM = self.FINISHEDQQNUM +1
                 else:
                     self.staticText2_NUM = self.staticText2_NUM +1
                     result = u"短信解限"
                     self.Query_cache(row,result,response)
-                    #self.grid.SetCellValue(row, 1, u"短信解限")
-                    #self.FINISHEDQQNUM = self.FINISHEDQQNUM +1
             else:
                 pass
         else:
@@ -757,10 +848,26 @@ PS:\n\
         code = self.image_textctrl.GetValue()
         global VERIFY_CODE
         VERIFY_CODE = code
+
+    def OnCloseWindow(self,evt):
+        dlg = wx.MessageDialog(None, u"是否关闭QQ查询冻结工具?",
+                          u'QQ查询冻结工具',
+                          wx.YES_NO | wx.ICON_QUESTION)
+        retCode = dlg.ShowModal()
+        if (retCode == wx.ID_YES):
+            dlg.Destroy()
+            self.Destroy()
+        else:
+            dlg.Destroy()
+            pass
+        CS.exit_server(LOAD_RESPONSE_DICT['uuid'])
+        
+
             
 def start(load_response_dict):
     global LOAD_RESPONSE_DICT
     LOAD_RESPONSE_DICT = load_response_dict #登录之后跳转到start函数，保存传入的response
+    LOAD_RESPONSE_DICT['currentstate'] = ''
     app = wx.PySimpleApp() 
     UiShow=MainUi()
     UiShow.Show(True)
@@ -770,44 +877,4 @@ def start(load_response_dict):
 
 if __name__=='__main__':
     start(LOAD_RESPONSE_DICT)
-
-
-    def checksession(self,url):
-        number = self.text2.GetValue()
-        checknumber = self.image_textctrl.GetValue()
-        resultHtml=httplib.HTTPConnection(url, 80, False)
-        header_getcheckverify["Referer"] = 'http://aq.qq.com/'+'/cn2/ajax/check_verifycode?verify_code=%s&account=%s&session_type=on_rand'%(checknumber,number)
-        resultHtml.request('GET', '/cn2/ajax/check_verifycode?verify_code=%s&account=%s&session_type=on_rand'%(checknumber,number),
-                       headers = header_getcheckverify)
-        page=resultHtml.getresponse()
-        L = page.getheaders()
-        self.COOKIE = self.COOKIE+';'+self.get_aq_base_sid(L)
-        header_getcheckstate["cookie"] = self.COOKIE
-        times = str(time.time())
-        timed = times[0:10]+times[11:]
-        print timed
-        resultHtml.request('GET', '/cn2/login_limit/checkstate?from=1&account=%s&verifycode=%s&_=%s2'%(number,checknumber,timed),
-                       headers = header_getcheckstate)
-        page2=resultHtml.getresponse(True)
-
-    def get_aq_base_sid(self,L):
-        for i in L:
-            if 'set-cookie' in i:
-                return i[1].split(';')[0]
-
-
-
-    def checkstate(self,url):
-        number = self.text2.GetValue()
-        checknumber = self.image_textctrl.GetValue()
-        resultHtml=httplib.HTTPConnection(url, 80, False)
-        resultHtml.request('GET', '/cn2/login_limit/checkstate?from=1&account=%s&verifycode=%s'%(number,checknumber),
-                       headers = header_getcheckverify)
-        page=resultHtml.getresponse(True)
-
-    def startmanualquery(self, event):
-        
-        self.checksession("aq.qq.com")
-        #self.checkstate("aq.qq.com")
-
 
