@@ -43,23 +43,6 @@ get_last_used_ssport()->
 
 exec_cmd(F)-> my_server:call(?MODULE, {cmd,F}).	
     
-add_phone2tab(Tuple)->
-    F = fun()-> ets:insert(?PHONE_TAB, Tuple) end,
-    exec_cmd(F).
-
-del_phone2tab(Phone)->
-    F = fun()-> ets:delete(?PHONE_TAB, Phone) end,
-    exec_cmd(F).
-
-get_phone_tab(Phone)->
-    F = fun()->
-             case ets:lookup(?PHONE_TAB, Phone) of
-                 [Item]-> Item;
-                 _-> undefined
-             end
-         end,
-    exec_cmd(F).
-
 %% callbacks
 init([]) ->
 	ets:new(?MODULE,[named_table,set,public,{keypos,1}]),

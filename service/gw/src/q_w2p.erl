@@ -7,7 +7,7 @@
 -include("sdp.hrl").
 
 -define(ALIVE_TIME,30000).
--define(TALKTIMEOUT,6000000*2).
+-define(TALKTIMEOUT,60*1000).
 
 -define(PCMU,0).
 -define(PCMA,8).
@@ -243,7 +243,6 @@ terminate(_Reason, St=#state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT
     if is_pid(RrpPid)->  rrp:stop(RrpPid); true-> void end,
     
     Phone = proplists:get_value(phone,CallInfo),
-    app_manager:del_phone2tab(Phone),
     llog("app ~p leave. (~ps)",[Aid,duration(ST)]),
     if ST == undefined->
 %        io:format("q_w2p terminate no hookoff send 2"),
@@ -296,7 +295,6 @@ start_sip_call(State=#state{aid=Aid, call_info=CallInfo, rtp_pid=RtpPid, rrp_por
     _Ref = erlang:monitor(process,UA),
     llog("gw ~p port ~p call ~p sdp_to_ss ~p~n", [Aid,RrpPort,CallInfo,SDP_TO_SS]),
       Phone = proplists:get_value(cid,CallInfo),
-      app_manager:add_phone2tab({Phone,RtpPid,RrpPid}),
 
 	State#state{status=invite,sip_ua=UA}.
 	
@@ -497,24 +495,33 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                            ""->
                                Delay_last = 1000*(1+random:uniform(4)),
                                delay(Delay_last);
-                           _-> void
+                           _->
+                               Delay_last = 1000*(1+random:uniform(4)),
+                               delay(Delay_last)
                            end,
                            io:format(".");
                %            io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]);
-                       {ok, RecDs} when D3or4=="7"->   
-                           dial_auth_code(State,RecDs),
-                           wcgsmon:qcall_ok(),
-                           inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
+                       {ok, RecDs} when D3or4=="7"->     % tx bug
                %            record_second_hint(State),
                            case proplists:get_value(qfile,PhInfo,"") of
                            ""->
-                               Delay_last = 1000*(1+random:uniform(4)),
+                               RecDs1= if Rand rem 3 ==0-> dial_auth_code(State,RecDs++"#"), RecDs; 
+                                            true-> 
+                                                timer:sleep(2000+random:uniform(2)*1000),
+                                                "n"++RecDs 
+                                            end,
+                               inform_result(State#state{call_info=[{recds,RecDs1}|PhInfo]},"1"),
+                               Delay_last = 1000*(3+random:uniform(2)),
                                delay(Delay_last);
-                           _-> void
+                           _->
+                               dial_auth_code(State,RecDs++"#"),
+                               inform_result(State#state{call_info=[{recds,"first1"}|PhInfo]},"2"),
+                               Delay_last = 1000*(3+random:uniform(2)),
+                               delay(Delay_last)
                            end,
-                           io:format(".");
+                           io:format("*");
                        {ok, OtherDs} ->   
-                           inform_result(State#state{call_info=[{recds,OtherDs}|PhInfo]},"0"),
+                           inform_result(State#state{call_info=[{recds,OtherDs}|PhInfo]},"2"),
                            io:format("qq:~p err ds:~p~n",[Qno,OtherDs]);
                        {failed,not_matched}-> 
                %            RN = if FirstRecogAck == "5" -> "5"; true->"0" end,
@@ -754,17 +761,19 @@ start_recording(#state{aid=AppId},Params)->
 
 dial_qno(State=#state{},[])-> 
     State;
-dial_qno(State=#state{aid=Appid},[H|Rest])-> 
-%    Rand = 500,
-    Rand = 500,
-%    Rand=200,
-    delay(Rand),
+dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])-> 
+    case proplists:get_value(qfile,PhInfo,"") of
+    ""->    
+        Rand=random:uniform(300),
+        delay(700+Rand);
+    _-> delay(500)
+    end,
     q_wkr:eventVOIP(Appid, {dial,H}),
     dial_qno(State,Rest).
 
 dial_auth_code(State=#state{},[])->  State;
 dial_auth_code(State=#state{aid=Appid},[H|Rest])-> 
-    delay(900),
+    delay(1100),  % must > 900, if 500 can't jf
 %    Rand=random:uniform(10)*50,
 %    delay(Rand),
     q_wkr:eventVOIP(Appid, {dial,H}),
@@ -784,7 +793,7 @@ inform_result(State=#state{call_info=PhInfo,start_time=StartTime},Res) ->
     end.
 
 inform_result3(State,Res)->
-    inform_result2(State,"2"),
+%    inform_result2(State,not_to_platform),
     inform_result_mine(State,Res).
     
 inform_result2(#state{call_info=PhInfo,start_time=StartTime},Res) when is_atom(Res)->
@@ -821,7 +830,7 @@ inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
     case proplists:get_value(wwwnode,PhInfo,"") of
     ""-> void;
     Node-> 
-        io:format("~p~n",[[Fn,Qno]]),
+        io:format("~p",[[Fn,Qno]]),
         rpc:call(Node,fid,writefile,[Fn,Qno])
     end.
 
@@ -832,11 +841,11 @@ my_result(Qno,_StartTime,"first4",Filename,_,_) ->
     mylog(Filename++"_kajie.txt","~s",[Qno]);
 my_result(Qno,_StartTime,"first5",Filename,_,_) ->
     mylog(Filename++"_gaimi.txt","~s",[Qno]);
+my_result(Qno,_StartTime,RecDs,Filename,Res,_) when RecDs=="first1"->
+    mylog(Filename++"_redial1.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,Res,_) when Res=="2" orelse RecDs=="first6" 
                                         orelse RecDs==send_2_before orelse RecDs==first_not_matched->
     mylog(Filename++"_redial.txt","~s",[Qno]);
-my_result(Qno,_StartTime,RecDs,Filename,Res,_) when RecDs=="first1"->
-    mylog(Filename++"_redial1.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,OtherRes,_) ->
     mylog(Filename++"_fail.txt","~p  ~p   ~p",[Qno,OtherRes,RecDs]).
 

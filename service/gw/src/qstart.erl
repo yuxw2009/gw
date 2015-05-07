@@ -71,7 +71,6 @@ can_call(St=#st{qnos=[{first,Qnos={www,Fid,Wwwnode,_}}|RestQnos]})->
     can_call(St#st{qnos=[Qnos|RestQnos]});
     
 can_call(St=#st{qnos=[{www,Fid,Wwwnode,[]}|RestQnos]})->
-    io:format("fa"),
     rpc:call(Wwwnode,fid,set_status,[Fid,finish]),
     can_call(St#st{qnos=RestQnos});
 can_call(St=#st{qnos=Qnos=[{www,Fid,Wwwnode,[Qno|Others]}|RestQnos],status=active,pls=[{cids,[{Cid,Clidata}|RestCids]}|RestPls]})->

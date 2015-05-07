@@ -12,7 +12,7 @@
 -define(ISACPTIME,30).
 -define(ILBCPTIME,30).
 -define(OPUSPTIME,60).
--define(AMRPTIME,40).
+-define(AMRPTIME,20).
 
 -define(PCMU,0).
 -define(PCMA,8).
@@ -741,10 +741,9 @@ amr_60_enc(Id,<<F1:320/binary,Rest/binary>>,Out) ->
 % ----------------------------------
 %
 flush_msg(Msg) ->
-    %% receive Msg -> flush_msg(Msg)
-    %% after 0 -> ok
-    %% end.
-	pass.
+    receive Msg -> flush_msg(Msg)
+     after 0 -> ok
+     end.
 
 mkvfn(Name) ->
     {_,Mo,D} = date(),
@@ -798,7 +797,7 @@ uncompress_voice({g729,Ctx},?G729,<<Body:10/binary,Other/binary>>,ST)->
 uncompress_voice(Type0,Type1,Body,_St) when size(Body)==2 orelse size(Body)==0->
     <<>>;
 uncompress_voice(Type0,Type1,Body,_St)->
-    io:format("Type0:~p,Type1:~p,Bodysize:~p~n",[Type0,Type1,size(Body)]),
+%    io:format("Type0:~p,Type1:~p,Bodysize:~p~n",[Type0,Type1,size(Body)]),
     <<>>.
 
 zero_pcm16(Freq,Time) ->

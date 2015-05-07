@@ -189,7 +189,7 @@ parse_format_specified(Codec,PN, Cfg,[{a,Attribute} | Rest]=Announce) ->
       {ok, Re} = re:compile("(\\d+) ([^/]+)"),
       {match, [_, Format, Params]} = re:run(Value, Re, [{capture, all, list}]),
       if Format==PN ->
-         io:format("parse_format_specified:~p~n",[{Codec,Params}]),
+%         io:format("parse_format_specified:~p~n",[{Codec,Params}]),
         Ccfg = parse_codec_params(Codec,Params),
         parse_format_specified(Codec,PN,[Ccfg|Cfg],Rest);
       true -> {ok,lists:reverse(Cfg),Announce} end;

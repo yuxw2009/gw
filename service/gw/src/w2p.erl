@@ -269,7 +269,6 @@ terminate(_Reason, #state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT,si
     if is_pid(RrpPid)->  rrp:stop(RrpPid); true-> void end,
     
     Phone = proplists:get_value(phone,CallInfo),
-    app_manager:del_phone2tab(Phone),
     if is_integer(PeerAid)-> avanda:stopNATIVE(PeerAid); true-> void end,
 
     llog("app ~p leave. (~ps)",[Aid,duration(ST)]),
@@ -327,7 +326,6 @@ start_sip_call(State=#state{aid=Aid, call_info=CallInfo, rtp_pid=RtpPid, rrp_por
     _Ref = erlang:monitor(process,UA),
     llog("gw ~p port ~p call ~p sdp_to_ss ~p~n", [Aid,RrpPort,CallInfo,SDP_TO_SS]),
       Phone = proplists:get_value(cid,CallInfo),
-      app_manager:add_phone2tab({Phone,RtpPid,RrpPid}),
 
 	State#state{start_time=now(),status=invite,sip_ua=UA}.
 	
@@ -381,30 +379,8 @@ llog(F,P) ->
 %    io:format(F,P).
 %     {unused,F,P}.
      
-deal_callinfo(State=#state{call_info=CallInfo,rtp_pid=RtpPid}) ->    
-    Phone0=proplists:get_value(phone, CallInfo),
-    case Phone0 of
-    "#8888881"++Phone->
-        case app_manager:get_phone_tab(Phone) of
-        undefined-> State;
-        {_,MonedRtpPid,_MonedRrpPid}->
-            MonedRtpPid ! {add_mon, RtpPid},
-            my_server:cast(RtpPid, {media_relay,closed}),
-            
-            State
-        end;
-    "#8888882"++Phone->
-        case app_manager:get_phone_tab(Phone) of
-        undefined-> State;
-        {_,_MonedRtpPid,MonedRrpPid}->
-            MonedRrpPid ! {play, RtpPid},
-            my_server:cast(RtpPid, {media_relay,closed}),
-            
-            State
-        end;
-    _->
-        start_sip_call(State)
-    end.
+deal_callinfo(State) ->    
+        start_sip_call(State).
 
 call_act(AppId,Act)->
     case app_manager:lookup_app_pid(AppId) of
