@@ -10,14 +10,15 @@ import urllib,cStringIO,Image
 import CSinterface as CS
 import base64
 import re
-#import win32clipboard
-#import win32con
+import win32clipboard
+import win32con
 import string
 #import text_ctrl_multiple as mult_text
-#import win32ras
+import win32ras
 import showip
 import subprocess,sys
 import QQ_query
+import q
 
 
 '''
@@ -209,14 +210,16 @@ class WorkerThread(threading.Thread):
         global g_parrel_num
         #print 'self.dict_qno=%s----%s\n'%(self.dict_qno,self.getName())
         qinput=[]
-        for i,qno in self.dict_qno.items():
+        QnoItems=self.dict_qno.items()
+        TotalNum=len(QnoItems)
+        user_auth2=TotalNum>10
+        for i,qno in QnoItems:
             if self.timeToQuit.isSet():
                 wx.CallAfter(self.window.ThreadFinished,self)
                 wx.CallAfter(self.window.log_message,u'self.timeToQuit.isSet----%s\n'%self.getName())
                 break
             elif not self.window.grid.GetCellValue(i,1):
                 qinput.append((i,qno))
-                print 'count is ',g_counter,qinput,g_parrel_num
                 if len(qinput)>=2:
                     if g_counter>=15:
                         temp=0
@@ -228,24 +231,20 @@ class WorkerThread(threading.Thread):
                         time.sleep(1)
                         g_counter=0
                     [(i1,qno1),(i2,qno2)]=qinput
-                    def query_and_update(uuid,i1,i2,qno1,qno2):
-                        '''global g_parrel_num
-                        temp=0
-                        while temp<100 and g_parrel_num>=max_parrel_num():
-                            time.sleep(1)
-                            temp+=1'''
-                        (response1,response2) = CS.query_state_2(self.uuid,(qno1,qno2))
+                    def query_and_update(uuid,i1,i2,qno1,qno2,use_auth2=user_auth2):
+                        response1=CS.query_state(self.uuid,qno1)
+                        response2=CS.query_state(self.uuid,qno2,use_auth2=user_auth2)
+                        #(response1,response2) = CS.query_state_2(self.uuid,(qno1,qno2))
                         self.update_response(i1,response1)
                         def updatelazy(i,r):
                             self.update_response(i,r)
                         threading.Timer(3,updatelazy,[i2,response2]).start()
                     threading.Timer(0,query_and_update,[self.uuid,i1,i2,qno1,qno2]).start()
 #                    time.sleep(get_pause_len())
-                    time.sleep(1)
+                    time.sleep(3)
                     del qinput[:]
-        print '999999999999999999999999999999999999999999999'
         for i,qno in qinput:
-            response = CS.query_state(self.uuid,qno)
+            response = CS.query_state(self.uuid,qno,use_auth2=user_auth2)
             self.update_response(i,response)
         wx.CallAfter(self.window.ThreadFinished,self)          
 
@@ -284,7 +283,7 @@ class MainUi(wx.Frame):
     def __init__(self):
         self.threads = []
         self.runser = []
-        wx.Frame.__init__(self, None, -1, u"QQ查询冻结V002    By:下大雨",size=(595,605))
+        wx.Frame.__init__(self, None, -1, u"QQ查询冻结V002    By:下大雨",size=(595,700))
         self.icon = wx.Icon('pic/ic.ico', wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)  
 
@@ -540,7 +539,76 @@ class MainUi(wx.Frame):
         bandfield_sizer.Add(load_sizer1_band)
         bandfield_sizer.Add(load_sizer2_band)
         
-       
+
+        #打码平台设置区：
+        platfield=wx.StaticBox(panel,-1,u"打码平台设置区")
+        load_sizer6_plat=wx.StaticBoxSizer(platfield,wx.HORIZONTAL)
+        statictext1_plat = wx.StaticText(panel, -1,u"打码平台",style=wx.ALIGN_CENTER)
+        self.ComboBox_plat=wx.ComboBox(panel,-1,u'选择打码平台',size=(93,21))
+        self.ComboBox_plat.Append(u'UU平台')
+        self.ComboBox_plat.Append(u'超人平台')
+        self.plat_help = buttons.GenButton(panel, -1, u'打码平台点击弹出说明',size=(150,21))
+        self.Bind(wx.EVT_BUTTON,self.help_plat,self.plat_help)
+        
+        statictext2_plat = wx.StaticText(panel, -1,u" 平台帐号 ",style=wx.ALIGN_CENTER)
+        statictext3_plat = wx.StaticText(panel, -1,u" 平台密码 ",style=wx.ALIGN_CENTER)        
+        self.text1_plat = wx.TextCtrl(panel, -1, u"",size=(90, 20),style=wx.ALIGN_CENTER_HORIZONTAL)
+        self.text2_plat = wx.TextCtrl(panel, -1, u"",size=(90, 20),style=wx.ALIGN_CENTER_HORIZONTAL|wx.TE_PASSWORD)
+
+        self.plat_load = buttons.GenButton(panel, -1, u'登录平台',size=(75,21))
+        self.Bind(wx.EVT_BUTTON,self.load_plat,self.plat_load)
+        self.plat_exit = buttons.GenButton(panel, -1, u'退出平台',size=(75,21))
+        self.Bind(wx.EVT_BUTTON,self.exit_plat,self.plat_exit)
+        self.plat_balance = buttons.GenButton(panel, -1, u'查询余额',size=(75,21))
+        self.Bind(wx.EVT_BUTTON,self.querybalace_palt,self.plat_balance)
+
+        statictext4_plat = wx.StaticText(panel, -1,u"  平台登录状态: ",style=wx.ALIGN_CENTER)
+        #statictext5_plat = wx.StaticText(panel, -1,u"  平台剩余积分: ",style=wx.ALIGN_CENTER)
+        self.statictext6_plat = wx.StaticText(panel, -1,u"未登录",style=wx.ALIGN_CENTER,size=(46,18))
+        self.statictext7_plat = wx.StaticText(panel, -1,u"",style=wx.ALIGN_CENTER,size=(46,18))
+
+        load_sizer1_plat=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer2_plat=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer3_plat=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer4_plat=wx.BoxSizer(wx.VERTICAL)
+        load_sizer5_plat=wx.BoxSizer(wx.VERTICAL)
+        #load_sizer6_plat=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer7_plat=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer8_plat=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer9_plat=wx.BoxSizer(wx.VERTICAL)
+        load_sizer1_plat.Add(statictext1_plat,0,wx.ALL,3)
+        load_sizer1_plat.Add(self.ComboBox_plat,0,wx.ALL,3)
+        #load_sizer2_plat.Add(self.plat_help,0,wx.ALL,5)
+        load_sizer4_plat.Add(load_sizer1_plat,0,wx.ALL,3)
+        load_sizer4_plat.Add(self.plat_help,0,wx.ALL,3)
+        
+        load_sizer2_plat.Add(statictext2_plat,0,wx.ALL,3)
+        load_sizer2_plat.Add(self.text1_plat,0,wx.ALL,3)
+        load_sizer2_plat.Add(self.plat_load,0,wx.ALL,3)
+
+        load_sizer3_plat.Add(statictext3_plat,0,wx.ALL,3)
+        load_sizer3_plat.Add(self.text2_plat,0,wx.ALL,3)
+        load_sizer3_plat.Add(self.plat_exit,0,wx.ALL,3)
+        
+        #load_sizer3_plat=wx.BoxSizer(wx.VERTICAL)
+        load_sizer5_plat.Add(load_sizer2_plat,0,wx.ALL,3)
+        load_sizer5_plat.Add(load_sizer3_plat,0,wx.ALL,3)
+
+        load_sizer7_plat.Add(statictext4_plat,0,wx.ALL,3)
+        load_sizer7_plat.Add(self.statictext6_plat,0,wx.ALL,3)
+        load_sizer8_plat.Add(self.plat_balance,0,wx.ALL,8)
+        load_sizer8_plat.Add(self.statictext7_plat,0,wx.ALL,8)
+        load_sizer9_plat.Add(load_sizer7_plat,0,wx.TOP,5)
+        load_sizer9_plat.Add(load_sizer8_plat,0,wx.TOP,2)
+
+        
+
+        load_sizer6_plat.Add(load_sizer4_plat,0,wx.ALL,1)
+        load_sizer6_plat.Add(load_sizer5_plat,0,wx.ALL,1)
+        load_sizer6_plat.Add(load_sizer9_plat,0,wx.ALL,1)
+
+
+        
 
         #状态栏区
         self.statusbar=wx.StatusBar(panel,-1)
@@ -562,9 +630,9 @@ class MainUi(wx.Frame):
         #sizer6.Add(noticesizer,0,wx.ALL,1)
         sizer6.Add(bandfield_sizer,0,wx.ALL,3)
         sizer6.Add(sizer4,0,wx.ALL,3)
-
-        sizer6.Add(sizer7,0,wx.ALL,3)
         sizer6.Add(print_sizer,0,wx.ALL,3)
+        sizer6.Add(sizer7,0,wx.ALL,3)
+
         sizer5.Add(sizer2,0,wx.ALL,3)
         sizer5.Add(sizer3,0,wx.ALL,3)
         
@@ -573,9 +641,69 @@ class MainUi(wx.Frame):
         
         topsizer=wx.BoxSizer(wx.VERTICAL)
         topsizer.Add(sizer1,0,wx.ALL,3)
-        #topsizer.Add(load_sizer6_plat,0,wx.ALL,8)
-        topsizer.Add(self.statusbar,0,wx.EXPAND|wx.TOP,15)
+        topsizer.Add(load_sizer6_plat,0,wx.ALL,8)
+        topsizer.Add(self.statusbar,0,wx.EXPAND|wx.BOTTOM,1)
         panel.SetSizer(topsizer)
+
+
+    def help_plat(self,event):
+        wx.MessageBox(u"1.什么是打码平台? 简单讲就是你花钱，别人替你输入验证码\n\n2.怎么使用?\
+首先在打码网站上注册账号 然后给账号里充值积分 在软件上选择相应的平台 输入账号密码 登陆后就可使用\n\n\n\
+目前本软件对接了两个打码平台\n\n\n\
+超人打码平台   6元钱  可以打1000个验证码   一个6厘\n\
+UU云打码平台  10元钱  可以打1000个验证码   一个1分\n\n\n\n\
+超人官网： www.sz789.net\n\
+UU云官网： www.uuwise.com " )
+
+    def load_plat(self,event):
+        acc_plat = self.text1_plat.GetValue().encode('utf-8')
+        pwd_plat = self.text2_plat.GetValue().encode('utf-8')
+        def loadlazy(acc_plat,pwd_plat):
+            if self.ComboBox_plat.GetValue()==u'超人平台':
+                response = q.login_superman(acc_plat,pwd_plat)
+                if response <0:
+                    self.statictext6_plat.SetLabel(u'登录失败')
+                    self.statictext6_plat.SetForegroundColour('red')
+                elif response>=0:
+                    self.statictext7_plat.SetLabel('%s'%response)
+                    self.statictext6_plat.SetLabel(u'已登录')
+                    self.ComboBox_plat.Disable()
+                    self.text1_plat.Disable()
+                    self.text2_plat.Disable()
+                    self.plat_load.Disable()
+                    self.statictext6_plat.SetForegroundColour('green')
+                    self.statictext7_plat.SetForegroundColour('green')
+                else:
+                    self.statictext6_plat.SetLabel(u'未知异常')
+                    self.statictext6_plat.SetForegroundColour('red')
+            elif self.ComboBox_plat.GetValue()==u'UU平台':
+                print 'UUplat'
+                pass
+            else:
+                wx.MessageBox(u'请选择打码平台后再登录！')
+        threading.Timer(0,loadlazy,[acc_plat,pwd_plat]).start()
+            
+
+    def exit_plat(self,event):
+        q.logout_superman()
+        self.statictext6_plat.SetLabel(u'未登录')
+        self.statictext6_plat.SetForegroundColour('red')
+        self.statictext7_plat.SetLabel('')
+        self.ComboBox_plat.Enable()
+        self.text1_plat.Enable()
+        self.text2_plat.Enable()
+        self.plat_load.Enable()
+        
+    def querybalace_palt(self,event):
+        acc_plat = self.text1_plat.GetValue().encode('utf-8')
+        pwd_plat = self.text2_plat.GetValue().encode('utf-8')
+        if q.is_superman_logined():
+            response = q.login_superman(acc_plat,pwd_plat)
+            self.statictext7_plat.SetLabel(response)
+        else:
+            self.statictext7_plat.SetLabel(u'')
+            self.statictext6_plat.SetLabel(u'未登录')
+            self.statictext6_plat.SetForegroundColour('red')
 
     def log_message(self,msg):
         global g_log_times
@@ -755,6 +883,7 @@ class MainUi(wx.Frame):
         self.radio_button2.Enable()
         self.radio1.Enable()
         self.radio2.Enable()
+        self.radio3.Enable()
         self.grid.EnableEditing(True)
         
 
@@ -764,6 +893,7 @@ class MainUi(wx.Frame):
         #self.radio_button1.Disable()
         self.radio1.Disable()
         self.radio2.Disable()
+        self.radio3.Disable()#5-5禁止radio3
         
     def OnShowPopup(self, event):
         if self.manualcheck.IsChecked():
@@ -784,7 +914,7 @@ class MainUi(wx.Frame):
 4)内置超人打码平台，用户只需注册本软件，无需再去超人平台注册帐号，方便用户使用\n\
 \n\
 PS:\n\
-1)软件万一界面死掉，不要慌张在软件目录result_save中自动缓存当天的查询记录，自动归类\n\
+1)软件万一界面死掉，在软件目录result_save中自动缓存当天的查询记录，自动归类\n\
 2)导出的冻结原因为非法登录的QQ，可以给我解，百以下0.25/个，百以上0.24/个，千以上0.22/个\n\
 3)本软件终身维护，有任何问题请联系QQ7806840或者淘宝店主" )
 

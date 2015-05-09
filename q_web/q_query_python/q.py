@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import cookielib, urllib2,urllib,socket
+import cookielib, urllib2,urllib,socket,Cookie
 import json,base64,time,string,random,re
-import mainframe
+import mainframe,superman
 
-def get_all_info_2(uuid,qnos,type="no_jfcode"):
+'''def get_all_info_2(uuid,qnos,type="no_jfcode"):
 	def query_status(qno,auth,cj):
 		Status=get_status(qno,auth,cj)
 		if type!="no_jfcode" and Status["state"]=="lock":
@@ -46,13 +46,50 @@ def get_all_info_2(uuid,qnos,type="no_jfcode"):
 		result= (response,response)
 	if mainframe.g_parrel_num>0: mainframe.g_parrel_num-=1
 	return result
-def get_all_info(uuid,qno,type="no_jfcode"):
-	cookiejar=cookielib.CookieJar()
+'''	
+def my_get_code(uuid,cookiejar,use_auth2):
+	response= use_auth2 and fetch_code(uuid)
+	print 'my_get_code',use_auth2,response
+	if response and dict.get(response,'status')=='ok':
+		session_value=dict.get(response,'clidata')
+		cookiejar.set_cookie(make_cookie('verifysession',session_value))
+		return response
 	Jpgbin=getimg(cookiejar)
-	cookie=get_cookie_from_cj(cookiejar)
 	if not Jpgbin: return {'status':'failed','reason':'jpg_not_availablele'}
-	AuthCode=recognize_code(uuid,Jpgbin)
-	if AuthCode:
+	response=recognize_code(uuid,Jpgbin)
+	cookie=get_cookie_from_cj(cookiejar)
+	upload_code(dict.get(response,'authcode'),cookie.value)
+	return response
+
+def superman_get_code(uuid,cookiejar):
+	Jpgbin=getimg(cookiejar)
+	if not Jpgbin: return {'status':'failed','reason':'jpg_not_availablele'}
+	response=superman_recognize_code(uuid,Jpgbin)
+	cookie=get_cookie_from_cj(cookiejar)
+	upload_code(dict.get(response,'authcode'),cookie.value)
+	return response
+
+def fetch_code(uuid):
+	Url="http://119.29.62.190:8180/aqqq/qv0/hqyzdm"
+	response=my_send_http(Url,{"uuid":uuid})
+	print 'fetch_code',response
+	return response
+
+def upload_code(code,session_value):
+	Url="http://119.29.62.190:8180/aqqq/qv0/hcyzdm"
+	response=my_send_http(Url,{"verify_code":code,'clidata':session_value})
+	print 'upload_code',response,code,session_value
+	return response
+
+
+def get_all_info(uuid,qno,type="no_jfcode",use_auth2=True):
+	cookiejar=cookielib.CookieJar()
+	if is_superman_logined():
+		response=superman_get_code(uuid,cookiejar)
+	else:
+		response=my_get_code(uuid,cookiejar,use_auth2)
+	if dict.get(response,"status") == "ok":
+		AuthCode,imgId=dict.get(response,"authcode",""),dict.get(response,"imgId")
 		Status=get_status(qno,AuthCode,cookiejar)
 		if dict.get(Status,"status") == "failed":
 			restore_fee(uuid,1)
@@ -61,9 +98,7 @@ def get_all_info(uuid,qno,type="no_jfcode"):
 			print 'report_authcode_err result:',r
 		if type!="no_jfcode" and Status["state"]=="lock":
 			Status["jfcode"]=get_jfcode(qno,AuthCode,cookiejar)
-		cookiejar.clear()
-		cookiejar.set_cookie(cookie)
-		return Status.update({"cj":cookiejar})
+		return Status
 	else:
 		return {"status":"failed", "reason":"authcode_not_available"}
 
@@ -110,13 +145,12 @@ def report_authcode_err(uuid,imgId):
     response=my_send_http(Url,{"uuid":uuid,"imgId":imgId})
     return response
 
+def superman_recognize_code(uuid,JpgBin):
+	return get_superman_code(JpgBin)
 def recognize_code(uuid,JpgBin):
-	if is_superman_logined():
-		return get_superman_code(JpgBin)
-	else:
-		Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
-		response=my_send_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(encrypt(JpgBin))})
-	return dict.get(response,"status") == "ok" and response["authcode"]
+	Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
+	response=my_send_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(encrypt(JpgBin))})
+	return response
 
 def recognize_code_2(uuid,JpgBin):
     Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
@@ -298,12 +332,34 @@ def test1(Acc,Code):
 	rsp=urlOpener.open(req)
 	return rsp.read()
 
+def imgCookieStr(ck):
+	return ck.name+'='+ck.value+'; PATH=/; DOMAIN=qq.com;'
+
+def make_cookie(name, value):
+    return cookielib.Cookie(
+        version=0,
+        name=name,
+        value=value,
+        port=None,
+        port_specified=False,
+        domain="qq.com",
+        domain_specified=True,
+        domain_initial_dot=False,
+        path="/",
+        path_specified=True,
+        secure=False,
+        expires=None,
+        discard=False,
+        comment=None,
+        comment_url=None,
+        rest=None
+    )	
 #--------------  superman账户直接访问方式相关接口----------------------------------
 #import superman
 g_superman=None
 def is_superman_logined():
-	return False
-#	return g_superman and g_superman.is_logined()
+#	return False
+	return g_superman and g_superman.is_logined()
 def login_superman(uname,pwd):
 	global g_superman
 	g_superman=superman.dcVerCode(uname,pwd)
@@ -312,4 +368,10 @@ def logout_superman():
 	global g_superman
 	g_superman=None
 def get_superman_code(img):
-	return g_superman.recByte(img)
+	res= g_superman.recByte(img)
+	print 'superman authcode',res
+	if res:
+		return {'status':'ok','authcode':res[0],'imgId':res[1]}
+	else:
+		return {'status':'failed','reason':'no_authcode'}
+

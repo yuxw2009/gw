@@ -5,6 +5,7 @@ import CSinterface as CS
 import mainframe as MAIN
 import q
 import json
+import webbrowser
 
 def write_data(filename='data',dictdata={}):#4-28
     dictdata0 = open_data(filename)
@@ -72,7 +73,7 @@ class loadframe(wx.Panel):
         if response_dict['status']=='ok':
             #self.write_data(dictdata={'acc':acc,'pwd':pwd})#4-28
             write_data(dictdata={'acc':acc,'pwd':pwd})#5-4
-            self.mainFrame.Destroy()
+            self.mainFrame.destroy()
             MAIN.start(response_dict)
         elif response_dict['reason']=='account_not_existed':
             self.result_statictext.SetLabel(u"登录失败，该账户不存在！")
@@ -218,6 +219,28 @@ class rechargeframe(wx.Panel):
             self.result_statictext.SetLabel(u"恭喜您充值成功,账户名:%s 当前余额为:%s"%(self.text1.GetValue(),response_dict['balance']))
         elif response_dict['status']=='failed':
             self.result_statictext.SetLabel(u"抱歉！充值失败,请检查充值卡号和用户名是否正确！\n如有疑问请联系店主淘宝或QQ7806840")
+class contact_us_frame(wx.Panel):
+    def __init__(self,parent):
+        wx.Panel.__init__(self, parent)
+        notic_text = wx.StaticText(self,label=u'本软件为QQ冻结查询工具\n如有兴趣可联系QQ：7806840\n淘宝旺旺:ztedaozei\n店铺:互联网络工作室\n')
+        notic_text.SetForegroundColour('blue')
+        colour = [(160,255,204),(153,204,255),(151,253,225),]
+        font = wx.Font(14, wx.SWISS, wx.NORMAL, wx.BOLD)
+        notic_text.SetFont(font)
+
+        self.SetBackgroundColour(colour[2])
+        self.contact_button = buttons.GenButton(self, -1, u'和我联系',size=(75,30))
+        self.Bind(wx.EVT_BUTTON,self.contact_us,self.contact_button)
+        sizer_contact=wx.BoxSizer(wx.VERTICAL)
+        sizer_contact.Add(notic_text)
+        sizer_contact.Add(self.contact_button)
+        self.SetSizer(sizer_contact)
+
+
+    def contact_us(self,event):
+        webbrowser.open_new('http://shop60392861.taobao.com/?spm=2013.1.1000126.d21.VQmLM6')
+
+
         
 class Frame(wx.Frame):
     def __init__(self):
@@ -227,10 +250,11 @@ class Frame(wx.Frame):
 
         panel = wx.Panel(self, -1)
         #中间功能取
-        nb = wx.Notebook(panel,style=wx.NB_FIXEDWIDTH)
+        nb = wx.Notebook(panel,style=wx.NB_TOP)
         nb.AddPage(loadframe(nb,self), u"会员登录")
         nb.AddPage(registerframe(nb), u"帐号注册")
         nb.AddPage(rechargeframe(nb), u"帐号充值")
+        nb.AddPage(contact_us_frame(nb), u"关于软件") #5-5增加
         #界面顶部图片
         image_top_add = wx.Image('pic/top.jpg', wx.BITMAP_TYPE_ANY)
         image_top_bmp = image_top_add.ConvertToBitmap()
