@@ -17,6 +17,14 @@ start(IP,Port) ->
 stop() ->
     gen_server:call(nmsi,stop).
 
+set_debug(Debug)->
+    {_,Pids}=show(),
+    F=fun({P,_S}) when is_pid(P)-> nmsi_server:set_debug(P,Debug);
+            (P) when is_pid(P)-> nmsi_server:set_debug(P,Debug);
+            (_)-> unknown_pid
+            end,
+    [F(Itm)||Itm<-Pids].
+
 show()->
     Fun=fun(State={listened,Listen,Pids})->
                {{Listen,Pids},State}

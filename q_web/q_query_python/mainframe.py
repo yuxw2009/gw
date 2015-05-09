@@ -10,11 +10,11 @@ import urllib,cStringIO,Image
 import CSinterface as CS
 import base64
 import re
-import win32clipboard
-import win32con
+#import win32clipboard
+#import win32con
 import string
-import text_ctrl_multiple as mult_text
-import win32ras
+#import text_ctrl_multiple as mult_text
+#import win32ras
 import showip
 import subprocess,sys
 import QQ_query

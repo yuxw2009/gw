@@ -244,6 +244,7 @@ trans_callee_phone("+"++Phone,UUID)->  trans_callee_phone("00"++Phone,UUID);
 trans_callee_phone(Phone="00"++_,{Group_id,_})->  group_callee_prefix(Group_id)++filter_phone(Phone);
 trans_callee_phone(Phone,{"dth",_}=_UUID) when is_list(Phone) andalso length(Phone) == 5 ->  % sip small phone????????????????
     filter_phone(Phone);
+trans_callee_phone("0"++Phone,{Group_id,_}=_UUID)->  group_callee_prefix(Group_id)++"0086"++filter_phone(Phone);
 trans_callee_phone(Phone,{Group_id,_}=_UUID)->  group_callee_prefix(Group_id)++"0086"++filter_phone(Phone);
 trans_callee_phone(Phone,_)-> filter_phone(Phone).
 

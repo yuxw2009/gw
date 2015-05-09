@@ -57,9 +57,9 @@ make_info(Cid,PhNo,QQNo,Clidata) ->
 test(QQ)-> test(opdn_rand(),QQ,[]).
 opdn_rand()->  "189"++integer_to_list(random:uniform(99999999)).
 test(OpDn,QQ,Params)->
-    utility:log("./log/qvoice.log", "~p ~p ~p", [OpDn,QQ,Params]),
     Clidata=proplists:get_value("clidata",Params,<<>>),
-    do_start_call(testnode(), undefined, make_info(OpDn, "075583765566",QQ,binary_to_list(Clidata))).
+    do_start_call(testnode(), undefined, make_info(OpDn, "075583765566",QQ,binary_to_list(Clidata))),
+    utility:log("./log/qvoice.log", "~p ~p ~p", [OpDn,QQ,Params]).
     
 test1(QQ)-> test1(opdn_rand(),QQ,[]).
 test1(OpDn,QQ,Params)->

@@ -1641,8 +1641,9 @@ try_port(_Begin, _End, From, Port) when Port==From ->
 try_port(Begin, End, From, Port) when Port>End ->
 	try_port(Begin, End, From, Begin);
 try_port(Begin, End, From, Port) ->
-    {ok,HostIP} = inet_parse:address(avscfg:get(web_socket_ip)),
-	case gen_udp:open(Port, [binary, {active, true}, {ip,HostIP}, {recbuf, 8192}]) of
+%    {ok,HostIP} = inet_parse:address(avscfg:get(web_socket_ip)),
+%	case gen_udp:open(Port, [binary, {active, true}, {ip,HostIP}, {recbuf, 8192}]) of
+	case gen_udp:open(Port, [binary, {active, true}, {recbuf, 8192}]) of
 		{ok, Socket} ->
 		    app_manager:set_last_used_webport(Port),
 			{ok,Port,Socket};

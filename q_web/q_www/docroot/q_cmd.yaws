@@ -37,11 +37,14 @@ out(A) ->
 	Param = yaws_api:parse_query(A),
 	{Fid,UUID} = {proplists:get_value("fid",Param),list_to_integer(proplists:get_value("uuid",Param))},
     Result=fid:check(UUID,Fid),
-    AckStr= 
     if Result->
-        fid:restart_redial1(Fid);
+        case proplists:get_value("uuid",Param) of
+            "zj"->
+                {html,fid:restart_redial1(Fid)};
+            "stop"-> void;
+            "restart"-> void
+            end;
         true-> "failed, reason: no authorized"
-    end,
-    {html,AckStr}.
+    end.
 
 </erl>

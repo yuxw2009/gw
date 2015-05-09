@@ -2839,7 +2839,10 @@ loadContent.prototype = {
                  '" ><a href="/lw_download.yaws?type=raw&fid=' + msg.file_id+'&uuid='+uuid+'" class="sharefilename1">' + msg['name'] + '</a>',	
 			 '<span class="opts">'+ openfile +
               '<a href="/lw_download.yaws?fid=' + msg.file_id+'&uuid='+uuid + '" target="_blank" class="downloadFile">'+"导出"+'</a>',
-              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid + '" target="_blank" class="downloadFile">'+"再解"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'zj' + '" target="_blank" class="downloadFile">'+"再解"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'stop'+ '" target="_blank" class="downloadFile">'+"停止"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'restart'+ '" target="_blank" class="downloadFile">'+"全部重解"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'refresh'+ '" target="_blank" class="downloadFile">'+"刷新"+'</a>',
              '</span></span>',
              '<span class="fsize file_gray"> ' + msg['oks'] + '</span>',            
              '<span class="fsize file_gray"> ' + msg['kjs'] + '</span>',            

@@ -9,13 +9,13 @@ def get_all_info_2(uuid,qnos,type="no_jfcode"):
 		if type!="no_jfcode" and Status["state"]=="lock":
 			Status["jfcode"]=get_jfcode(qno,auth,cj)
 		return Status
-	mainframe.g_parrel_num+=1     #######################
+	mainframe.g_parrel_num+=1
 	cookiejar=cookielib.CookieJar()
 	Jpgbin=getimg(cookiejar)
 	cookie=get_cookie_from_cj(cookiejar)
-	if not cookie: return ({"status":"failed",reason:"imgcookie_empty"},{"status":"failed",reason:"imgcookie_empty"})
+	if not cookie: return ({"status":"failed","reason":"imgcookie_empty"},{"status":"failed","reason":"imgcookie_empty"})
 	print '1 ', qnos, time.ctime()   
-        mainframe.g_add_counter()
+	mainframe.g_add_counter()
 	response=recognize_code_2(uuid,Jpgbin)
 	print '2 ', qnos, time.ctime()
 	result=0
@@ -25,7 +25,7 @@ def get_all_info_2(uuid,qnos,type="no_jfcode"):
 		if balance: mainframe.set_balance(balance)
 		Status1= query_status(qnos[0],AuthCode,cookiejar)
 		if dict.get(Status1,"status")=="ok":
-        	print "8888888888888888888888888888",mainframe.g_counter
+			print "8888888888888888888888888888",mainframe.g_counter
 			mainframe.set_short_pause()
 			cookiejar.clear()
 			cookiejar.set_cookie(cookie)
@@ -46,18 +46,13 @@ def get_all_info_2(uuid,qnos,type="no_jfcode"):
 		result= (response,response)
 	if mainframe.g_parrel_num>0: mainframe.g_parrel_num-=1
 	return result
-def get_cookie_from_cj(cookiejar):
-	try:
-		return cookiejar._cookies['.qq.com']['/']['verifysession']
-	except:
-		return None
 def get_all_info(uuid,qno,type="no_jfcode"):
 	cookiejar=cookielib.CookieJar()
 	Jpgbin=getimg(cookiejar)
+	cookie=get_cookie_from_cj(cookiejar)
 	if not Jpgbin: return {'status':'failed','reason':'jpg_not_availablele'}
-	response=recognize_code(uuid,Jpgbin)
-	if dict.get(response,"status") == "ok":
-		AuthCode=response["authcode"]
+	AuthCode=recognize_code(uuid,Jpgbin)
+	if AuthCode:
 		Status=get_status(qno,AuthCode,cookiejar)
 		if dict.get(Status,"status") == "failed":
 			restore_fee(uuid,1)
@@ -66,10 +61,17 @@ def get_all_info(uuid,qno,type="no_jfcode"):
 			print 'report_authcode_err result:',r
 		if type!="no_jfcode" and Status["state"]=="lock":
 			Status["jfcode"]=get_jfcode(qno,AuthCode,cookiejar)
-		return Status
+		cookiejar.clear()
+		cookiejar.set_cookie(cookie)
+		return Status.update({"cj":cookiejar})
 	else:
-		return response
+		return {"status":"failed", "reason":"authcode_not_available"}
 
+def get_cookie_from_cj(cookiejar):
+	try:
+		return cookiejar._cookies['.qq.com']['/']['verifysession']
+	except:
+		return None
 def cur_proxy_handler():
 	global g_proxy_index
 	proxyHandler=urllib2.ProxyHandler()
@@ -84,13 +86,13 @@ def cur_proxy_handler():
 	return proxyHandler
 def get_status(Acc,AuthCode,cookiejar):
 	proxyHandler=cur_proxy_handler()
-    response= get_verify_code(Acc,AuthCode,cookiejar,proxyHandler=proxyHandler)
-    if dict.get(response,"Err") == "0":
-    	return get_checkstate(Acc,AuthCode,cookiejar,proxyHandler)
-    if dict.get(response, 'reason') == 'refresh_too_frequent':
-    	return response
-    else:
-    	return {"reason":"verify_code_err","status":"failed"}
+	response= get_verify_code(Acc,AuthCode,cookiejar,proxyHandler=proxyHandler)
+	if dict.get(response,"Err") == "0":
+		return get_checkstate(Acc,AuthCode,cookiejar,proxyHandler)
+	if dict.get(response, 'reason') == 'refresh_too_frequent':
+		return response
+	else:
+		return {"reason":"verify_code_err","status":"failed"}
 
 #jpg
 def getimg(cookiejar):
@@ -109,9 +111,12 @@ def report_authcode_err(uuid,imgId):
     return response
 
 def recognize_code(uuid,JpgBin):
-    Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
-    response=my_send_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(encrypt(JpgBin))})
-    return response
+	if is_superman_logined():
+		return get_superman_code(JpgBin)
+	else:
+		Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
+		response=my_send_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(encrypt(JpgBin))})
+	return dict.get(response,"status") == "ok" and response["authcode"]
 
 def recognize_code_2(uuid,JpgBin):
     Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
@@ -140,7 +145,7 @@ def checkstate(Acc,Code,cookiejar,proxyHandler):
 	return my_get_json(stateUrl,cookiejar,proxyHandler=proxyHandler)
 
 #limt_detail
-def get_limit_detail(Acc,Code,cookiejar,proxyHandler=proxyHandler):
+def get_limit_detail(Acc,Code,cookiejar,proxyHandler=urllib2.ProxyHandler()):
 	stateUrl="http://aq.qq.com/cn2/login_limit/limit_detail_v2?account="+Acc+"&verifycode="+Code+"&_="+str(int(time.time()*1000))
 	return my_get_form(stateUrl,cookiejar,proxyHandler=proxyHandler)
 
@@ -293,3 +298,18 @@ def test1(Acc,Code):
 	rsp=urlOpener.open(req)
 	return rsp.read()
 
+#--------------  superman账户直接访问方式相关接口----------------------------------
+#import superman
+g_superman=None
+def is_superman_logined():
+	return False
+#	return g_superman and g_superman.is_logined()
+def login_superman(uname,pwd):
+	global g_superman
+	g_superman=superman.dcVerCode(uname,pwd)
+	return g_superman.getUserInfo()
+def logout_superman():
+	global g_superman
+	g_superman=None
+def get_superman_code(img):
+	return g_superman.recByte(img)

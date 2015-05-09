@@ -43,5 +43,5 @@ get_node(_)-> node().
 
 get_self_percent()->  0.1.
 
-
-
+get_mhost(_RemoteIp="10."++_)-> get(internal_ip);
+get_mhost(_RemoteIp)-> get(host_ip).

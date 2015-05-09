@@ -458,7 +458,8 @@ class MainUi(wx.Frame):
         #topsizer.Add(load_sizer6_plat,0,wx.ALL,8)
         topsizer.Add(self.statusbar,0,wx.EXPAND|wx.TOP,15)
         panel.SetSizer(topsizer)
-
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+        panel.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         
     def split_dicts(self,Dict0,N):
         dicts=[dict() for i in range(N)]
@@ -861,6 +862,10 @@ PS:\n\
             dlg.Destroy()
             pass
         CS.exit_server(LOAD_RESPONSE_DICT['uuid'])
+    def OnKeyDown(self, event):  
+        #按键时相应代码  
+        kc=event.GetKeyCode()  
+        print 'key down:',kc  
         
 
             

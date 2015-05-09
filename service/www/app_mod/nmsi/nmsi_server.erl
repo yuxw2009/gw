@@ -6,7 +6,7 @@
 -compile(export_all).
 
 init([IP,Port]) when is_tuple(IP) and is_integer(Port) ->
-    io:format("~p init~n",[?MODULE]),
+    utility:log("~p init~n",[?MODULE]),
     case gen_tcp:listen(Port,[binary,{ip,IP},{packet,raw},{active,once},{keepalive,true}]) of
         {ok,Listen} ->
             {ok,{listened,Listen,[]}};
@@ -14,7 +14,8 @@ init([IP,Port]) when is_tuple(IP) and is_integer(Port) ->
             {stop,{listen_failed,Reason}}
     end.
 
-terminate(normal,{listened,Listen,Pids}) ->
+terminate(Reason,{listened,Listen,Pids}) ->
+    utility:log("nmsi_server terminated reason:~p",[Reason]),
     gen_tcp:close(Listen),
     [exit(Pid,kill)||Pid<-Pids],
     ok.
@@ -34,16 +35,22 @@ handle_call({act,Act},_From,State) ->
 handle_call(stop,_From,State) ->
     {stop,normal,stopped,State}.
 
-handle_cast({new_socket,Pid},{listened,Listen,Pids}) ->
-    io:format("new_socket:~p~n",[Pid]),
+handle_cast({new_socket,Pid,Socket},{listened,Listen,Pids}) ->
+    {ok,{PeerAddr,PeerPort}}=inet:peername(Socket),
+    io:format("new_socket:pid:~p,socket:~p from~p~n",[Pid,Socket,{PeerAddr,PeerPort}]),
     erlang:monitor(process,Pid),
-    {noreply,{listened,Listen,[Pid|Pids]}};
+    {noreply,{listened,Listen,[{Pid,PeerAddr}|Pids]}};
 
 handle_cast({accept_failed,_Reason},State) ->
     {noreply,State}.
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason},{listened,Listen,Pids})->
-    io:format("pid ~p down",[Pid]),
+    case lists:keyfind(Pid,1,Pids) of
+    {Pid,PeerAddr}->
+        utility:log("nmsi_server pid ~p down reason:~p peer:~p",[Pid,_Reason,PeerAddr]);
+    _->
+        utility:log("nmsi_server pid ~p down reason:~p unknown peer",[Pid,_Reason])
+    end,
     {noreply,{listened,Listen,lists:delete(Pid,Pids)}};
 handle_info(_Msg,State) ->
     {noreply,State}.
@@ -55,7 +62,7 @@ waiting_for_accept(Listen,Parent) ->
     case gen_tcp:accept(Listen) of
         {ok,Socket} ->
             Pid = spawn(fun() -> waiting_for_accept(Listen,Parent) end),
-            gen_server:cast(Parent,{new_socket,Pid}),
+            gen_server:cast(Parent,{new_socket,Pid,Socket}),
             {ok,TRef} = timer:send_after(nmsi_configure:heart_interval(),heart_interval_arrive),
             loop(Socket,#conn_state{},{TRef,0});
         {error,Reason} ->
@@ -147,8 +154,8 @@ conn_status(Pid)->
     Act=fun(S)->
                      {S,S}   end,
     exe_cmd(Pid,Act).
-set_debug(Pid,Status)->
-    Act=fun(S)->  {ok,S#conn_state{status=Status}} end,
+set_debug(Pid,Debug)->
+    Act=fun(S)->  {ok,S#conn_state{debug=Debug}} end,
     exe_cmd(Pid,Act).
 exe_cmd(Pid,Act)->                     
     Pid !{act,Act,self()},
@@ -161,6 +168,7 @@ exe_cmd(Pid,Act)->
 
 loop(Socket,ConnState=#conn_state{status=State,debug=Debug},{TRef,_Retry} = Heart) ->
     if Debug-> io:format(".~p.",[self()]); true-> void end,
+    {_,Peer}=inet:peername(Socket),
     HeartMML = list_to_binary([?MSG_HEAD,?MSG_HEART_TYPE]),
     receive
         {tcp,Socket,<<Head:4/binary,Type:1/binary,Len:4/integer-unit:8,Ver:4/binary,EID:8/binary,TID:4/binary,Ack:4/binary,FUP:1/binary,CPID:2/binary,Rev:16/binary,Rest/binary>>} ->
@@ -194,11 +202,11 @@ loop(Socket,ConnState=#conn_state{status=State,debug=Debug},{TRef,_Retry} = Hear
             inet:setopts(Socket,[{active,once}]),
             loop(Socket,ConnState,Heart);
         {tcp_closed,Socket} ->
-            io:format("peer close socket~n"),
+            utility:log("peer close socket ~p~n",[Peer]),
             {ok,cancel} = timer:cancel(TRef),
             gen_tcp:close(Socket);
         stop ->
-            io:format("stop socket~n"),
+            utility:log("we stop socket,peer:~p",[Peer]),
             {ok,cancel} = timer:cancel(TRef),
             gen_tcp:close(Socket);
         {act,Act,From} ->

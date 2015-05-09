@@ -41,9 +41,15 @@ get_auth_code(Jpg)->
 %                    {ok,Fd}=file:open("yzm1.jpg",[write]),
 %                    file:write(Fd,Jpg),
 %                    file:close(Fd),
-                    io:format("get_auth_code:~p~n",[Params]),
-                    [{status,ok},{authcode,proplists:get_value("result",Params)}];
-                _->[{status,failed},{reason,code_unparsable}]
+                    case proplists:get_value("info",Params) of
+                    1->
+%                        io:format("get_auth_code:~p~n",[Params]),
+                        [{status,ok},{authcode,proplists:get_value("result",Params)},{imgId,proplists:get_value("imgId",Params)}];
+                    _-> % failure
+                        io:format("get_auth_code failure:~p~n",[Body]),
+                        [{status,failed},{reason,cannot_recognize_authcode},{detail,Body}]
+                    end;
+                _->[{status,failed},{reason,code_unparsable},{detail,Body}]
                 end;
         _->  [{status,failed},{reason,code_unrecognize_code}]
     end.
@@ -64,6 +70,14 @@ manual_get_jpg()->
     Cookiestr=proplists:get_value("set-cookie",Headers,""),
     [{status,ok},{jpg,base64:encode(Body)},{clidata,Cookiestr}].
 
+test_get_jpg()->
+    inets:start(),
+    httpc:set_options([{cookies,enabled}]),
+    {ok,{_StatusLine,Headers,Body}}=httpc:request(get,{"http://captcha.qq.com/getimage?aid=2001601&0.5957661410793789",headers()},[],[{body_format,binary}]),
+    Cookiestr=proplists:get_value("set-cookie",Headers,""),
+    AuthRsp=recognize_code(Body),
+    io:format("authrsp:~p ~p~n",[AuthRsp,Cookiestr]),
+    [{status,ok},{jpg,base64:encode(Body)},{clidata,Cookiestr}].
 manual_query({Qno,Code,Clidata})->
     inets:start(),
     httpc:set_options([{cookies,enabled}]),
@@ -79,6 +93,19 @@ recognize_code(JpgBin)->
     Img=jpg2str(JpgBin),
     Body=string:join([K++"="++V||{K,V}<-[{"username",Uname},{"password",(Pwd)},{"softId",(Sid)},{"imgdata",(Img)}]],"&"),
     httpc:request(post,{Url,[],"application/x-www-form-urlencoded",Body},[],[{body_format,string}]).    
+
+report_authcode_error(ImgId)->
+    inets:start(),
+    Url="http://api2.sz789.net:88/ReportError.ashx",
+    Uname="testyyy",
+    Pwd="321123",
+    Body=string:join([K++"="++V||{K,V}<-[{"username",Uname},{"password",(Pwd)},{"imgId",ImgId}]],"&"),
+    case httpc:request(post,{Url,[],"application/x-www-form-urlencoded",Body},[],[{body_format,string}]) of
+        {ok,{_,_,Body}}->  
+            io:format("report_authcode_error result: ~p~n",[Body]);
+        R->
+            io:format("report_authcode_error result: ~p~n",[Body])
+    end.
 
 get_status()-> get_status(test_acc()).
 get_status(Acc)->get_status(Acc,test_code()).

@@ -38,38 +38,49 @@ get_array_object(JsonObj, Key, Spec) ->
     [decode(I, Spec, []) || I<-get(JsonObj, Key)].
 
 get(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    Value.
+    case rfc4627:get_field(JsonObj, Key) of
+    {ok, Value}-> Value;
+    _-> undefined
+    end.
 
 get_value(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    value2list(Value).
+    case get(JsonObj, Key) of
+    undefined-> undefined;
+    V->    value2list(V)
+    end.
 
 value2list(V) when is_integer(V) -> integer_to_list(V);
 value2list(V) when is_binary(V) -> binary_to_list(V).
 
 get_binary(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    Value.
+    get(JsonObj, Key).
 
 get_array(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    [value2list(I) || I<-Value].
+    case get(JsonObj, Key) of
+    undefined-> undefined;
+    V->    [value2list(I) || I<-V]
+    end.
 
 get_array_integer(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    [list_to_integer(value2list(I)) || I<-Value].
-
+    case get(JsonObj, Key) of
+    undefined-> undefined;
+    V->    [list_to_integer(value2list(I)) || I<-V]
+    end.
+    
 get_array_atom(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    [atom(value2list(I)) || I<-Value].
+    case get(JsonObj, Key) of
+    undefined-> undefined;
+    V->    [atom(value2list(I)) || I<-V]
+    end.
 
 get_array_binary(JsonObj, Key) ->
-    {ok, Value} = rfc4627:get_field(JsonObj, Key),
-    [I || I<-Value].
+    [I || I<-get(JsonObj, Key)].
 
 get_integer(JsonObj, Key) ->
-    list_to_integer(get_string(JsonObj, Key)).
+    case get_string(JsonObj, Key) of
+    undefined-> undefined;
+    V->    list_to_integer(V)
+    end.
 
 get_atom(JsonObj, Key) ->
     atom(get_string(JsonObj, Key)).

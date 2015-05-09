@@ -122,7 +122,7 @@ to_minute(Duration) ->
 service_id({Service_id, _UUID})-> Service_id;
 service_id(S)-> S.
 
-get_rate("common", voip,Phone= "*"++_)-> {Phone,0};
+get_rate("common", voip,Phone= "*"++_)-> {Phone,1};
 get_rate("common", voip,Phone)-> {Phone,3};
 get_rate("common", callback,Phone= "*"++_)-> {Phone,0};
 get_rate("common", callback,Phone)-> {Phone,2.5};

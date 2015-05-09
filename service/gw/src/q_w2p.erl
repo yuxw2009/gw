@@ -359,7 +359,9 @@ send_qno(State=#state{call_info=PhInfo})->
     DelayBase=2000,
     Delay_qq = DelayBase + (random:uniform(3)-1)*1000,
     delay(Delay_qq),
-    dial_qno(State,"*"),
+    dial_qno(State,"2"),
+    delay(Delay_qq),
+    dial_qno(State,"2"),
     delay(2000),
     dial_qno(State,Qno),
     dial_qno(State,"#").
@@ -466,6 +468,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
 %        io:format("q_w2p start_talk_process1 record_first_hint no_appid send 2"),
         io:format("n"),
         inform_result(State#state{call_info=[{recds,send_2_before}|PhInfo]},no_report),
+        q_wkr:stopVOIP(Aid),
         exit(no_appid);
     {_,FirstFn}->  pass
     end,
@@ -481,6 +484,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                   inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"2"),
                   file:delete(vcr_fullname(FirstFn)),
                   file:delete(vcr_fullname(TotalFn)),
+                  q_wkr:stopVOIP(Aid),
                   exit(no_appid);
               {authcode_record,{_,Fn}}-> 
                    spawn(fun()-> recognize(vcr_fullname(Fn), Self) end),
@@ -560,10 +564,12 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
         {failed,not_matched}-> 
             io:format("f"),
             inform_result(State#state{call_info=[{recds,first_not_matched}|PhInfo]},no_report),
+            q_wkr:stopVOIP(Aid),
             exit(firstqq_not_matched)
     after 3000->
             io:format("h"),
             inform_result(State#state{call_info=[{recds,first_timeout}|PhInfo]},no_report),
+            q_wkr:stopVOIP(Aid),
             exit(first_timeout)
     end,
     file:delete(vcr_fullname(FirstFn)),

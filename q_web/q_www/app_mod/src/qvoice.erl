@@ -10,12 +10,17 @@
 -define(TESTNODE, 'qtest@14.17.107.196').
 -define(TESTNODE1, 'qtest1@14.17.107.196').
 
+handle00(A,M,P)->
+    Json=handle0(A,M,P),
+    Json.
+%    utility:pl2jso([{data_enc,lwork_app:encrypto(rfc4627:encode(Json))}]).
 handle0(Arg, 'POST', ["register"]) ->handle(Arg, 'POST', ["register"]);
 handle0(Arg, 'POST', ["login"]) -> handle(Arg, 'POST', ["login"]);
 handle0(Arg, 'POST', ["recharge"]) -> handle(Arg, 'POST', ["recharge"]);
 handle0(Arg, 'POST', ["get_code"]) -> handle(Arg, 'POST', ["get_code"]);
 handle0(Arg, Method, Params) ->
     { UUID} = utility:decode(Arg, [{uuid, s}]),
+    io:format("UUID:~p~n",[{Params,UUID}]),
     case lw_register:check(UUID) of
     ok->    handle(Arg, Method, Params);
     no_money-> utility:pl2jso_br([{status,failed},{reason,no_money}]);
@@ -32,16 +37,37 @@ handle(Arg, 'POST', ["login"]) ->
 handle(Arg, 'POST', ["recharge"]) ->
     { Acc,  AuthCode} = utility:decode(Arg, [{acc, s}, {auth_code,s}]),
     utility:pl2jso_br(lw_register:recharge({Acc,AuthCode}));
+handle(Arg, 'POST', ["get_code0"]) ->
+    {Jpgbin,UUID,Quati} = utility:decode(Arg, [{jpgbin, b}, {uuid,s},{qua,i}]),
+    io:format("get_code:~p qua:~p~n",[UUID,Quati]),
+    Quatity=if Quati=/=undefined-> 2; true-> 1 end,
+    case lw_register:check(UUID) of
+    ok->    
+        R=qclient:get_auth_code(lwork_app:decrypto(Jpgbin)),
+        utility:pl2jso_br(consume(UUID,R,Quatity*authcode_fee()));
+    Reason-> utility:pl2jso_br([{status,failed},{reason,Reason}])
+    end;
 handle(Arg, 'POST', ["get_code"]) ->
     Param = yaws_api:parse_post(Arg),
-    {Jpgbin,UUID} = {proplists:get_value("jpgbin",Param),proplists:get_value("uuid",Param)},
-    io:format("get_code:~p~n",[UUID]),
+    {Jpgbin,UUID,Quati} = {proplists:get_value("jpgbin",Param),proplists:get_value("uuid",Param),proplists:get_value("qua",Param)},
+    io:format("get_code:~p qua:~p~n",[UUID,Quati]),
+    Quatity=if Quati=/=undefined-> 2; true-> 1 end,
     case lw_register:check(UUID) of
     ok->    
         R=qclient:get_auth_code(utility:fb_decode_base64(Jpgbin)),
-        utility:pl2jso_br(consume(UUID,R,authcode_fee()));
+        utility:pl2jso_br(consume(UUID,R,Quatity*authcode_fee()));
     Reason-> utility:pl2jso_br([{status,failed},{reason,Reason}])
     end;
+handle(Arg, 'POST', ["restore_fee"]) ->
+    { UUID,  Quatity} = utility:decode(Arg, [{uuid, s}, {qua,i}]),
+    io:format("restore_fee : ~p ~p~n",[UUID,Quatity]),
+    utility:pl2jso_br(consume(UUID,[{status,ok}],-1*Quatity*authcode_fee()));
+    
+handle(Arg, 'POST', ["report_autherr"]) ->
+    { UUID,  ImgId} = utility:decode(Arg, [{uuid, s}, {imgId,s}]),
+    io:format("report_autherr : ~p ~p~n",[UUID,ImgId]),
+    qclient:report_authcode_error(ImgId),
+    utility:pl2jso_br([{status,ok}]);
     
 handle(Arg, 'POST', ["query_qno_status"]) ->
     { UUID,  QQNo} = utility:decode(Arg, [{uuid, s}, {qno,s}]),
@@ -55,7 +81,8 @@ handle(Arg, 'POST', ["manual_query"]) ->
     utility:pl2jso_br(Res);
 handle(Arg, 'POST', ["logout"]) ->
     { UUID} = utility:decode(Arg, [{uuid, s}]),
-    utility:pl2jso_br([{status,ok},{uuid,<<"123">>}]);
+    lw_register:logout(UUID),
+    utility:pl2jso_br([{status,ok},{uuid,UUID}]);
 handle(Arg, 'POST', ["query_balance"]) ->
     UUID=utility:query_string(Arg, "uuid"),
     utility:pl2jso_br([{status,ok},{balance,lw_register:uuid_balance(UUID)}]);

@@ -9,3 +9,11 @@ log
 .svn
 data
 *.pcm
+*.pyc
+/q_web/q_query_python/result_save/2015-4-23查询缓存-正常登录.txt
+/q_web/q_query_python/result_save/2015-4-23查询缓存-申诉解限-登录环境异常.txt
+/q_web/q_query_python/result_save/2015-4-23查询缓存-短信解限-QQ被非法登录.txt
+/q_web/q_query_python/result_save/2015-4-23查询缓存-短信解限-发不良信息.txt
+/q_web/q_query_python/result_save/2015-4-23查询缓存-短信解限-登录环境异常.txt
+/q_web/q_query_python/result_save/2015-4-24查询缓存-正常登录.txt
+/q_web/q_query_python/result_save/2015-4-25查询缓存-正常登录.txt

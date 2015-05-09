@@ -28,7 +28,7 @@ processNATIVE2({R_Addr,R_Port},PhNo) when is_list(R_Addr),is_integer(R_Port),is_
     		   
     {value, Aid, LPort} = w2p:start({mobile,R_Options}, L_Options, PhNo,PLType, {R_Addr,R_Port}),
     ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
-    {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}.
+    {successful,Aid,{avscfg:get_mhost(R_Addr),LPort}, ToMobiles}.
 
 processSipP2pCall(SipInfo)  ->
     PLType = avscfg:get(web_codec),

@@ -110,15 +110,9 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
 	Phinfo=proplists:get_value(call_info,Options,[]),
     Phone = proplists:get_value(phone, Phinfo),
     UUID = proplists:get_value(cid, Phinfo),
-	{VCR,VCR1} = 
-      case {Vcr,proplists:get_value(qno,Phinfo)} of
-        {has_vcr, undefined}->
+	{VCR,VCR1} = if Vcr==has_vcr-> 
 	           {vcr:start(mkvfn(UUID++"_"++Phone)),new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
-        {has_vcr, Qno}->
-             {vcr:start(mkvfn("t"++Qno++"_"++UUID)),new_vcr:start(mkvfn("t"++Qno++"_"++UUID))};
-        _->
-             {undefined,undefined} 
-      end,
+	           true-> {undefined,undefined} end,
 	ST=#st{phinfo=Phinfo,vcr=VCR,noise=Noise,vcr1=VCR1},
 	ST1 = case WebCdc of
         	pcmu ->
@@ -510,15 +504,12 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/bina
 %      io:format("x"),
       NewStats=down_udp_stats(ST#st.stats,Bin),
       NewSt=record_ip_port(ST#st{stats=NewStats},{Addr,Port}),
-      PCM0 = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
-      PCM=adjust_gain(PCM0),
-      processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
-      processVCR_rrp(ST#st.vcr,ST#st.vcr_buf,PCM),
 	AB = ToWeb#apip.abuf,
 	if size(AB) > ?VBUFOVERFLOW * (?FS8K div 1000) * 2 ->
            {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS}}};
 	true ->
         if Wcdc==isac ->
+            PCM = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
             PCM16_16K = if LastSeq==undefined -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
                                    size(PsU) < 10 -> ?APPLY(erl_resample, up16k, [PCM,<<0,0,0,0,0,0,0,0,0,0>>]);
                         true -> ?APPLY(erl_resample, up16k, [PCM,PsU]) end,
@@ -528,9 +519,14 @@ handle_info({udp,_Sck,Addr,Port,<<2:2,_:6,_Mark:1,PN:7,Seq:16,TS:32,_SSRC:4/bina
                 <<_:310/binary,PsU2_/binary>> -> PsU2_;
                 _->  <<0,0,0,0,0,0,0,0,0,0>>
                 end,
+            processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
             {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2},passu=PsU2}};
         true ->     % ilbc or opus
+            PCM0 = uncompress_voice(ST#st.sipcodec,PN,Body,ST),
+            PCM=adjust_gain(PCM0),
             Abuf2 = <<AB/binary,PCM/binary>>,
+            processVCR_rrp(ST#st.newvcr,ST#st.vcr_buf,PCM),
+            processVCR_rrp(ST#st.vcr,ST#st.vcr_buf,PCM),
 %            io:format("."),
             {noreply,NewSt#st{r_base=#base_info{seq=Seq,timecode=TS},to_web=ToWeb#apip{abuf=Abuf2}}}
         end

@@ -11,7 +11,6 @@
 -define(VERSION_DTH_INFO, "./docroot/version/version_dth.info").
 -define(VERSION_COMMON_INFO, "./docroot/version/version_common.info").
 
-%% handle start callback call request
 handle(Arg,'POST', ["register"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
     Res=
@@ -292,6 +291,7 @@ get_maxtalkt(Arg)->
 get_group_id(UUID,_Arg)->     %from login_info
     login_processor:get_group_id(UUID).
 build_call_options(UUID, Arg)->
+    Ip=utility:client_ip(Arg),
     { _CallerPhone, Phone, {IPs=[SessionIP|_], Port, Codec}, Class} = utility:decode(Arg, [{caller_phone, s}, {callee_phone, s},
 	                                   {sdp, o, [{ip, as}, {port, i}, {codec, s}]}, {userclass, s}]),
     {MaxtalkT0,ServiceId} = {get_maxtalkt(Arg),get_group_id(UUID,Arg)},
@@ -300,7 +300,7 @@ build_call_options(UUID, Arg)->
                  io:format("sadfasfdasfdasfdasf~n"),
                  lw_register:consume_coins(UUID,Charges)
              end,
-    Options0=[{uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},{codec,Codec},
+    Options0=[{uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,utility:make_ip_str(Ip)}]},{cid,UUID},{userclass, Class},{codec,Codec},
                      {callback,{node(),lw_register,consume_coins,UUID}}],
     case voice_handler:check_token(UUID, string:tokens(Phone,"@")) of
         {pass, Phone2,Others=[FeeLength]} ->
@@ -332,7 +332,7 @@ start_call(UUID, Arg, XgAct) ->
       if length(Phone) < 3 ->  utility:pl2jso([{status, failed},{reason,phone_too_short}]);
       true->
 %            io:format("start_call req:~p~noptions:~p~n",[Arg#arg.clidata, Options]),
-        	case rpc:call(Node, avanda, processNATIVE, [IPs, Port, Options]) of
+        	case rpc:call(Node, avanda, processNATIVE, [[utility:make_ip_str(Ip)], Port, Options]) of
         	    {successful,SessionID,{PeerIP,PeerPort}}->
         	         utility:pl2jso([{status, ok},{session_id, voice_handler:enc_sid(Node, SessionID)}, {ip, list_to_binary(PeerIP)}, 
         	                              {port, PeerPort}, {codec, 102},{payload_mode, normal},{rssrc, <<"123">>}]);
@@ -379,9 +379,10 @@ get_node_by_ip0(UUID,Ip)->
 get_internal_node_by_ip(UUID,Ip)-> 
     wwwcfg:get_internal_wcgnode(utility:c2s(utility:country(Ip))).
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
-%get_node_by_ip(_luyin_test="008618017813673",_Ip)-> 'gw@119.29.62.190';
+%get_node_by_ip(_luyin_test="008618017813673",_Ip)-> 'gw1@119.29.62.190'; %'gw_git@202.122.107.66'; %
+get_node_by_ip(UUID=_yxwfztest="31230011",_)-> get_internal_node_by_ip(UUID,{168,167,165,245});
 get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
-get_node_by_ip(UUID="3000"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);
+get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
 get_node_by_ip(UUID="00862180246"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);
 get_node_by_ip(UUID,Ip)->
     R0= wwwcfg:get_wcgnode(utility:c2s(utility:country(Ip))),

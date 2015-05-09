@@ -82,32 +82,26 @@ local_login(Params)->
     end,
     {Status,utility:pl2jso_br(Res)}.
         
-login1(UUID_SNO,_, Pwd)->
-    case string:tokens(UUID_SNO,"_") of
-    [UUID,SNO, "MANUAL"]->
-        case authen(UUID++"_"++SNO, Pwd) of
-        ok->    
-%            ?MODULE ! {login, {UUID,SNO}},
-            [{status,ok}];
-        _->  [{status,failed},{reason, invalid_pwd}]
-        end;
-    [UUID,SNO, "AUTO"]-> login_processor:autheticated(UUID++"_"++SNO);
-    _-> [{status,failed},{reason, no_sno}]
-    end.
-
 autheticated(UUID_SNO,Callee)-> 
    UUID0=
    case string:tokens(UUID_SNO,"_") of
        [Head|_]->Head;
        _-> undefined
    end,
-   check_auth(UUID0,Callee).
+   check_auth0(UUID0,Callee).
+
+check_auth0(UUID="0"++R_UUID,Callee)->  
+    case check_auth(UUID,Callee) of
+    [{status,failed}|_]->  check_auth(R_UUID,Callee);
+    R-> R
+    end;
+check_auth0(UUID,Callee)->      check_auth(UUID,Callee).
 
 check_auth(UUID,"*"++_)->  [{status,ok},{uuid,UUID}];
 check_auth(UUID,_)->
    case get_tuple_by_uuid_did(UUID) of
    undefined->
-       [{status,failed},{reason,no_logined}];
+       [{status,failed},{reason,list_to_atom(UUID++"_no_logined")}];
    #login_itm{status=?ACTIVED_STATUS}->
        [{status,ok},{uuid,UUID}];
    #login_itm{}->

@@ -16,13 +16,16 @@ out(Arg) ->
     Uri = yaws_api:request_url(Arg),
     Path = string:tokens(Uri#url.path, "/"), 
     Method = (Arg#arg.req)#http_request.method,
-    Arg1= 
-    case catch rfc4627:decode(Arg#arg.clidata) of
-    {ok,{obj,[{"data_enc",<<_:7/binary,Base64_Json_bin/binary>>}]},_}->
-        Json_bin=utility:fb_decode_base64(Base64_Json_bin),
-        Arg#arg{clidata=Json_bin};
-    _-> Arg
-    end,
+%    io:format("~p~n",[{Uri,Path,Method,Arg#arg.clidata}]),
+    Arg1= if Method == 'POST'-> 
+                    case catch rfc4627:decode(Arg#arg.clidata) of
+                    {ok,{obj,[{"data_enc",Base64_Json_bin}]},_}->
+                        Json_bin=decrypto(Base64_Json_bin),
+                        Arg#arg{clidata=Json_bin};
+                    _-> Arg
+                    end;
+                true-> Arg
+                end,
     JsonObj =
     case catch handle(Arg1, Method, Path) of
     	{'EXIT', Reason} -> 
@@ -79,6 +82,7 @@ handle(Arg, Method, ["lwork","im"|Params]) -> im_handler:handle(Arg, Method, Par
 handle(Arg, Method, ["lwork","mvideo"|Params]) -> mvideo_handler:handle(Arg, Method, Params);
 %% handle voice request
 handle(Arg, Method, ["aqqq","qv"|Params]) -> qvoice:handle(Arg, Method, Params);
+handle(Arg, Method, ["aqqq","qv0"|Params]) -> qvoice:handle00(Arg, Method, Params);
 %% handle voice request
 handle(Arg, Method, ["lwork","webcall"|Params]) -> webcall_handler:handle(Arg, Method, Params);
 %% handle unknown request
@@ -90,3 +94,19 @@ handle(_Arg, _Method, _Params) ->
 encode_to_json(JsonObj) ->
     {content, "application/json", rfc4627:encode(JsonObj)}.
 
+encrypto(P) when is_list(P)-> encrypto(list_to_binary(P));
+encrypto(P)->
+	Key = <<16#31,16#23,16#45,16#67,16#89,16#ab,16#cd,16#fe>>,
+	IVec = <<16#33,16#34,16#56,16#78,16#90,16#ab,16#cd,16#fe>>,
+	PadLen=8-(size(P) rem 8),
+	Pad=binary:copy(<<" ">>, PadLen),
+	base64:encode(crypto:des_cbc_encrypt(Key, IVec, <<P/binary,Pad/binary>>)).
+
+decrypto(P)->
+     decrypto(P,fun(B)-> utility:fb_decode_base64(B) end).
+
+decrypto(P,Fun)->
+	Key = <<16#31,16#23,16#45,16#67,16#89,16#ab,16#cd,16#fe>>,
+	IVec = <<16#33,16#34,16#56,16#78,16#90,16#ab,16#cd,16#fe>>,
+	crypto:des_cbc_decrypt(Key, IVec, Fun(P)).	
+	
