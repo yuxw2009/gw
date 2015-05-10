@@ -33,7 +33,7 @@ FROZEN_REASON_MOD_PASS = u'改密立即恢复登录'
 FROZEN_REASON_COMPLAIN = u'申诉成功立即恢复登录'
 VERIFY_CODE = ''  #保存验证码，传入线程
 CLIDATA = ''     #保存clidata 传入线程
-LOAD_RESPONSE_DICT= {'uuid':'','balance':'','deadline':'','acc':''}  #保存登录界面登录之后的信息字典，包括uuid,余额，使用期限
+LOAD_RESPONSE_DICT= {'uuid':'','balance':'','deadline':'','acc':'','ip':''}  #保存登录界面登录之后的信息字典，包括uuid,余额，使用期限
 TODAY = str(time.localtime()[0])+'-'+str(time.localtime()[1])+'-'+str(time.localtime()[2])
 GRIDROWS = 20
 QUERY_FAIL_NUM = 0
@@ -140,6 +140,7 @@ class WorkerThread(threading.Thread):
         self.disconnect_band()
         self.connect_band()
         self.ip = showip.getip()
+        LOAD_RESPONSE_DICT['ip'] = self.ip
         wx.CallAfter(self.window.log_message,u'当前IP:%s\n'%self.ip)
 
     def getimage2(self,uuid):
@@ -191,19 +192,6 @@ class WorkerThread(threading.Thread):
         wx.CallAfter(self.window.Analyse_result,i,response)
         return True
 
-    def Query_auto_bak(self):
-        print 'self.dict_qno=%s----%s\n'%(self.dict_qno,self.getName())
-        for i in self.dict_qno.keys():
-            if self.timeToQuit.isSet():
-                wx.CallAfter(self.window.ThreadFinished,self)
-                print 'self.timeToQuit.isSet----%s\n'%self.getName()
-                break
-            elif not self.window.grid.GetCellValue(i,1):
-                print 'xuliehao=%d------%s\n'%(i,self.getName())
-                response = CS.query_state(self.uuid,self.dict_qno[i])
-                if not self.update_response(i,response):
-                    break
-        wx.CallAfter(self.window.ThreadFinished,self)
             
     def Query_auto(self):
         global g_counter
@@ -239,7 +227,10 @@ class WorkerThread(threading.Thread):
                         def updatelazy(i,r):
                             self.update_response(i,r)
                         threading.Timer(3,updatelazy,[i2,response2]).start()
-                    threading.Timer(0,query_and_update,[self.uuid,i1,i2,qno1,qno2]).start()
+                    if SELECT_RADIO_BUTTON == 'quick':
+                        threading.Timer(0,query_and_update,[self.uuid,i1,i2,qno1,qno2]).start()
+                    else:
+                        query_and_update(self.uuid,i1,i2,qno1,qno2)
 #                    time.sleep(get_pause_len())
                     time.sleep(3)
                     del qinput[:]
@@ -539,6 +530,7 @@ class MainUi(wx.Frame):
         bandfield_sizer.Add(load_sizer1_band)
         bandfield_sizer.Add(load_sizer2_band)
         
+        
 
         #打码平台设置区：
         platfield=wx.StaticBox(panel,-1,u"打码平台设置区")
@@ -552,7 +544,7 @@ class MainUi(wx.Frame):
         
         statictext2_plat = wx.StaticText(panel, -1,u" 平台帐号 ",style=wx.ALIGN_CENTER)
         statictext3_plat = wx.StaticText(panel, -1,u" 平台密码 ",style=wx.ALIGN_CENTER)        
-        self.text1_plat = wx.TextCtrl(panel, -1, u"",size=(90, 20),style=wx.ALIGN_CENTER_HORIZONTAL)
+        self.text1_plat = wx.TextCtrl(panel, -1, u"%s"%dict.get(QQ_query.open_data(),'acc_plat'),size=(90, 20),style=wx.ALIGN_CENTER_HORIZONTAL)
         self.text2_plat = wx.TextCtrl(panel, -1, u"",size=(90, 20),style=wx.ALIGN_CENTER_HORIZONTAL|wx.TE_PASSWORD)
 
         self.plat_load = buttons.GenButton(panel, -1, u'登录平台',size=(75,21))
@@ -607,17 +599,20 @@ class MainUi(wx.Frame):
         load_sizer6_plat.Add(load_sizer5_plat,0,wx.ALL,1)
         load_sizer6_plat.Add(load_sizer9_plat,0,wx.ALL,1)
 
+        self.disable_band() #默认不设置宽带
+
 
         
 
         #状态栏区
         self.statusbar=wx.StatusBar(panel,-1)
         self.statusbar.SetFieldsCount(4)
-        self.statusbar.SetStatusWidths([-4,-4,-4,-6])
+        self.statusbar.SetStatusWidths([-4,-4,-3,-6])
         self.statusbar.SetStatusText(u'查询进度：')
         self.statusbar.SetStatusText(u'到期时间：%s'%LOAD_RESPONSE_DICT['deadline'],1)
-        self.statusbar.SetStatusText(u'余额：%s 元'%LOAD_RESPONSE_DICT['balance'],2)
-        self.statusbar.SetStatusText(u'网络状态正常',3)
+        self.statusbar.SetStatusText(u'账户：%s '%LOAD_RESPONSE_DICT['acc'],2)
+        LOAD_RESPONSE_DICT['ip'] = showip.getip()
+        self.statusbar.SetStatusText(u'当前IP：%s'%LOAD_RESPONSE_DICT['ip'],3)
 
 
 
@@ -644,6 +639,16 @@ class MainUi(wx.Frame):
         topsizer.Add(load_sizer6_plat,0,wx.ALL,8)
         topsizer.Add(self.statusbar,0,wx.EXPAND|wx.BOTTOM,1)
         panel.SetSizer(topsizer)
+
+    def disable_band(self):
+        self.bandname.Disable()
+        self.text1_band.Disable()
+        self.text2_band.Disable()
+
+    def enable_band(self):
+        self.bandname.Enable()
+        self.text1_band.Enable()
+        self.text2_band.Enable()
 
 
     def help_plat(self,event):
@@ -673,6 +678,7 @@ UU云官网： www.uuwise.com " )
                     self.plat_load.Disable()
                     self.statictext6_plat.SetForegroundColour('green')
                     self.statictext7_plat.SetForegroundColour('green')
+                    QQ_query.write_data(dictdata={'acc_plat':acc_plat})#5-4宽带信息保存
                 else:
                     self.statictext6_plat.SetLabel(u'未知异常')
                     self.statictext6_plat.SetForegroundColour('red')
@@ -772,16 +778,19 @@ UU云官网： www.uuwise.com " )
         global SELECT_RADIO_BUTTON
         SELECT_RADIO_BUTTON='normal'
         self.log_message(u'当前:正常查询\n')
+        self.disable_band()
         
     def OnRadio2(self, event):
         global SELECT_RADIO_BUTTON
         SELECT_RADIO_BUTTON='proxy'
         self.log_message(u'当前:代理查询\n')
+        self.disable_band()
         
     def OnRadio3(self, event):
         global SELECT_RADIO_BUTTON
         SELECT_RADIO_BUTTON='quick'
         self.log_message(u'当前:快速查询\n')
+        self.enable_band()
         
     def Openfile(self, event):
         pat = re.compile('(\d{4,16}).*')  #识别出QQ
@@ -1054,8 +1063,8 @@ PS:\n\
         self.radio2_statictext.SetLabel('%d'%len(g_proxy_list))
         self.statusbar.SetStatusText(u'查询进度：%d/%d'%(self.FINISHEDQQNUM,self.ALLQQNUM))
         self.statusbar.SetStatusText(u'到期时间：%s'%LOAD_RESPONSE_DICT['deadline'],1)
-        self.statusbar.SetStatusText(u'余额：%s元'%LOAD_RESPONSE_DICT['balance'],2)
-        self.statusbar.SetStatusText(u'%s'%LOAD_RESPONSE_DICT['currentstate'],3)
+        self.statusbar.SetStatusText(u'账户：%s'%LOAD_RESPONSE_DICT['acc'],2)
+        self.statusbar.SetStatusText(u'当前IP：%s'%LOAD_RESPONSE_DICT['ip'],3)
 
     def Querymanual(self, event):  #由界面手动查询框框勾选或去勾选触发
         if self.manualcheck.IsChecked():
