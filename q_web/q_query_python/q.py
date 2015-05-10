@@ -82,12 +82,15 @@ def upload_code(code,session_value):
 	return response
 
 
-def get_all_info(uuid,qno,type="no_jfcode",use_auth2=True):
-	cookiejar=cookielib.CookieJar()
-	if is_superman_logined():
-		response=superman_get_code(uuid,cookiejar)
+def get_all_info(uuid,qno,type="no_jfcode",use_auth2=True,VERSION_TYPE='plat_load'):
+	if VERSION_TYPE=='server_load':
+		return my_get_all_info(uuid,qno,type=type,use_auth2=use_auth2)
 	else:
-		response=my_get_code(uuid,cookiejar,use_auth2)
+		return superman_get_all_info(uuid,qno,type=type,use_auth2=use_auth2)
+
+def my_get_all_info(uuid,qno,type="no_jfcode",use_auth2=True):
+	cookiejar=cookielib.CookieJar()
+	response=my_get_code(uuid,cookiejar,use_auth2)
 	if dict.get(response,"status") == "ok":
 		AuthCode,imgId=dict.get(response,"authcode",""),dict.get(response,"imgId")
 		Status=get_status(qno,AuthCode,cookiejar)
@@ -95,6 +98,23 @@ def get_all_info(uuid,qno,type="no_jfcode",use_auth2=True):
 			restore_fee(uuid,1)
 		if dict.get(Status,"reason") == 'verify_code_err':
 			r=report_authcode_err(uuid,imgId)
+			print 'report_authcode_err result:',r
+		if type!="no_jfcode" and Status["state"]=="lock":
+			Status["jfcode"]=get_jfcode(qno,AuthCode,cookiejar)
+		return Status
+	else:
+		return {"status":"failed", "reason":"authcode_not_available"}
+def superman_get_all_info(uuid,qno,type="no_jfcode",use_auth2=True):
+	if not is_superman_logined(): 
+		print 'superman_not_logined'
+		return {'status':'failed','reason':'superman_not_logined'}
+	cookiejar=cookielib.CookieJar()
+	response=superman_get_code(uuid,cookiejar)
+	if dict.get(response,"status") == "ok":
+		AuthCode,imgId=dict.get(response,"authcode",""),dict.get(response,"imgId")
+		Status=get_status(qno,AuthCode,cookiejar)
+		if dict.get(Status,"reason") == 'verify_code_err':
+			r=superman_report_authcode_err(uuid,imgId)
 			print 'report_authcode_err result:',r
 		if type!="no_jfcode" and Status["state"]=="lock":
 			Status["jfcode"]=get_jfcode(qno,AuthCode,cookiejar)
@@ -144,7 +164,6 @@ def report_authcode_err(uuid,imgId):
     Url="http://119.29.62.190:8180/aqqq/qv0/report_autherr"
     response=my_send_http(Url,{"uuid":uuid,"imgId":imgId})
     return response
-
 def superman_recognize_code(uuid,JpgBin):
 	return get_superman_code(JpgBin)
 def recognize_code(uuid,JpgBin):
@@ -357,6 +376,9 @@ def make_cookie(name, value):
 #--------------  superman账户直接访问方式相关接口----------------------------------
 #import superman
 g_superman=None
+def superman_ins():
+	global g_superman
+	return g_superman
 def is_superman_logined():
 #	return False
 	return g_superman and g_superman.is_logined()
@@ -374,4 +396,7 @@ def get_superman_code(img):
 		return {'status':'ok','authcode':res[0],'imgId':res[1]}
 	else:
 		return {'status':'failed','reason':'no_authcode'}
+def superman_report_authcode_err(uuid,imgId):
+    return superman_ins() and superman_ins().reportErrA(imgId)
+
 

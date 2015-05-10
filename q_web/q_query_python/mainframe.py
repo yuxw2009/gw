@@ -26,7 +26,7 @@ sizer1最大容器，sizer2设置区，sizer3帐号区，sizer4统计区
 sizer2和sizer3被sizer5包含=垂直，sizer5和sizer4被sizer1包含-水平
 
 '''
-
+VERSION_TYPE = 'server_load'      #'plat_load','server_load'
 FROZEN_REASON_ILL_LOAD = u'QQ被非法登录'
 FROZEN_REASON_RECYCLE = u'已被冻结'
 FROZEN_REASON_MOD_PASS = u'改密立即恢复登录'
@@ -47,6 +47,10 @@ g_log_times=0
 
 g_counter=0
 g_parrel_num=0
+def version_type(): return VERSION_TYPE
+def is_quick_query():
+    global SELECT_RADIO_BUTTON
+    return SELECT_RADIO_BUTTON == 'quick'
 def max_parrel_num(): return 7
 def g_add_counter():
     global g_counter
@@ -192,12 +196,18 @@ class WorkerThread(threading.Thread):
         wx.CallAfter(self.window.Analyse_result,i,response)
         return True
 
-            
+    def judge_if_reconncet_band(self):
+        global g_counter,g_parrel_num
+        if is_quick_query() and g_counter>=30:
+            temp=0
+            while temp<30 and g_parrel_num>0:
+                print 'sleep',temp
+                time.sleep(1)
+                temp+=1
+            self.reconncet_band()
+            time.sleep(1)
+            g_counter=0
     def Query_auto(self):
-        global g_counter
-        global g_parrel_num
-        #print 'self.dict_qno=%s----%s\n'%(self.dict_qno,self.getName())
-        qinput=[]
         QnoItems=self.dict_qno.items()
         TotalNum=len(QnoItems)
         user_auth2=TotalNum>10
@@ -207,36 +217,14 @@ class WorkerThread(threading.Thread):
                 wx.CallAfter(self.window.log_message,u'self.timeToQuit.isSet----%s\n'%self.getName())
                 break
             elif not self.window.grid.GetCellValue(i,1):
-                qinput.append((i,qno))
-                if len(qinput)>=2:
-                    if g_counter>=15:
-                        temp=0
-                        while temp<100 and g_parrel_num>0:
-                            print 'sleep',temp
-                            time.sleep(1)
-                            temp+=1
-                        self.reconncet_band()
-                        time.sleep(1)
-                        g_counter=0
-                    [(i1,qno1),(i2,qno2)]=qinput
-                    def query_and_update(uuid,i1,i2,qno1,qno2,use_auth2=user_auth2):
-                        response1=CS.query_state(self.uuid,qno1)
-                        response2=CS.query_state(self.uuid,qno2,use_auth2=user_auth2)
-                        #(response1,response2) = CS.query_state_2(self.uuid,(qno1,qno2))
-                        self.update_response(i1,response1)
-                        def updatelazy(i,r):
-                            self.update_response(i,r)
-                        threading.Timer(3,updatelazy,[i2,response2]).start()
-                    if SELECT_RADIO_BUTTON == 'quick':
-                        threading.Timer(0,query_and_update,[self.uuid,i1,i2,qno1,qno2]).start()
-                    else:
-                        query_and_update(self.uuid,i1,i2,qno1,qno2)
-#                    time.sleep(get_pause_len())
-                    time.sleep(3)
-                    del qinput[:]
-        for i,qno in qinput:
-            response = CS.query_state(self.uuid,qno,use_auth2=user_auth2)
-            self.update_response(i,response)
+                self.judge_if_reconncet_band()
+                def query_and_update():
+                    g_add_counter()
+                    response=CS.query_state(self.uuid,qno,use_auth2=user_auth2,VERSION_TYPE=version_type())
+                    self.update_response(i,response)
+                if is_quick_query(): threading.Timer(0,query_and_update,[]).start()
+                else: query_and_update()
+                time.sleep(2)
         wx.CallAfter(self.window.ThreadFinished,self)          
 
 
