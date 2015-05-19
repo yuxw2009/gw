@@ -7,6 +7,8 @@ import q
 import json
 import webbrowser
 
+VERSION_TYPE = 'plat_load' #'plat_load','server_load'
+
 def write_data(filename='data',dictdata={}):#4-28
     dictdata0 = open_data(filename)
     dictdata0.update(dictdata)
@@ -15,7 +17,7 @@ def write_data(filename='data',dictdata={}):#4-28
     with open(filename,"wb") as fd:
         fd.write(bin)
 
-def open_data(filename='data',dictdata={'acc':'','pwd':'','band_acc':'','band_pwd':''}):#4-28
+def open_data(filename='data',dictdata={'acc':'','pwd':'','band_acc':'','band_pwd':'','acc_plat':''}):#4-28
     try:
         with open(filename,"rb") as fd:
             enc=fd.read()
@@ -82,34 +84,12 @@ class loadframe(wx.Panel):
         else:
             self.result_statictext.SetLabel(response_dict['reason'])
             
-    '''
-    def write_data(self,filename='data',dictdata={}):#4-28
-        dictdata0 = self.open_data(filename)
-        dictdata0.update(dictdata)
-        data_json=json.dumps(dictdata0)
-        bin=q.encrypt(data_json)
-        with open(filename,"wb") as fd:
-            fd.write(bin)
-        
-
-
-    def open_data(self,filename='data',dictdata={'acc':'','pwd':''}):#4-28
-        try:
-            with open(filename,"rb") as fd:
-                enc=fd.read()
-                if enc:
-                    bin=q.decrypt(enc)
-                    dictdata=json.loads(bin)
-        except:
-            pass
-        return dictdata                
-    '''
 
 
 class registerframe(wx.Panel):
     def __init__(self,parent):
         wx.Panel.__init__(self, parent)
-        notic_text = wx.StaticText(self,label=u'购买充值卡后 才可以注册帐号')
+        notic_text = wx.StaticText(self,label=u'购买月卡后 才可以注册帐号')
         notic_text.SetForegroundColour('blue')
         colour = [(160,255,204),(153,204,255),(151,253,225),]
         self.SetBackgroundColour(colour[1])
@@ -118,7 +98,7 @@ class registerframe(wx.Panel):
         #增加部件
         statictext1 = wx.StaticText(self, -1,u"    会员帐号  ",style=wx.ALIGN_CENTER)
         statictext2 = wx.StaticText(self, -1,u"    会员密码  ",style=wx.ALIGN_CENTER)
-        statictext3 = wx.StaticText(self, -1,u"     充值卡号  ",style=wx.ALIGN_CENTER)
+        statictext3 = wx.StaticText(self, -1,u"       注册码  ",style=wx.ALIGN_CENTER)
         self.text1 = wx.TextCtrl(self, -1, u"",size=(125, 20),style=wx.ALIGN_CENTER_HORIZONTAL)
         self.text2 = wx.TextCtrl(self, -1, u"",size=(125, 20),style=wx.ALIGN_CENTER_HORIZONTAL|wx.TE_PASSWORD)
         self.text3 = wx.TextCtrl(self, -1, u"",size=(200, 20),style=wx.ALIGN_CENTER_HORIZONTAL)
@@ -212,11 +192,15 @@ class rechargeframe(wx.Panel):
         self.SetSizer(sizer2)
 
     def recharge(self,event):
+        global VERSION_TYPE
         acc = self.text1.GetValue()
         auth_code = self.text3.GetValue()
         response_dict = CS.recharge(acc,auth_code)
         if response_dict['status']=='ok':
-            self.result_statictext.SetLabel(u"恭喜您充值成功,账户名:%s 当前余额为:%s"%(self.text1.GetValue(),response_dict['balance']))
+            if VERSION_TYPE == 'plat_load':
+                self.result_statictext.SetLabel(u"恭喜您充值成功,账户名:%s 使用截至日期为:%s"%(self.text1.GetValue(),response_dict['deadline']))
+            else:
+                self.result_statictext.SetLabel(u"恭喜您充值成功,账户名:%s 当前余额为:%s"%(self.text1.GetValue(),response_dict['balance']))
         elif response_dict['status']=='failed':
             self.result_statictext.SetLabel(u"抱歉！充值失败,请检查充值卡号和用户名是否正确！\n如有疑问请联系店主淘宝或QQ7806840")
 class contact_us_frame(wx.Panel):
@@ -244,7 +228,7 @@ class contact_us_frame(wx.Panel):
         
 class Frame(wx.Frame):
     def __init__(self):
-        wx.Frame.__init__(self, None, -1, u"QQ查询冻结V002    ",size=(360,310))
+        wx.Frame.__init__(self, None, -1, u"QQ查询冻结V003    ",size=(360,310))
         self.icon = wx.Icon('pic/ic.ico', wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)  
 

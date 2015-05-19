@@ -26,8 +26,9 @@ sizer1最大容器，sizer2设置区，sizer3帐号区，sizer4统计区
 sizer2和sizer3被sizer5包含=垂直，sizer5和sizer4被sizer1包含-水平
 
 '''
-VERSION_TYPE = 'server_load'      #'plat_load','server_load'
+VERSION_TYPE = 'plat_load' #'plat_load','server_load'
 FROZEN_REASON_ILL_LOAD = u'QQ被非法登录'
+FROZEN_REASON_ENV_UNNORMAL = u'登录环境异常'
 FROZEN_REASON_RECYCLE = u'已被冻结'
 FROZEN_REASON_MOD_PASS = u'改密立即恢复登录'
 FROZEN_REASON_COMPLAIN = u'申诉成功立即恢复登录'
@@ -38,6 +39,7 @@ TODAY = str(time.localtime()[0])+'-'+str(time.localtime()[1])+'-'+str(time.local
 GRIDROWS = 20
 QUERY_FAIL_NUM = 0
 PAUSE_TIME = 180
+g_band_delay_time = 0  #界面增加拨号延迟
 
 MY_PAUSE_TIME=1
 #thread_proxy_dict={proxy1:{},proxy2:{}}
@@ -86,7 +88,10 @@ class WorkerThread(threading.Thread):
         self.pid = 0
         self.res = 0
         self.ip = ''
-        if proxy!="": self.proxy="http://"+proxy
+        if proxy!="":
+            self.proxy=proxy
+        else:
+            self.proxy=None
         self.counter=0
         #self.trend = u'' #为5173监控价格趋势添加
         #self.setName(name)#设置线程名为name
@@ -117,10 +122,10 @@ class WorkerThread(threading.Thread):
         dial_params = (band_name, '', '', band_acc, band_pwd, '')
         self.pid,self.res=win32ras.Dial(None, None, dial_params, None)
         if self.res == 0:
-            wx.CallAfter(self.window.log_message,u'%s--连接成功\n'%self.band_dict['band_name'])
+            wx.CallAfter(self.window.log_message,u'宽带连接成功\n')
             QQ_query.write_data(dictdata={'band_acc':band_acc,'band_pwd':band_pwd}) #5-4宽带信息保存
         else :
-            wx.CallAfter(self.window.log_message,u'%s--连接失败..\n等待5秒后再次尝试..\n'%self.band_dict['band_name'])
+            wx.CallAfter(self.window.log_message,u'宽带连接失败\n等待5秒后再次尝试..\n')
             time.sleep(5)
             self.pid,self.res=win32ras.Dial(None, None, dial_params, None)
 
@@ -129,27 +134,31 @@ class WorkerThread(threading.Thread):
             cmd_str = "rasdial %s /DISCONNECT" % self.band_dict['band_name'].encode('gb2312')
             subprocess_call(cmd_str,shell=True)
             if win32ras.EnumConnections():
-                wx.CallAfter(self.window.log_message,u'%s--断开连接成功\n'%self.band_dict['band_name'])
+                wx.CallAfter(self.window.log_message,u'断开连接\n')
         else:
             if self.res==0:
                 win32ras.HangUp(self.pid)
                 if win32ras.EnumConnections():
-                    wx.CallAfter(self.window.log_message,u'%s--断开连接成功\n'%self.band_dict['band_name'])
+                    wx.CallAfter(self.window.log_message,u'断开连接\n')
                 else:
                     wx.CallAfter(self.window.log_message,u'%s--断开连接失败\n'%self.band_dict['band_name'])
             else:
-                wx.CallAfter(self.window.log_message,u'%s--处于断开状态，无需再断开连接\n'%self.band_dict['band_name'])
+                wx.CallAfter(self.window.log_message,u'宽带已断开，无需再断开\n')
 
     def reconncet_band(self):
         self.disconnect_band()
+        time.sleep(g_band_delay_time)
         self.connect_band()
         self.ip = showip.getip()
         LOAD_RESPONSE_DICT['ip'] = self.ip
-        wx.CallAfter(self.window.log_message,u'当前IP:%s\n'%self.ip)
+        wx.CallAfter(self.window.log_message,u'当前IP:\n%s\n'%self.ip)
 
     def getimage2(self,uuid):
         response_dict = CS.upload_qno_manual(LOAD_RESPONSE_DICT['uuid'])
-        img_temp = response_dict['jpg']
+        try:
+            img_temp = response_dict['jpg']
+        except:
+            return
         img = base64.b64decode(img_temp)
         stream = cStringIO.StringIO(img)
         self.img_out = Image.open(stream)
@@ -159,11 +168,13 @@ class WorkerThread(threading.Thread):
         clidata = response_dict['clidata']
         global CLIDATA
         CLIDATA = clidata
+        wx.CallAfter(self.window.ThreadFinished,self)
 
     def update_response(self,i,response):
         global QUERY_FAIL_NUM,PAUSE_TIME,LOAD_RESPONSE_DICT,SELECT_RADIO_BUTTON
         if response['status'] == "failed":
-            wx.CallAfter(self.window.log_message,u'查询失败！原因:\n%s\n'%response['reason'])
+            #wx.CallAfter(self.window.log_message,string.split(time.ctime(),' ')[3]+'------>\n')
+            #wx.CallAfter(self.window.log_message,u'查询失败!原因:\n%s\n'%response['reason'])
             if response["reason"]=="no_money":  # 4-27yj添加，增加no_money的判断
                 wx.CallAfter(self.window.ThreadFinished,self)# 4-27yj添加
                 LOAD_RESPONSE_DICT['currentstate'] = u'账户余额不足，请充值...'# 4-27yj添加
@@ -183,7 +194,7 @@ class WorkerThread(threading.Thread):
                     time.sleep(PAUSE_TIME)
                 elif SELECT_RADIO_BUTTON == 'quick':
                     LOAD_RESPONSE_DICT['currentstate'] = u'IP被禁止，重启拨号中..'
-                    wx.CallAfter(self.window.log_message,u'IP被禁止，重启拨号..\n')
+                    wx.CallAfter(self.window.log_message,u'IP被禁止!\n重启拨号..\n')
                     wx.CallAfter(self.window.Updatestatic)
                     QUERY_FAIL_NUM = 0
                     self.reconncet_band()                   
@@ -198,37 +209,64 @@ class WorkerThread(threading.Thread):
 
     def judge_if_reconncet_band(self):
         global g_counter,g_parrel_num
-        if is_quick_query() and g_counter>=30:
-            temp=0
-            while temp<30 and g_parrel_num>0:
-                print 'sleep',temp
-                time.sleep(1)
-                temp+=1
-            self.reconncet_band()
-            time.sleep(1)
-            g_counter=0
+        if is_quick_query() and g_counter>=33:
+            if g_parrel_num>0: return 'wait_reconnect_band'
+            else: 
+                self.reconncet_band()
+                g_counter=0
+                timer.sleep(1)
+                return 'reconnect_band_finished'
+        return False
+    def query_and_update(self, i,qno,proxy=None):
+        global parrel_num
+        g_add_counter()
+        parrel_num+=1
+        response=CS.query_state(self.uuid,qno,use_auth2=self.user_auth2,VERSION_TYPE=version_type(),proxy=proxy)
+        parrel_num-=1
+        fail = 0
+        while response['status'] == "failed":
+            fail +=1
+            if fail<3:
+                response=CS.query_state(self.uuid,qno,use_auth2=self.user_auth2,VERSION_TYPE=version_type(),proxy=proxy)
+            else:
+                break
+        self.update_response(i,response)
     def Query_auto(self):
         QnoItems=self.dict_qno.items()
         TotalNum=len(QnoItems)
-        user_auth2=TotalNum>10
+        self.user_auth2=TotalNum>20
         for i,qno in QnoItems:
+            print 'query_auto',i,qno
             if self.timeToQuit.isSet():
                 wx.CallAfter(self.window.ThreadFinished,self)
-                wx.CallAfter(self.window.log_message,u'self.timeToQuit.isSet----%s\n'%self.getName())
                 break
             elif not self.window.grid.GetCellValue(i,1):
-                self.judge_if_reconncet_band()
-                def query_and_update():
+                '''def query_and_update(i,qno,proxy=None):
                     g_add_counter()
-                    response=CS.query_state(self.uuid,qno,use_auth2=user_auth2,VERSION_TYPE=version_type())
-                    self.update_response(i,response)
-                if is_quick_query(): threading.Timer(0,query_and_update,[]).start()
-                else: query_and_update()
+                    response=CS.query_state(self.uuid,qno,use_auth2=user_auth2,VERSION_TYPE=version_type(),proxy=proxy)
+                    fail = 0
+                    while response['status'] == "failed":
+                        fail +=1
+                        if fail<3:
+                            response=CS.query_state(self.uuid,qno,use_auth2=user_auth2,VERSION_TYPE=version_type(),proxy=proxy)
+                        else:
+                            break
+                    self.update_response(i,response)'''
+                if is_quick_query() and self.judge_if_reconncet_band()!='wait_reconnect_band': 
+                    threading.Timer(0,self.query_and_update,[i,qno]).start()
+                else: 
+                    self.query_and_update(i,qno,proxy=self.proxy)
                 time.sleep(2)
+        print 'tiao chu for'
+        #wx.CallAfter(self.window.log_message,string.split(time.ctime(),' ')[3]+'------>\n')
+        #wx.CallAfter(self.window.log_message,u'查询停止!\n\n\n\n')
         wx.CallAfter(self.window.ThreadFinished,self)          
 
-
+    def WaitQueryOk(self):
+        while self.myQueryNum>0:
+            time.sleep(2)
     def Qyery_manual(self):
+
         global QUERY_FAIL_NUM,PAUSE_TIME,LOAD_RESPONSE_DICT
         for i in range(self.rows+1):
             if not self.window.grid.GetCellValue(i,1):
@@ -236,10 +274,11 @@ class WorkerThread(threading.Thread):
         #vercode = wx.CallAfter(self.window.Get_verifycode)
         clidata = CLIDATA
         vercode = VERIFY_CODE
+        self.getimage2(LOAD_RESPONSE_DICT['uuid']) 
         response = CS.query_state_manual(self.uuid,self.dict_qno[i],vercode,clidata)
         wx.CallAfter(self.window.Analyse_result,i,response)
         #wx.CallAfter(self.window.getimage2,LOAD_RESPONSE_DICT['uuid'])
-        self.getimage2(LOAD_RESPONSE_DICT['uuid'])
+        #self.getimage2(LOAD_RESPONSE_DICT['uuid'])  
         wx.CallAfter(self.window.ThreadFinished,self)
 
 
@@ -262,7 +301,7 @@ class MainUi(wx.Frame):
     def __init__(self):
         self.threads = []
         self.runser = []
-        wx.Frame.__init__(self, None, -1, u"QQ查询冻结V002    By:下大雨",size=(595,700))
+        wx.Frame.__init__(self, None, -1, u"QQ查询冻结V003    By:下大雨",size=(595,700))
         self.icon = wx.Icon('pic/ic.ico', wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)  
 
@@ -276,6 +315,11 @@ class MainUi(wx.Frame):
         radio_statictext1 = wx.StaticText(panel, -1, u" 全自动挂机，无需换IP，适用于非拨号宽带")
         radio_statictext1.SetForegroundColour('red')
         #self.text1 = text1 = wx.TextCtrl(panel, -1, u"600", size=(78, 16),style=wx.ALIGN_CENTER_HORIZONTAL)
+        self.set_thread_num = wx.ComboBox(panel,-1,'1',size=(35,18))
+        [self.set_thread_num.Append(str(i))for i in range(1,5)]#列表遍历实现添加条目
+        self.Bind(wx.EVT_COMBOBOX, self.OnSelect,self.set_thread_num)
+        set_thread_text = wx.StaticText(panel, -1, u" 线程数:")
+
 
         
 
@@ -313,6 +357,8 @@ class MainUi(wx.Frame):
         sizer2=wx.StaticBoxSizer(omm,wx.VERTICAL)
         radio_sizer1=wx.BoxSizer(wx.HORIZONTAL)
         radio_sizer1.Add(radio1,0,wx.ALL,2)
+        radio_sizer1.Add(set_thread_text,0,wx.ALL,2)
+        radio_sizer1.Add(self.set_thread_num)
         radio_sizer1.Add(radio_statictext1,0,wx.ALL,2)
         #radio_sizer1.Add(radio_statictext1,0,wx.ALL,2)
         #radio_sizer1.Add(text1,0,wx.ALL,2)
@@ -358,6 +404,8 @@ class MainUi(wx.Frame):
         self.grid.Bind(wx.EVT_MENU, self.Selecte_frozen_item, frozen_item)
         illegal_load_item = self.submenu.Append(-1,u'导出非法登录')
         self.grid.Bind(wx.EVT_MENU, self.Selecte_illegal_load_item, illegal_load_item)
+        env_unnormal_item = self.submenu.Append(-1,u'导出登录环境异常')
+        self.grid.Bind(wx.EVT_MENU, self.Selecte_env_unnormal_item, env_unnormal_item)
                 
         self.popupmenu = wx.Menu()
         input_file = self.popupmenu.Append(-1,u'导入QQ文件')
@@ -482,7 +530,7 @@ class MainUi(wx.Frame):
         #打印区
         printfield=wx.StaticBox(panel,-1,u"打印区")
         print_sizer=wx.StaticBoxSizer(printfield,wx.VERTICAL)
-        self.log= wx.TextCtrl(panel, -1, u"",size=(117, 113),style=wx.TE_RICH|wx.TE_MULTILINE)
+        self.log= wx.TextCtrl(panel, -1, u"",size=(117, 93),style=wx.TE_RICH|wx.TE_MULTILINE)
         print_sizer.Add(self.log)
 
         #增加文字提示
@@ -500,23 +548,38 @@ class MainUi(wx.Frame):
         statictext3_band = wx.StaticText(panel, -1,u"名称",style=wx.ALIGN_CENTER)
         self.text1_band = wx.TextCtrl(panel, -1, u"%s"%QQ_query.open_data()['band_acc'],size=(80, 18),style=wx.ALIGN_CENTER_HORIZONTAL)
         self.text2_band = wx.TextCtrl(panel, -1, u"%s"%QQ_query.open_data()['band_pwd'],size=(80, 18),style=wx.ALIGN_CENTER_HORIZONTAL|wx.TE_PASSWORD)
-        self.bandname=wx.ComboBox(panel,-1,'%s'%win32ras.EnumEntries()[0],size=(80,20))
-        [self.bandname.Append(i)for i in win32ras.EnumEntries()]#列表遍历实现添加条目
+        try:
+            self.bandname=wx.ComboBox(panel,-1,'%s'%win32ras.EnumEntries()[0],size=(80,20))
+            [self.bandname.Append(i)for i in win32ras.EnumEntries()]#列表遍历实现添加条目
+        except:
+            self.bandname=wx.ComboBox(panel,-1,'NoBand!',size=(80,20))
+
+        set_delay_text1 = wx.StaticText(panel, -1, u"延迟")
+        set_delay_text2 = wx.StaticText(panel, -1, u"秒后拨号")
+        self.band_delay_num = wx.TextCtrl(panel, -1, "0",size=(26, 16))
+        
         load_sizer0_band=wx.BoxSizer(wx.HORIZONTAL)
         load_sizer1_band=wx.BoxSizer(wx.HORIZONTAL)
         load_sizer2_band=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer3_band=wx.BoxSizer(wx.HORIZONTAL)
+        load_sizer3_band.Add(set_delay_text1,0,wx.ALL,3)
+        load_sizer3_band.Add(self.band_delay_num,0,wx.ALL,3)
+        load_sizer3_band.Add(set_delay_text2,0,wx.ALL,3)
+        
         load_sizer0_band.Add(statictext3_band,0,wx.ALL,3)
         load_sizer0_band.Add(self.bandname,0,wx.ALL,3)
         load_sizer1_band.Add(statictext1_band,0,wx.ALL,3)
         load_sizer1_band.Add(self.text1_band,0,wx.ALL,3)
         load_sizer2_band.Add(statictext2_band,0,wx.ALL,3)
         load_sizer2_band.Add(self.text2_band,0,wx.ALL,3)
-        load_sizer3_band=wx.BoxSizer(wx.VERTICAL)
+        
         #load_sizer3_band.Add(load_sizer1_band)
         #load_sizer3_band.Add(load_sizer2_band)
         bandfield_sizer.Add(load_sizer0_band)
         bandfield_sizer.Add(load_sizer1_band)
         bandfield_sizer.Add(load_sizer2_band)
+        bandfield_sizer.Add(load_sizer3_band)
+        
         
         
 
@@ -524,7 +587,7 @@ class MainUi(wx.Frame):
         platfield=wx.StaticBox(panel,-1,u"打码平台设置区")
         load_sizer6_plat=wx.StaticBoxSizer(platfield,wx.HORIZONTAL)
         statictext1_plat = wx.StaticText(panel, -1,u"打码平台",style=wx.ALIGN_CENTER)
-        self.ComboBox_plat=wx.ComboBox(panel,-1,u'选择打码平台',size=(93,21))
+        self.ComboBox_plat=wx.ComboBox(panel,-1,u'超人平台',size=(93,21))
         self.ComboBox_plat.Append(u'UU平台')
         self.ComboBox_plat.Append(u'超人平台')
         self.plat_help = buttons.GenButton(panel, -1, u'打码平台点击弹出说明',size=(150,21))
@@ -546,6 +609,8 @@ class MainUi(wx.Frame):
         #statictext5_plat = wx.StaticText(panel, -1,u"  平台剩余积分: ",style=wx.ALIGN_CENTER)
         self.statictext6_plat = wx.StaticText(panel, -1,u"未登录",style=wx.ALIGN_CENTER,size=(46,18))
         self.statictext7_plat = wx.StaticText(panel, -1,u"",style=wx.ALIGN_CENTER,size=(46,18))
+        self.statictext6_plat.SetForegroundColour('red')
+        self.statictext7_plat.SetForegroundColour('red')
 
         load_sizer1_plat=wx.BoxSizer(wx.HORIZONTAL)
         load_sizer2_plat=wx.BoxSizer(wx.HORIZONTAL)
@@ -628,15 +693,26 @@ class MainUi(wx.Frame):
         topsizer.Add(self.statusbar,0,wx.EXPAND|wx.BOTTOM,1)
         panel.SetSizer(topsizer)
 
+    def OnSelect(self,event):
+        num = int(self.set_thread_num.GetValue())
+        if num >=3:
+            wx.MessageBox(u'1.该配置仅用于正常查询，快速查询无需设置线程数！\n\n2.线程数>=3个时，查询一段时间后可能会被TX检测到刷新频繁！\n\n\
+3.刷新频繁后，需要更换IP或者等待10分钟才能继续查询\n\n\
+4.若网络是拨号宽带，可选择快速查询设置宽带后进行查询')
+        else:
+            pass
+
     def disable_band(self):
         self.bandname.Disable()
         self.text1_band.Disable()
         self.text2_band.Disable()
+        self.band_delay_num.Disable()
 
     def enable_band(self):
         self.bandname.Enable()
         self.text1_band.Enable()
         self.text2_band.Enable()
+        self.band_delay_num.Enable()
 
 
     def help_plat(self,event):
@@ -654,24 +730,22 @@ UU云官网： www.uuwise.com " )
         def loadlazy(acc_plat,pwd_plat):
             if self.ComboBox_plat.GetValue()==u'超人平台':
                 response = q.login_superman(acc_plat,pwd_plat)
-                if response <0:
-                    self.statictext6_plat.SetLabel(u'登录失败')
-                    self.statictext6_plat.SetForegroundColour('red')
-                elif response>=0:
-                    self.statictext7_plat.SetLabel('%s'%response)
-                    self.statictext6_plat.SetLabel(u'已登录')
-                    self.ComboBox_plat.Disable()
-                    self.text1_plat.Disable()
-                    self.text2_plat.Disable()
-                    self.plat_load.Disable()
-                    self.statictext6_plat.SetForegroundColour('green')
-                    self.statictext7_plat.SetForegroundColour('green')
-                    QQ_query.write_data(dictdata={'acc_plat':acc_plat})#5-4宽带信息保存
-                else:
-                    self.statictext6_plat.SetLabel(u'未知异常')
-                    self.statictext6_plat.SetForegroundColour('red')
+                try:
+                    if int(response) <0:
+                        self.statictext6_plat.SetLabel(u'登录失败')
+                    elif int(response)>=0:
+                        self.statictext7_plat.SetLabel('%s'%response)
+                        self.statictext6_plat.SetLabel(u'已登录')
+                        self.ComboBox_plat.Disable()
+                        self.text1_plat.Disable()
+                        self.text2_plat.Disable()
+                        self.plat_load.Disable()
+                        QQ_query.write_data(dictdata={'acc_plat':acc_plat})#5-4宽带信息保存
+                    else:
+                        self.statictext6_plat.SetLabel(u'未知异常')
+                except:
+                    pass
             elif self.ComboBox_plat.GetValue()==u'UU平台':
-                print 'UUplat'
                 pass
             else:
                 wx.MessageBox(u'请选择打码平台后再登录！')
@@ -693,6 +767,10 @@ UU云官网： www.uuwise.com " )
         pwd_plat = self.text2_plat.GetValue().encode('utf-8')
         if q.is_superman_logined():
             response = q.login_superman(acc_plat,pwd_plat)
+            try:
+                response = str(response)
+            except:
+                pass
             self.statictext7_plat.SetLabel(response)
         else:
             self.statictext7_plat.SetLabel(u'')
@@ -702,6 +780,7 @@ UU云官网： www.uuwise.com " )
     def log_message(self,msg):
         global g_log_times
         if g_log_times<=5000:
+            
             self.log.AppendText(msg)
             g_log_times+=1
         else:
@@ -882,6 +961,7 @@ UU云官网： www.uuwise.com " )
         self.radio2.Enable()
         self.radio3.Enable()
         self.grid.EnableEditing(True)
+        self.set_thread_num.Enable() #5-13禁止线程数选择
         
 
     def Start_frame(self):   #开始批量查询时禁止某些插件
@@ -891,24 +971,24 @@ UU云官网： www.uuwise.com " )
         self.radio1.Disable()
         self.radio2.Disable()
         self.radio3.Disable()#5-5禁止radio3
+        self.set_thread_num.Disable() #5-13禁止线程数选择
+
         
     def OnShowPopup(self, event):
+        '''
         if self.manualcheck.IsChecked():
             pass
         else:
-            pos = event.GetPosition()
-            self.grid.PopupMenu(self.popupmenu, pos)
+        '''
+        pos = event.GetPosition()
+        self.grid.PopupMenu(self.popupmenu, pos)
         #pos = self.grid.ScreenToClient(pos)
             
     def HelpItemSelected(self, event):
         #item = self.popupmenu.FindItemById(event.GetId()) 
         #text = item.GetText()   获取部件的值，备用
-        wx.MessageBox(u"1.本软件支持全自动查询、手动查询二种模式\n2.\
-采用客户端服务器模式，无需用户更换IP\n\n收费:\n\
-1)软件使用费(包月10元)\n\
-2)自动查询模式打码费(由第三方打码超人平台收取0.6分一个)\n\
-3)活动期间（6月1号之前）打码费优惠为0.5分一个\n\
-4)内置超人打码平台，用户只需注册本软件，无需再去超人平台注册帐号，方便用户使用\n\
+        wx.MessageBox(u"1.本软件支持正常查询、快速查询、代理查询\n2.\
+正常查询无需设置宽带，无需更换IP；快速查询必须是拨号宽带需要设置宽带，由于起的线程较多，查几十个IP就会被禁止；代理查询需要自己导入可用的代理IP\n\n收费:\n\
 \n\
 PS:\n\
 1)软件万一界面死掉，在软件目录result_save中自动缓存当天的查询记录，自动归类\n\
@@ -922,10 +1002,8 @@ PS:\n\
         #pass
 
     def StartItemSelected(self, event):
-        #global PAUSE_TIME
+        global g_proxy_list,g_band_delay_time
         self.dict_qno={}
-        #PAUSE_TIME = int(self.text1.GetValue())
-        self.Start_frame()
         rows = self.grid.GetNumberRows()
         band_info = self.get_bandinfo() #传入宽带信息5-4
         for i in range(rows):
@@ -933,28 +1011,56 @@ PS:\n\
                 break
             else:
                 self.dict_qno[i] = self.grid.GetCellValue(i,0)
-        self.log_message(showip.getip()+'\n')
+        self.log_message(u'当前IP:\n'+showip.getip()+'\n')
         if not len(self.dict_qno) == 0:
-            if SELECT_RADIO_BUTTON=='proxy':
-                dicts_qno = self.split_dicts(self.dict_qno,len(self.proxy_list))
-                for j in range(len(self.proxy_list)):
-                    thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],dicts_qno[j],self,self.proxy_list[j])  #未调试
+            if VERSION_TYPE == 'plat_load':
+                if not q.is_superman_logined():
+                    wx.MessageBox(u'打码平台未登录，登录打码平台后才可以使用自动查询功能')
+                    return
+                elif SELECT_RADIO_BUTTON=='proxy':
+                    dicts_qno = self.split_dicts(self.dict_qno,len(g_proxy_list))
+                    for j in range(len(g_proxy_list)):
+                        thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],dicts_qno[j],self,proxy=g_proxy_list[j])  
+                        self.threads.append(thread)
+                        thread.start()
+                elif SELECT_RADIO_BUTTON=='normal':   #5-13增加用户多线成选择
+                    dicts_qno = self.split_dicts(self.dict_qno,int(self.set_thread_num.GetValue()))
+                    for j in range(int(self.set_thread_num.GetValue())):
+                        thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],dicts_qno[j],self)  
+                        self.threads.append(thread)
+                        thread.start()
+                else:
+                    thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],self.dict_qno,self,band_dict=band_info)
+                    self.threads.append(thread)
+                    thread.start()
+            elif SELECT_RADIO_BUTTON=='proxy':
+                dicts_qno = self.split_dicts(self.dict_qno,len(g_proxy_list))
+                for j in range(len(g_proxy_list)):
+                    thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],dicts_qno[j],self,proxy=g_proxy_list[j])  #未调试
                     self.threads.append(thread)
                     thread.start()
             else:
-                dicts_qno = self.split_dicts(self.dict_qno,1)
-                for j in range(1):
-                    thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],dicts_qno[j],self,band_dict=band_info)   #UUID由登录界面传入
-                    self.threads.append(thread)
-                    thread.start()
+                thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],self.dict_qno,self,band_dict=band_info)
+                self.threads.append(thread)
+                thread.start()
         else:
-            return 
-
+            return
+        try:   #5-16
+            g_band_delay_time = int(self.band_delay_num.GetValue())
+        except:
+            g_band_delay_time = 0
+        print 'g_band_delay_time',g_band_delay_time
+        self.Start_frame()
+        self.log_message(string.split(time.ctime(),' ')[3]+'------>\n')
+        self.log_message(u'批量查询中..\n')
+        
         
     
     def StopItemSelected(self, event):
         self.Reset_frame()
         self.Stop_threads()
+        self.log_message(string.split(time.ctime(),' ')[3]+'------>\n')
+        self.log_message(u'停止批量查询..\n')
         
 
     def Stop_threads(self):   #点击停滞批量查询后停止所有线程
@@ -971,6 +1077,7 @@ PS:\n\
         global LOAD_RESPONSE_DICT  #5-2更新状态栏
         if thread in self.threads:
             self.threads.remove(thread)
+        print 'self.threads is',self.threads
         if not self.threads:
             LOAD_RESPONSE_DICT['currentstate'] = u'查询结束'#5-2更新状态栏
             self.Updatestatic()
@@ -990,13 +1097,19 @@ PS:\n\
             for i in range(rows):
                 s = self.grid.GetCellValue(i,0)
                 s2 = self.grid.GetCellValue(i,4) #获取密码
-                self.Writefile(filename,s+s2)
+                try:
+                    self.Writefile(filename,s+s2)
+                except:
+                    self.Writefile(filename,s)
         else:
             for i in range(rows):
                 if self.grid.GetCellValue(i,1)==state_string:
                     s = self.grid.GetCellValue(i,0)
                     s2 = self.grid.GetCellValue(i,4) #获取密码
-                    self.Writefile(filename,s+s2)
+                    try:
+                        self.Writefile(filename,s+s2)
+                    except:
+                        self.Writefile(filename,s)
 
     def Selecte_normal_item(self, event):
         self.Choose_item(event,u'正常登录')
@@ -1013,6 +1126,7 @@ PS:\n\
     def Selecte_frozen_item(self, event):
         self.Choose_item(event,u'冻结回收')
 
+
     def Selecte_illegal_load_item(self,event):
         filename = self.Savefile_dialog(event)
         rows = self.grid.GetNumberRows()
@@ -1020,7 +1134,20 @@ PS:\n\
             if self.grid.GetCellValue(i,2) == FROZEN_REASON_ILL_LOAD:
                 s = self.grid.GetCellValue(i,0)
                 s2 = self.grid.GetCellValue(i,4) #获取密码
-                self.Writefile(filename,s+s2)
+                try:
+                    self.Writefile(filename,s+s2)
+                except:
+                    self.Writefile(filename,s)
+
+
+    def Selecte_env_unnormal_item(self,event):
+        filename = self.Savefile_dialog(event)
+        rows = self.grid.GetNumberRows()
+        for i in range(rows):
+            if self.grid.GetCellValue(i,2) == FROZEN_REASON_ENV_UNNORMAL:
+                s = self.grid.GetCellValue(i,0)
+                s2 = self.grid.GetCellValue(i,4) #获取密码
+                self.Writefile(filename,s+s2)        
 
     def input_proxy(self, event):
         global g_proxy_list
@@ -1033,8 +1160,8 @@ PS:\n\
                 d = f.read()
                 m = string.split(d,'\n')
                 g_proxy_list=[ i for i in m if i]
-            with open('proxylist.txt','w')as f:
-                f.write(string.join(self.proxy_list,'\n'))
+            #with open('proxylist.txt','w')as f:
+                #f.write(string.join(self.proxy_list,'\n'))
         dialog.Destroy()   
         self.Updatestatic()
 
@@ -1062,12 +1189,16 @@ PS:\n\
             thread = WorkerThread(LOAD_RESPONSE_DICT['uuid'],{},self,arg=2) #4-28
             self.threads.append(thread)
             thread.start()
+            self.log_message(string.split(time.ctime(),' ')[3]+'------>\n')
+            self.log_message(u'手动查询中..\n')
         else:
 
             self.image_button.SetBitmap(self.nullimg)
             self.image_text.Disable()
             self.image_textctrl.Disable()
             self.Stop_threads()
+            self.log_message(string.split(time.ctime(),' ')[3]+'------>\n')
+            self.log_message(u'关闭手动查询\n')
 
     def Start_manual_query(self):
         rows = self.grid.GetNumberRows()
@@ -1117,15 +1248,21 @@ PS:\n\
         self.grid.SetCellValue(row, 1, u"%s"%result)
         self.FINISHEDQQNUM = self.FINISHEDQQNUM + 1
         qno = self.grid.GetCellValue(row, 0)
-        s2 = self.grid.GetCellValue(row,4) #获取密码
+        s2 = self.grid.GetCellValue(row,4)#获取密码
         string = u'查询缓存'
         if result==u'正常登录':
             filename = 'result_save/%s%s-%s.txt'%(TODAY,string,result)
-            self.Writefile(filename,qno+s2)
+            try:
+                self.Writefile(filename,qno+s2)
+            except:
+                self.Writefile(filename,qno)
 
         elif response["reason"]:
             filename = 'result_save/%s%s-%s-%s.txt'%(TODAY,string,result,response["reason"])#修复BUG
-            self.Writefile(filename,qno+s2)
+            try:
+                self.Writefile(filename,qno+s2)
+            except:
+                self.Writefile(filename,qno)
 
 
 

@@ -21,10 +21,11 @@ def load_server(acc,pwd):
     #return response_dict
     return q.my_send_http(SERVER_LOAD_URL,values)  
 
-def query_state(uuid,qno,use_auth2=True,VERSION_TYPE='plat_load'):
+def query_state(uuid,qno,use_auth2=True,VERSION_TYPE='plat_load',proxy=None):
+    print 'cs file query_state',proxy
     values ={'uuid':'%s'%uuid,'qno':'%s'%qno}
     #response_dict = main(values,SERVER_QUERY_QQ_URL)
-    response_dict = q.get_all_info(uuid,qno,use_auth2=use_auth2,VERSION_TYPE=VERSION_TYPE)
+    response_dict = q.get_all_info(uuid,qno,use_auth2=use_auth2,VERSION_TYPE=VERSION_TYPE,proxy_str=proxy)
     for i in response_dict.keys():
         response_dict[i]=response_dict[i].decode('utf-8')
     return response_dict
