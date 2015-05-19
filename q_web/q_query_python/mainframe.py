@@ -218,11 +218,11 @@ class WorkerThread(threading.Thread):
                 return 'reconnect_band_finished'
         return False
     def query_and_update(self, i,qno,proxy=None):
-        global parrel_num
+        global g_parrel_num
         g_add_counter()
-        parrel_num+=1
+        g_parrel_num+=1
         response=CS.query_state(self.uuid,qno,use_auth2=self.user_auth2,VERSION_TYPE=version_type(),proxy=proxy)
-        parrel_num-=1
+        g_parrel_num-=1
         fail = 0
         while response['status'] == "failed":
             fail +=1
