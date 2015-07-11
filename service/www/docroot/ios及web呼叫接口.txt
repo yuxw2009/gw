@@ -1,0 +1,86 @@
+ios呼叫接口:
+1 start call
+post: /lwork/mobile/voip/icalls/
+params:{uuid:uuid,caller_phone: s,phone: s, userclass:userclass, sdp:sdp,dev_id:d,type:p2p, acc:a, clidata:clidata}
+ack: {status:ok,session_id:sid, sdp:sdp}  or {status:failed, reason:r}
+
+2 stop call  同android
+delete: /lwork/mobile/voip/icalls/
+params:{uuid:uuid, session_id:sessionID, 't': t}
+ack: {status:ok}  or {status:failed, reason:r}
+
+3 get status  同android,不一样，不是peer_status,是 state
+get: /lwork/mobile/voip/icalls/
+params:{uuid:uuid, session_id:sessionID, 't': t}
+ack:  [{status, ok}, {peer_status, Status},{stats,stats}] or {status:ok,peer_status:state}  or {status:failed, reason:r}
+
+stats：  {pr:CumuR,pl:CumuL, avgIJ:AvgIJms,avgrttms:AvgRTTms,rttms:Rttms,jitter:Jitter,lostrate:Lostrate,down_jitter:DownJitter,down_lostrate:FLost,total_eval:Total_eval,detail_eval:Detail_eval}
+
+on_stats(stats)
+
+4 sip呼叫终端app消息，推送
+{aps:{alert:caller,badge:badge,sound:"chime",event:"p2p_inform_called",caller:Caller,opdata:opdata}}
+
+4 主叫挂断消息推送
+{aps:{alert:caller,event:"caller_hookon",caller:Caller}}
+
+
+5 p2p 接听消息接口
+post lwork/mobile/ip2p_answer
+req: {caller_phone: s, callee_phone: s,sdp: s,userclass: s,opdata:Opdata,clidata:clidata}
+ack: {status:ok,session_id:sid, sdp:sdp}
+     {status:failed, reason:"already_call_real_phone"}     
+     
+6 获取通话记录接口:
+post lwork/mobile/call_history
+req: {uuid:u,start_id:start,num:num}  
+ack: {status:ok,history:[
+					{id:id,caller:caller,callee:callee,times:2,detail:[
+					    {type:t,calltime:ct,ringtime:rt,starttime:starttime,duration:dura}
+					]}]}
+
+
+result{"status":"ok","history":[{"id":0,"caller":"13788927293","callee":"888888", times:""2
+
+, detail: [{  "starttime":"2015-5-22 16:28:49",    "duration":1}, {  "starttime":"2015-5-23 16:28:49",    "duration":1}]}]}
+
+
+6 被叫p2p_poll接口  同android
+post lwork/mobile/p2p_poll
+req: {opdata:Opdata}
+ack:  [{status, ok}, {peer_status, Status}];   Status: idle/ring/hookoff/p2p_idle/p2p_ring/p2p_hookoff/release
+
+
+7 p2p 拒绝消息接口
+post lwork/mobile/p2p_reject
+req: {opdata:Opdata}
+ack: {status:ok}
+     {status:failed, reason:"already_call_real_phone"}   
+
+4 start callback   同android
+post lwork/mobile/callback
+req: [{uuid,i},{local,s},{remote,s}]
+ack: [{status, ok}, {session_id, SID}]
+
+5 stop callback      同android
+delete lwork/mobile/callback
+req: [{session_id, SID}]
+ack: [{status,ok}]
+
+
+
+web呼叫接口
+1 start call
+post: /lwork/mobile/fzdvoip/
+params:{uuid:g_lw_uuid, phone:peerNum, userclass:curObj.userclass, sdp:sdp,t:t}
+ack: {status:ok,session_id:sid, sdp:sdp}  or {status:failed, reason:r}
+
+2 stop call
+delete: /lwork/voices1/fzdvoip/
+params:{uuid:uuid, session_id:sessionID, 't': t}
+ack: {status:ok}  or {status:failed, reason:r}
+
+3 get status
+get: /lwork/voices1/fzdvoip/
+params:{uuid:uuid, session_id:sessionID, 't': t}
+ack: {status:ok,state:state}  or {status:failed, reason:r}
