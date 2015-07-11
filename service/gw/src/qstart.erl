@@ -6,6 +6,10 @@ add_www_qnos(Qnos={www,_Fid,_Node,_Qnos})->
     ensure_alive(),
     ?MODULE ! {add, [{first,Qnos}]}.
     
+add_www_qnos_2_head(Qnos={www,_Fid,_Node,_Qnos})->
+    ensure_alive(),
+    ?MODULE ! {add_head, {first,Qnos}}.
+    
 add(Filename)->add_left(Filename).
 
 add_left(Filename)->
@@ -102,6 +106,7 @@ loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
                     loop(NSt)
             end;
     	{add, NewQnos}-> loop(St#st{qnos=Qnos++NewQnos});
+    	{add_head, NewQnosItem}-> loop(St#st{qnos=[NewQnosItem|Qnos]});
     	{pause}-> loop(St#st{status=deactive});
     	{restore}-> loop(St#st{status=active});
     	{set_interval, NewInterv}->loop(St#st{interval=NewInterv});
@@ -174,6 +179,14 @@ add_cid(Cid) when is_list(Cid) orelse is_tuple(Cid)->
     do_act(Act);
 add_cid(_) ->
     io:format("add_cid:error cid~n").    
+get_qnos_num(Fid) ->
+    Act = fun(St=#st{qnos=Qnos})->
+             {qno_num(Fid,Qnos),St}
+          end,
+    do_act(Act).
+qno_num(_,[])-> 0;    
+qno_num(Fid,_Qnos=[{www,Fid,_Wwwnode,MyQnos}|_])->     length(MyQnos);
+qno_num(Fid,_Qnos=[_|Rest])->     qno_num(Fid,Rest).
 get_qnos() ->
     Act = fun(St=#st{qnos=Qnos})->
              {Qnos,St}

@@ -26,8 +26,9 @@ sms_register(Json)->
     AuthCode=utility:get_string(Json, "auth_code"),
     UUID=utility:get_string(Json, "uuid"),
     DevId=utility:get_string(Json, "device_id"),
-    case get_register_info_by_uuid(UUID) of
-    {atomic,[#lw_register{}]}->  [{status,failed},{reason,account_already_exist}];
+    case {get_register_info_by_uuid(UUID),lw_agent_oss:query_did_item(UUID)} of
+    {{atomic,[#lw_register{}]},_}->  [{status,failed},{reason,account_already_exist}];
+    {_,DidItem} when DidItem =/=undefined->  [{status,failed},{reason,account_already_exist},{other,did_no_conflict}];
     _->
         case sms_handler:auth_code(UUID++DevId) of
         AuthCode->
@@ -42,6 +43,7 @@ delegate_register(Json)->
     AuthCode=utility:get_string(Json, "auth_code"),
     UUID=utility:get_string(Json, "uuid"),
     DevId=utility:get_string(Json, "device_id"),
+    io:format("delegate_register:~p~n",[Json]),
     case lw_agent_oss:authenticate(UUID,AuthCode) of
     {ok,Status}->
         Name=utility:get_string(Json, "name"),
@@ -193,6 +195,11 @@ add_coins(UUID, Added)->
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
+%talk_over(UUID,Charges) when is_number(Charges)->  consume_coins(UUID,Charges);
+%talk_over(UUID,Pls) when is_list(Pls)->
+%    Charges=proplists:get_value(charges,Pls,0),
+%    consume_coins(UUID,Charges),
+%    Cdr=proplists:get_value(cdr,Pls,[]),
 consume_coins(UUID,Charges)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls}]}->  

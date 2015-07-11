@@ -14,6 +14,83 @@
 
 
 %% ---------------------------------
+decodeWebSDP(SDP,LPort)->
+	try sdp:decode(SDP) of
+		{Session,Streams} ->
+			{HasAudio,Streama} =
+				case [Strm||Strm<-Streams,Strm#media_desc.type==audio] of
+					[Strm1] -> {true,Strm1};
+					[] -> {false,undefined}
+				end,
+			if HasAudio ->
+				case check_sdp_params_for_voip({Session,Streams}) of
+					{ok,Type} ->
+						get_rtp_params({Session,[Streama]},Type,getrandom(),LPort);
+					_ ->
+						{failure,sdp_bad_audio}
+				end;
+			true -> {failure,sdp_need_audio}
+			end
+	catch
+		error:_X ->
+			{failure,sdp_error}
+	end.
+
+get_rtp_params({Session,[Streama]},PLType,L_OrigID,LPort) ->
+	{OSVer, R_OrigID} = fetchorig(Session),
+	%{RUfrag,RPwd,RK_S} = fetchkey(Streama),
+	{RUfrag,RPwd} = fetchicepara(Streama),
+	KeyStrategy = fetchkeystrategy(Streama),
+    {PeerCrypto, PeerFingerPrint} = 
+        case KeyStrategy of
+		    crypto ->
+		    	{fetchcrypto(Streama), undefined};
+		    dtls ->
+		        {undefined, fetchfingerprint(Streama)}
+		end,
+	{Meth,PeerKS}= if PeerCrypto == undefined -> {undefined, undefined}; true -> PeerCrypto end,
+	%io:format("{KeyStrategy:~p,PeerCrypto:~p,PeerFingerPrint:~p}.~n", [KeyStrategy, PeerCrypto, PeerFingerPrint]),
+	{R_SSRC,R_CName} = fetchssrc(Streama),
+	{R_Addr,R_Port} = fetchpeer(Session,Streama),
+	
+	{ICEUfrag,ICEpwd,K_S} = makey(),	
+	{L_SSRC,L_CName} = makessrc(),
+	SelfCrypto = if KeyStrategy == crypto -> {Meth,K_S};
+		     true -> undefined end,
+	
+	L_rtp = #srtp_desc{origid = integer_to_list(L_OrigID),
+					   ssrc = L_SSRC,
+					   ckey = K_S,
+					   cname= L_CName,
+					   ice = {ice,ICEUfrag,ICEpwd}},
+	R_rtp = #srtp_desc{origid = integer_to_list(R_OrigID),
+					   ssrc = R_SSRC,
+					   ckey = PeerKS,
+					   cname = R_CName,
+					   ice = {ice,RUfrag,RPwd}},
+	
+	Media = whereis(rbt),
+	Options1 = [{outmedia,Media},
+	           {key_strategy, KeyStrategy},
+	           {fingerprint, PeerFingerPrint},
+			   {crypto,PeerCrypto},
+			   {ssrc,[R_rtp#srtp_desc.ssrc,R_rtp#srtp_desc.cname]},
+			   {vssrc,[R_rtp#srtp_desc.vssrc,R_rtp#srtp_desc.cname]},
+			   {stun,{controlled,?STUNV2,L_rtp#srtp_desc.ice,R_rtp#srtp_desc.ice}}],
+	Options2 = [{media,Media},
+	           {key_strategy, KeyStrategy},
+			   {crypto,SelfCrypto},
+			   {ssrc,[L_rtp#srtp_desc.ssrc,L_rtp#srtp_desc.cname]}],
+			   
+	L_session = make_default_session(L_OrigID, OSVer, false, undefined),
+	L_audio = make_voip_audio(PLType,L_SSRC, LPort, {ICEUfrag,ICEpwd,SelfCrypto}),
+    C1 = make_candidate(?CC_RTP,avscfg:get(host_ip),LPort),
+	C2 = make_candidate(?CC_RTCP,avscfg:get(host_ip),LPort),
+    C3 = make_candidate(?CC_RTP,avscfg:get(internal_ip),LPort),
+	C4 = make_candidate(?CC_RTCP,avscfg:get(internal_ip),LPort),
+	AnsSDP = sdp:encode(L_session, [L_audio#media_desc{candidates=[C1,C2,C3,C4]}]),
+	{ok,Options1,Options2,AnsSDP,{R_Addr,R_Port}}.
+
 processVOIP(SDP,PhInfo) when is_binary(SDP),is_list(PhInfo) ->
  {value, Calls} = app_manager:get_app_count(),
  MaxCalls = avscfg:get(max_calls),
@@ -124,6 +201,101 @@ make_sess_from_ip(IP) ->
 	<<Sess:32>> = <<A:8,B:8,C:8,D:8>>,
 	Sess.
 
+processIosTpVOIP(SDP,Aid) when is_binary(SDP) ->
+ {value, Calls} = app_manager:get_app_count(),
+ MaxCalls = avscfg:get(max_calls),
+    if
+        Calls >  MaxCalls ->
+            {failed, over_load};
+        true ->
+            R=processIosTpVOIP(SDP,getrandom(),Aid),
+            w2p:sip_p2p_answer(Aid),
+            io:format("processIosTpVOIP:~p~n",[R]),
+            R
+	end.
+
+processIosTpVOIP(SDP,PartySess,Aid) ->
+	try sdp:decode(SDP) of
+		{Session,Streams} ->
+			{HasAudio,Streama} =
+				case [Strm||Strm<-Streams,Strm#media_desc.type==audio] of
+					[Strm1] -> {true,Strm1};
+					[] -> {false,undefined}
+				end,
+			if HasAudio ->
+				case check_sdp_params_for_voip({Session,Streams}) of
+					{ok,Type} ->
+						do_ios_sip_tp_VOIP({Session,[Streama]},Type,PartySess,Aid);
+					_ ->
+						{failure,sdp_bad_audio}
+				end;
+			true -> {failure,sdp_need_audio}
+			end
+	catch
+		error:_X ->
+			{failure,sdp_error}
+	end.
+
+do_ios_sip_tp_VOIP({Session,[Streama]},PLType,L_OrigID,Aid) ->
+	io:format("**************************************************************~n"),
+	{OSVer, R_OrigID} = fetchorig(Session),
+	%{RUfrag,RPwd,RK_S} = fetchkey(Streama),
+	{RUfrag,RPwd} = fetchicepara(Streama),
+	KeyStrategy = fetchkeystrategy(Streama),
+    {PeerCrypto, PeerFingerPrint} = 
+        case KeyStrategy of
+		    crypto ->
+		    	{fetchcrypto(Streama), undefined};
+		    dtls ->
+		        {undefined, fetchfingerprint(Streama)}
+		end,
+	{Meth,PeerKS}= if PeerCrypto == undefined -> {undefined, undefined}; true -> PeerCrypto end,
+	%io:format("{KeyStrategy:~p,PeerCrypto:~p,PeerFingerPrint:~p}.~n", [KeyStrategy, PeerCrypto, PeerFingerPrint]),
+	{R_SSRC,R_CName} = fetchssrc(Streama),
+	{R_Addr,R_Port} = fetchpeer(Session,Streama),
+	
+	{ICEUfrag,ICEpwd,K_S} = makey(),	
+	{L_SSRC,L_CName} = makessrc(),
+	SelfCrypto = if KeyStrategy == crypto -> {Meth,K_S};
+		     true -> undefined end,
+	
+	L_rtp = #srtp_desc{origid = integer_to_list(Aid),
+					   ssrc = L_SSRC,
+					   ckey = K_S,
+					   cname= L_CName,
+					   ice = {ice,ICEUfrag,ICEpwd}},
+	R_rtp = #srtp_desc{origid = integer_to_list(R_OrigID),
+					   ssrc = R_SSRC,
+					   ckey = PeerKS,
+					   cname = R_CName,
+					   ice = {ice,RUfrag,RPwd}},
+	
+	Media = whereis(rbt),
+	Options1 = [{outmedia,Media},
+	           {key_strategy, KeyStrategy},
+	           {fingerprint, PeerFingerPrint},
+			   {crypto,PeerCrypto},
+			   {ssrc,[R_rtp#srtp_desc.ssrc,R_rtp#srtp_desc.cname]},
+			   {vssrc,[R_rtp#srtp_desc.vssrc,R_rtp#srtp_desc.cname]},
+			   {stun,{controlled,?STUNV2,L_rtp#srtp_desc.ice,R_rtp#srtp_desc.ice}}],
+	Options2 = [{media,Media},
+	           {key_strategy, KeyStrategy},
+			   {crypto,SelfCrypto},
+			   {ssrc,[L_rtp#srtp_desc.ssrc,L_rtp#srtp_desc.cname]}],
+			   
+	{value, LPort}=w2p:get_rtp_port(Aid),
+	RTP= w2p:get_rtp_pid(Aid),
+      rtp:info(RTP,{add_stream,audio,Options2}),
+      my_server:call(RTP,{options,Options1}),
+	L_session = make_default_session(L_OrigID, OSVer, false, undefined),
+	L_audio = make_voip_audio(PLType,L_SSRC, LPort, {ICEUfrag,ICEpwd,SelfCrypto}),
+    C1 = make_candidate(?CC_RTP,avscfg:get(host_ip),LPort),
+	C2 = make_candidate(?CC_RTCP,avscfg:get(host_ip),LPort),
+    C3 = make_candidate(?CC_RTP,avscfg:get(internal_ip),LPort),
+	C4 = make_candidate(?CC_RTCP,avscfg:get(internal_ip),LPort),
+	AnsSDP = sdp:encode(L_session, [L_audio#media_desc{candidates=[C1,C2,C3,C4]}]),
+	{successful,Aid,AnsSDP}.
+
 parsePEv("*") -> 10;
 parsePEv("#") -> 11;
 parsePEv(N) when N>="0",N=<"9" -> list_to_integer(N);
@@ -141,7 +313,7 @@ make_info(PhNo) ->
 check_sdp_params_for_voip(Desc) ->
 	case check_sdp_params(Desc) of
 		{_,[{audio,PLs,[true,true],true,true,_}|_]} ->
-			case avscfg:get(web_codec) of
+			case avscfg:get(webrtc_web_codec) of
 				isac ->
 					case {lists:member(103,PLs),lists:member(105,PLs)} of
 						{true,true} -> {ok,isac};

@@ -44,6 +44,9 @@ processSipP2pCall(SipInfo)  ->
     
     ToMobiles = [{codec_name, atom_upper(PLType)},{payload_mode, normal},{rssrc, <<"123">>}],
     {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}.
+processIosSipP2pCall(SipInfo)  ->
+    {value, Aid, LPort} = w2p:start({sip_call_in_ios,[]}, [], SipInfo,undefined, { "192.0.0.1",0}),
+    {successful,Aid,{avscfg:get(mhost_ip),LPort}, []}.
 processSipP2pRing(Sid)  ->
     w2p:sip_p2p_ring(Sid).
 processSipP2pAnswer(Sid)  ->

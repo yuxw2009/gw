@@ -188,8 +188,9 @@ get_pause_wcgs() ->
     	end,
     mnesia:activity(transaction, F).
 
-call(SDP, Options) ->
-    case choose_wcg() of
+call(SDP, Options) ->call(choose_wcg(),SDP, Options).
+call(WcgNode,SDP, Options) ->
+    case WcgNode of
     	{error, no_wcg_conf} -> no_wcg_conf;
     	Node ->
     	    do_call(Node, SDP, Options)

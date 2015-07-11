@@ -19,8 +19,10 @@
                uuid,
                audit_info,
                phone,
+               sip_phone,
                contact,
                cid,
+               sip_cid,
                max_talkT,
                alertT,
                options,
@@ -50,12 +52,13 @@ init(Owner,Options) ->
     Audit_info = proplists:get_value(audit_info, Options),
     Maxtime = proplists:get_value(max_time, Options),
     Cid0 = proplists:get_value(cid, Options),
-    Cid = session:trans_caller_phone(Phone,Cid0),
-    Phone1 = session:trans_callee_phone0(Phone,UUID),
 %    io:format("voip_ua:options:~p~n",[Options]),
-    init(Owner,caller,session:caller_addr(Cid),Phone1,UUID, Audit_info, Maxtime, Cid,Options).
+    init(Owner,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
     
-init(Owner,Role,From,Phone,UUID, Audit_info, Maxtime, Cid,Options) ->
+init(Owner,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
+    Cid = session:trans_caller_phone(Phone0,Cid0),
+    From=session:caller_addr(Cid ),
+    Phone = session:trans_callee_phone0(Phone0,UUID),
     process_flag(trap_exit,true),
     To=session:callee_addr(Phone),
     if
@@ -64,7 +67,8 @@ init(Owner,Role,From,Phone,UUID, Audit_info, Maxtime, Cid,Options) ->
             uid_manager:start_call(Cid, [{sip_pid, self()}, {owner,Owner}])
     end,
     _Ref = erlang:monitor(process,Owner),
-    loop(idle, #state{owner=Owner,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone,max_time=Maxtime, cid=Cid,options=Options}).
+    loop(idle, #state{owner=Owner,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone0,sip_phone=Phone,max_time=Maxtime, cid=Cid0,
+                             sip_cid=Cid,options=Options}).
 
 %% StateName: idle | trying | |ring | ready | cancel    
 loop(StateName,State=#state{cid=_CID}) ->
@@ -94,6 +98,7 @@ terminate(St=#state{max_talkT=MaxTalkT,timer_ref=InviteT,alertT=AlertT})->
 	{GroupId,_} when GroupId==fzd orelse GroupId=="fzd" -> generate_cdr4shuobar(St);
 	{_,_}-> generate_cdr(St)
 	end,
+	traffic(St),
 	stop.
 
 on_message({'DOWN', _Ref, process, Owner, _Reason},Status,State=#state{owner=Owner})->
@@ -417,4 +422,8 @@ maxtalk_judge(State0=#state{max_time=Maxtime})->
             State0#state{max_talkT=TalkT,alertT=AlertT};
         true-> State0
     end.
-    
+
+traffic(St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
+    Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
+      {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
+    rpc:call('traffic@lwork.hk',traffic,add,[Trf]).

@@ -46,6 +46,6 @@ tables()-> ram_tables()++disc_tables().
 disc_tables()->
     [lw_register,agent_did2sip,name2uuid,agent_oss_item,pay_record].
 ram_tables()->
-    [login_itm].
+    [login_itm,wcg_queue].
 delete_tables()->
     [mnesia:delete_table(I)||I<-tables()].

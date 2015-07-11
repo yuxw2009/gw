@@ -71,12 +71,13 @@ livecom_login(Account,Params,{_XgAccount,PassMD5,DevId})->
 local_login(Params)->
     UUID=proplists:get_value("uuid",Params),
     Pwd=proplists:get_value("pwd",Params),
-%    io:format("login:~p,~p~n",[UUID,Pwd]),
+    io:format("login:~p,~p~n",[UUID,Pwd]),
     {Status,Res}=
     case lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pwd=Pwd,name=Name,pls=Pls}]}-> 
         Info=proplists:get_value(info,Pls,""),
-        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,UUID}]};
+        Did= proplists:get_value(did,Pls,""),
+        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,UUID},{did,Did}]};
     {atomic,[#lw_register{}]}-> {islocal,[{status,failed},{reason,pwd_not_match}]};
     _-> {not_local,[{status,failed},{reason,account_not_existed}]}
     end,
@@ -140,13 +141,13 @@ filter_phone(Phone)->  [I||I<-Phone, lists:member(I, "0123456789*#")].
 
 push_trans_caller(undefined)-> undefined;
 push_trans_caller("0086"++P)-> P;
-push_trans_caller(Caller) when is_binary(Caller)-> push_trans_caller(binary_to_list(Caller));    
+push_trans_caller(Caller) when is_binary(Caller)-> push_trans_caller(string:strip(binary_to_list(Caller)));    
 push_trans_caller(Caller) ->trans_caller_phone("0086",Caller).
     
 unregister_user_login(UUID,DevId)-> 
     io:format("unregister_user_login ~p ~p ~n",[UUID,DevId]),
-    case login_processor:get_tuple_by_uuid_did(UUID) of
-    #login_itm{}=Itm-> update_itm(Itm#login_itm{devid=""});
+    case login_processor:get_account_tuple(UUID) of
+    #login_itm{devid=DevId}=Itm-> update_itm(Itm#login_itm{devid=""});
     _-> void
     end.
 register_user_login(_Params,[])-> {failed,no_phone_registered};
@@ -161,20 +162,28 @@ register_user_login(Params,[Phone1|_OtherPhones])->
                                 #agent_oss_item{status=S,did=D,pls=P}-> {S,push_trans_caller(D),P};
                                 _-> {actived,undefined,[]}
                             end,
+    Clidata=proplists:get_value("clidata",Params),
+    io:format("register_user_login clidata ~p~n",[Clidata]),
+    {OsType}= if Clidata==undefined-> {"ios"}; true-> utility:decode_json(Clidata,[{os_type,s}]) end,
     NL=#login_itm{phone=push_trans_caller(Phone1),acc=Account,devid=DevId,ip=Ip,group_id=GroupId,status=Status,
-           pls=[{did,Did}|Pls]},
+           pls=[{os_type,OsType},{did,Did}|Pls]},
     ?DB_WRITE(NL).
 
 tick_old(Params,[Phone1|_OtherPhones])->
     {Acc0,Pwd0,DevId0,GroupId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),
                                                          proplists:get_value("device_id",Params),proplists:get_value("group_id",Params)},
-    Ip=proplists:get_value("ip", Params),
-    {Account,_PassMD5,DevId,GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
+    _Ip=proplists:get_value("ip", Params),
+    {Account,_PassMD5,DevId,_GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
     case get_tuple_by_uuid_did(Phone1) of
     #login_itm{devid=DevId}->  void;
-    #login_itm{devid=OldDevId}-> 
+    #login_itm{devid=OldDevId,pls=Pls}-> 
         io:format("try tickout ~p from ~p to ~p~n",[Phone1, OldDevId,DevId]),
-        xhr_poll:tickout(OldDevId);
+        case proplists:get_value(os_type,Pls) of
+        "ios"->
+            lw_mobile:send_notification1(OldDevId,[{'content-available',1},{alert,login_otherwhere_notes(Account)},{event,login_otherwhere}]);
+        _->
+            xhr_poll:tickout(OldDevId)
+        end;
     _->    void
     end,
     ok.
@@ -218,6 +227,12 @@ get_ip_tuple(Phone)->
     #login_itm{ip=Ip}-> Ip;
     _-> undefined
     end.
+get_phone_type(Phone)->
+    case get_tuple_by_uuid_did(Phone) of
+    #login_itm{pls=Pls}-> 
+        proplists:get_value(os_type,Pls);
+    _-> undefined
+    end.
 get_tuple_by_uuid_did(Phone)->
 case {get_account_tuple(Phone), get_account_tuple_bydid(Phone)} of
     {Itm=#login_itm{},_}-> Itm;
@@ -242,4 +257,5 @@ set_status(UUID,Status)->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
 
-
+login_otherwhere_notes(UUID)->
+    "您的账号"++UUID++"在其他设备登录".

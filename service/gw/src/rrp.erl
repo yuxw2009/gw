@@ -263,7 +263,7 @@ handle_info({pause,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
 % send phone event to sip
 %
 handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
-	llog1(ST,"~p send DTMF ~p",[ST#st.session,SPEv]),
+	io:format("~p send DTMF ~p",[ST#st.session,SPEv]),
 	SPEv2 = if SPEv#ev.actived==false -> 
                 #ev{actived=true,step=init,t_begin=now(),nu=Nu,vol=Vol,dura=Dura};
         	true ->
@@ -299,7 +299,6 @@ handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
     Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{rtpvcr=Nvcr1}};
 handle_info(pcmu_to_sip,#st{snd_pev=#ev{actived=true}=SPEv,socket=Socket,peer={IP,Port},in_stream=BaseRTP}=ST) ->
-	flush_msg(pcmu_to_sip),
     {SPEv2,M,Samples,F1} = processSPE(SPEv),
     %%io:format("~p ~p~n",[M,F1]),
 	NewBaseRTP = inc_timecode(BaseRTP,Samples),
@@ -309,19 +308,19 @@ handle_info(pcmu_to_sip,#st{snd_pev=#ev{actived=true}=SPEv,socket=Socket,peer={I
 	Strm4 = if SPEv2#ev.step==init orelse SPEv2#ev.actived==false ->
             	inc_timecode(Strm3,SPEv2#ev.tcount + SPEv2#ev.gcount*160 -160);
         	true -> Strm3 end,
+	flush_msg_pev(pcmu_to_sip),
     {noreply,ST#st{stats=up_udp_stats(ST#st.stats,OutBin),in_stream=Strm4,snd_pev=SPEv2}};
 %
 % pcm-u send to msg9000 web (isac/opus mode)
 %
 handle_info(pcmu_to_sip,#st{peerok=false,to_sip=#apip{vad=VAD,passed=Passed,abuf=AB}=ToSip} = ST) ->     % peerok is true after MSG9000's sdp received
-	flush_msg(pcmu_to_sip),
     {{_,F1},RestAB} = shift_to_voice_keep_get_samples(VAD,if ST#st.webcodec==isac -> ?FS16K;
                                                          true -> ?FS8K end,
                                                      ?PTIME,Passed,AB),
+	flush_msg(pcmu_to_sip),
     {noreply,ST#st{to_sip=ToSip#apip{abuf=RestAB,passed=F1}}};
 handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST) ->
-	flush_msg(pcmu_to_sip),
     {{Type,F1},RestAB} = if Trace==noise ->
                         	shift_to_voice_keep_get_samples(VAD,?FS16K,?PTIME,Passed,AB);
                          true ->
@@ -332,18 +331,19 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
 	VB2 = if is_pid(VCR)-> <<VB/binary,PCM/binary>>;true->VB end,
 
-	if Type == noise-> 
+    if Type == noise-> 
+        flush_msg(pcmu_to_sip),
         {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
         send_udp(Socket,IP,Port,RTP),
         send2_newvcr(ST#st.vcr1,PCM,rrp),
+        flush_msg(pcmu_to_sip),
         {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
     end;
 %yuxw    
 handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST)
                         	when Wcdc==opus;Wcdc==ilbc;Wcdc==amr;Wcdc==undefined ->  %yxw
-	flush_msg(pcmu_to_sip),
     {{Type,F1},RestAB} = if Trace==noise ->
                         	shift_to_voice_keep_get_samples(VAD,?FS8K,?PTIME,Passed,AB);
                          true ->
@@ -353,10 +353,12 @@ handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,pass
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
     VB2 = if is_pid(VCR)-> <<VB/binary,F1/binary>>;true->VB end,
 	if Type == noise-> 
+	flush_msg(pcmu_to_sip),
         {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
         send_udp(Socket,IP,Port,RTP),
         send2_newvcr(ST#st.vcr1,F1,rrp),
+	flush_msg(pcmu_to_sip),
         {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
     end;
 %        send_udp(Socket,IP,Port,RTP),
@@ -369,18 +371,19 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,to_web=#apip{trace=voice,noise_deep
 	flush_msg(isac_to_webrtc),
     {noreply,ST#st{to_web=ToWeb#apip{noise_deep=-1}}};
 handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=voice,noise_deep=-1}=ToWeb}=ST) ->
-	flush_msg(isac_to_webrtc),
     #apip{vad=VAD,cnge=CNGE,cdc=Isac,passed=Passed,abuf=AB} = ToWeb,
 	case get_samples(VAD,?FS16K,60,Passed,AB) of	% 16Khz 60ms 16-bit samples = 960
         {{voice,F1},RestAB} ->
             {0,_,Aenc} = ?APPLY(erl_isac_nb, xenc, [Isac,F1]),
              send2_newvcr(ST#st.vcr1,F1,rtp),
         	Web ! #audio_frame{codec=?iSAC,marker=false,body=Aenc,samples=960},
+            flush_msg(isac_to_webrtc),
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,noise_deep=0,passed=F1}}};
         {{noise,<<ND1:960/binary,ND2/binary>>},RestAB} ->
 %            {0,<<>>} = erl_cng_xenc(CNGE,ND1,0),
 %            {0,Asid} = ?APPLY(erl_cng, xenc, [CNGE,ND2,1]),
 %        	Web ! #audio_frame{codec=?iCNG,marker=false,body=Asid,samples=960},
+            flush_msg(isac_to_webrtc),
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,trace=noise,noise_deep=1,noise_duration=0,passed=ND2}}}
 	end;
 handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=noise,noise_deep=NDeep}=ToWeb}=ST) when NDeep>0 ->
@@ -442,7 +445,6 @@ handle_info(ilbc_to_webrtc,#st{webcodec=ilbc,to_web=#apip{trace=voice,noise_deep
 	flush_msg(ilbc_to_webrtc),
     {noreply,ST#st{to_web=ToWeb#apip{noise_deep=-1}}};
 handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{trace=voice,noise_deep=-1}=ToWeb}=ST) ->
-	flush_msg(ilbc_to_webrtc),
     #apip{vad=VAD,cnge=CNGE,cdc=Ilbc,passed=Passed,abuf=AB} = ToWeb,
 	case shift_to_voice_and_get_samples(VAD,?FS8K,60,Passed,AB) of	% 8Khz 30ms 16-bit
         {{voice,F1},RestAB} ->
@@ -452,13 +454,14 @@ handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{
                 true-> void
                 end,
         	NewStats=down2rtp_stats(ST#st.stats,Aenc),
+             flush_msg(ilbc_to_webrtc),
             {noreply,ST#st{stats=NewStats,to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
         {{noise,F1},RestAB} ->
+             flush_msg(ilbc_to_webrtc),
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}}
 	end;
 
 handle_info(amr_to_webrtc,#st{monitor=Mon,webcodec=amr,media=Web,to_web=#apip{}=ToWeb}=ST) ->
-	flush_msg(amr_to_webrtc),
     #apip{vad=VAD,cnge=CNGE,cdc=Id,passed=Passed,abuf=AB} = ToWeb,
 	case shift_to_voice_and_get_samples(VAD,?FS8K,?AMRPTIME,Passed,AB) of	% 8Khz 120ms 16-bit
         {{voice,F1},RestAB} ->
@@ -467,8 +470,10 @@ handle_info(amr_to_webrtc,#st{monitor=Mon,webcodec=amr,media=Web,to_web=#apip{}=
 %        	llog1(ST, "raw:len:~p bin:~p enc:len:~p bin:~p~n", [size(F1),F1,size(Aenc),Aenc]),
         	Web ! #audio_frame{codec=?AMR,marker=false,body=Aenc,samples=(?AMRPTIME div 20)*160},
         	NewStats=down2rtp_stats(ST#st.stats,Aenc),
+             flush_msg(amr_to_webrtc),
             {noreply,ST#st{stats=NewStats,to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}};
         {{noise,F1},RestAB} ->
+             flush_msg(amr_to_webrtc),
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1,noise_deep=0}}}
 	end;
 %
@@ -740,10 +745,16 @@ amr_60_enc(Id,<<F1:320/binary,Rest/binary>>,Out) ->
 
 % ----------------------------------
 %
-flush_msg(Msg) ->
+flush_msg_pev(Msg) ->
     receive Msg -> flush_msg(Msg)
      after 0 -> ok
-     end.
+     end,
+     pass.
+flush_msg(Msg) ->
+%    receive Msg -> flush_msg(Msg)
+%     after 0 -> ok
+%     end,
+     pass.
 
 mkvfn(Name) ->
     {_,Mo,D} = date(),

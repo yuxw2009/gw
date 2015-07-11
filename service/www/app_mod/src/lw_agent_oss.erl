@@ -5,7 +5,7 @@
 
 % from boss oam
 create_sdn(Pls)->
-    Sdn = proplists:get_value(sdn,Pls),
+    Sdn = proplists:get_value(sdn1,Pls),
     Das = proplists:get_value(das,Pls),
     ServNo=das2service_no(Das),
     case {Sdn,?DB_READ(agent_oss_item,Sdn)} of
@@ -75,6 +75,11 @@ create_did(Pls)->
         end;        
     _->
         [{"RETN","1"},{"DESC","sipdn not binded"}]
+    end.
+query_did_item(Did)->
+    case ?DB_READ(agent_oss_item,Did) of
+    {atomic,[Item]}->  Item;
+    _-> undefined
     end.
     
 destroy_did(Pls)->

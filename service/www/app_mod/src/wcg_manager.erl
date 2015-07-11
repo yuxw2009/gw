@@ -25,7 +25,9 @@ init_db() ->
        io:format("*************************************************~n"),
         Tables = mnesia:system_info(tables),
         case lists:member(wcg_conf, Tables) of
-        	true -> pass;
+        	true -> 
+        	    login_processor:start(),
+        	    pass;
         	false ->
         	    mnesia:stop(),
                 mnesia:create_schema([node()]),

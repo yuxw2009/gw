@@ -16,6 +16,7 @@ get(sip_app_node) -> {voip_ua, 'voice_ext@fc2fc.com'}; %{voip_ua, 'voice@58.221.
 get(max_calls) -> 600;
 
 
+get(webrtc_web_codec) -> ilbc; 
 get(web_codec) -> amr; 
 get(sip_codec) -> pcmu;
 

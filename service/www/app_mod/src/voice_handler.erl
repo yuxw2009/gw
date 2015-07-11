@@ -72,7 +72,7 @@ handle(Arg, 'GET', ["fzdvoip", "status_with_qos"]) ->
 		        voip_failed -> utility:pl2jso([{status, failed},{reason,voip_failed}]);
 		        {State, QOS} -> 
 		            QOS2 = pretrans_qos(QOS, []),
-		            utility:pl2jso([{status, ok}, {state, State},{stats, utility:pl2jso(QOS2)}])
+		            utility:pl2jso([{status, ok},{peer_status, State}, {state, State},{stats, utility:pl2jso_br(QOS2)}])
 		    end;
 	    _ -> utility:pl2jso([{status, failed},{reason,cnm}])
     end;
@@ -109,15 +109,18 @@ handle(Arg, M, Ps) ->
     utility:pl2jso([{status,failed},{reason,und}]).
 
 handle_startcall("",Arg)->   handle_fzd_startcall(Arg);
-handle_startcall(GroupId,Arg)->
+handle_startcall(GroupId,Arg)-> 
+    {UUID}=utility:decode(Arg, [{uuid,s}]),
+    handle_startcall(lw_mobile:get_ios_node_by_ip(UUID,utility:client_ip(Arg)),GroupId,Arg).
+handle_startcall(Node,GroupId,Arg)->
     case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
     {UUID, SDP, Phone,Class}->
         AuthCode=utility:get_string_by_stringkey("auth_code",Arg),
          io:format("GroupId:~p AuthCode:~p Phone:~p~n",[GroupId,AuthCode,Phone]),
         case check_token(UUID, [Phone,GroupId,AuthCode]) of
             {pass, Phone2} ->
-        		Res = start_voip(GroupId,UUID, Class, Phone2, SDP, no_limit,utility:client_ip(Arg)),
-        		io:format("start_voip res:~p~n",[Res]),
+        		Res = start_voip(Node,GroupId,UUID, Class, Phone2, SDP, no_limit,utility:client_ip(Arg)),
+        		io:format("voice_handler start_voip node:~p res:~p~n",[Node,Res]),
         		case Res of
         			{SID, SDP2} -> utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
         			Err -> utility:pl2jso([{status, failed},{reason,a}])
@@ -173,6 +176,8 @@ handle_fzd_startcall(Arg)->
         utility:pl2jso([{status, failed},{reason,c}])
     end.
 
+check_token(UUID, [Phone, "dth", _]) -> {pass,Phone};
+check_token(UUID, [Phone, "livecom", _]) -> {pass,Phone};
 check_token(UUID, [Phone, "xh", "xhlivecom"]) -> {pass,Phone};
 check_token(UUID, [Phone, "my_token", "my_finger"]) -> {pass,Phone,["0"]};
 check_token(UUID, [Phone, Token, IDFinger]) ->
@@ -206,9 +211,21 @@ check_token(_, _) ->
 test_phones()->
     ["15300801756"].
 	
+start_call1(WcgNode,SDP,Options) ->
+    wcg_disp:call(WcgNode,SDP, Options).
 start_call1(SDP,Options) ->
     wcg_disp:call(SDP, Options).
 
+start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
+%    BA=xhr_poll:start([]),
+    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},{max_time, MaxtalkT}],
+    case start_call1(WcgNode,SDP, Options) of
+          {successful,Node,Session_id, Callee_sdp}->
+              {enc_sid(Node, Session_id), Callee_sdp};
+          Reason -> 
+              Reason
+   end.
+    
 start_voip(ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
 %    BA=xhr_poll:start([]),
     Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},{max_time, MaxtalkT}],
@@ -233,7 +250,7 @@ fzd_get_voip_status(_UUID, Session_id, _SessionIP) ->
             [{status, failed}, {reason, bad_rpc}]
     end.   
 
-fzd_get_voip_status_with_qos(_UUID, Session_id, SessionIP) ->
+fzd_get_voip_status_with_qos(_UUID, Session_id, _SessionIP) ->
     case dec_sid(Session_id) of
     {invalid_node,_}->
 %        utility:log(?NOTICE,"status failed!~nsession_id:~p,ip:~p~n",[Session_id,SessionIP]),

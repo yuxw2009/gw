@@ -8,6 +8,9 @@ get(voice_node)-> 'voice@10.32.7.28'.%'voice_ext@fc2fc.com'.%
 
 get_serid()-> "ml".
 
+get_ios_wcgnode(Continent) when Continent=="Europe" orelse Continent=="Africa" orelse Continent=="SouthAmerica"-> 'gw@10.32.2.4';
+get_ios_wcgnode(_)->'gw1@119.29.62.190'.
+
 get_wcgnode(default)-> get_wcgnode("Mainland");
 get_wcgnode("Mainland")->'gw1@119.29.62.190';
 get_wcgnode(Continent) when Continent=="Europe" orelse Continent=="Africa" orelse Continent=="SouthAmerica"-> 'gw@10.32.2.4';

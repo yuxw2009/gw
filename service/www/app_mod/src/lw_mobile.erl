@@ -6,6 +6,7 @@
 -compile(export_all).
 -include("yaws_api.hrl").
 -include("lwdb.hrl").
+-include("login_info.hrl").
 -define(CALL,"./log/call.log").
 -define(VERSION_INFO, "./docroot/version/version.info").
 -define(VERSION_DTH_INFO, "./docroot/version/version_dth.info").
@@ -82,7 +83,7 @@ handle(Arg,'POST', ["query_status"])->
 handle(Arg,Meth, Url=["p2p_"++_])->
     {{obj, Clidatas}}= utility:decode(Arg, [{opdata,r}]),
     Evt = proplists:get_value("event",Clidatas),
-    io:format("lw_mobile p2pmsg:~p~n",[Url]),
+    io:format("lw_mobile p2pmsg:~p~n",[{Meth,Url,Clidatas}]),
     handle_tp_call_msg(Arg,Meth,Url,Evt);
 handle(Arg,'POST', ["login1"])->
     IP = utility:client_ip(Arg),
@@ -101,8 +102,9 @@ handle(Arg, 'POST', ["voip", "calls"]) ->
 handle(Arg, 'DELETE', [ "voip", "calls"]) ->
     SessionID = utility:query_string(Arg, "session_id"),
     {Node, Sid} = voice_handler:dec_sid(SessionID),
+     io:format("lw_mobile: stop0~n~p~n", [Sid]),
     rpc:call(Node, avanda, stopNATIVE, [Sid]),
-%     io:format("lw_mobile: stop~n~p~n", [Sid]),
+     io:format("lw_mobile: stop~n~p~n", [Sid]),
     utility:pl2jso([{status, ok}]);
 
 handle(Arg, 'GET', ["version_no"]) ->
@@ -112,7 +114,11 @@ handle(Arg, 'GET', ["version_no"]) ->
     end;
 handle(Arg, 'GET', ["version_dth_no"]) ->
     case file:consult(?VERSION_DTH_INFO) of
-    {ok,Info}-> utility:pl2jso_br([{status,ok}|Info]);
+    {ok,Info}-> 
+        Node=get_node_by_ip0(unused,utility:client_ip(Arg)),
+        VPath=proplists:get_value(Node,Info),
+        Info1= if VPath==undefined-> Info; true-> lists:keystore(i_version_path,1, Info,{i_version_path,VPath}) end,
+        utility:pl2jso_br([{status,ok}|Info1]);
     _-> utility:pl2jso_br([{status,failed}])
     end;
 handle(Arg, 'GET', ["version_common_no"]) ->
@@ -129,7 +135,7 @@ handle(Arg, 'GET', ["voip", "calls"]) ->
                          {ok, Status,Stats0}->
 %                            io:format("stats:~p~n",[Stats0]),
                             Stats=proplists:delete(ip,Stats0),
-                            [{status, ok}, {peer_status, Status},{stats,utility:pl2jso_br(Stats)}];
+                            [{status, ok}, {peer_status, Status},{state, Status},{stats,utility:pl2jso_br(Stats)}];
                          {badrpc, Reason}-> 
                              [{status, failed}, {reason, Reason}];
                         {failed, Reason}-> [{status, failed}, {reason, Reason}]
@@ -145,9 +151,57 @@ handle(Arg, 'POST', ["voip", "dtmf"]) ->
    %%Session_id = utility:query_string(Arg, "session_id"),
    %%Num = utility:query_string(Arg, "num")
    {Node, Sid} = voice_handler:dec_sid(Session_id),
-   rpc:call(Node, wkr, eventVOIP, [Sid, {dail,Num}]),
+   Res=rpc:call(Node, wkr, eventVOIP, [Sid, {dail,Num}]),
+   io:format("dtmf:~p res:~p~n",[Num,Res]),
    utility:pl2jso([{status, ok}]);
-   
+
+%% ios
+handle(Arg, 'POST', ["voip", "icalls"]) ->
+    _IP = utility:client_ip(Arg),
+    {UUID_SNO,Callee}= utility:decode(Arg, [{uuid, s},{phone, s}]),
+    Node=lw_mobile:get_ios_node_by_ip(UUID_SNO,utility:client_ip(Arg)),
+    utility:log(?CALL, "ios:~s=>~s ~s ~s clidata:~p",[UUID_SNO,Callee,utility:make_ip_str(_IP),Node,utility:get_by_stringkey("clidata",Arg)]),
+    case login_processor:autheticated(UUID_SNO,Callee) of
+    [{status,ok},{uuid,UUID}]-> 
+        GroupId=get_group_id(UUID,Arg),
+        voice_handler:handle_startcall(Node,GroupId,Arg);
+    R->
+         utility:pl2jso(R)
+    end;
+
+handle(Arg, 'DELETE', [ "voip", "icalls"]) ->
+    SessionID = utility:query_string(Arg, "session_id"),
+    {Node, Sid} = voice_handler:dec_sid(SessionID),
+    voice_handler:fzd_stop_voip(not_used,SessionID, not_used),
+%     io:format("lw_mobile: stop~n~p~n", [Sid]),
+    utility:pl2jso([{status, ok}]);
+
+handle(Arg, 'GET', ["voip", "icalls"]) ->
+     voice_handler:handle(Arg, 'GET', ["fzdvoip", "status_with_qos"]);
+handle(Arg, 'GET', ["voip", "incomingcalls"]) ->
+     voice_handler:handle(Arg, 'GET', ["fzdvoip", "status_with_qos"]);
+
+handle(Arg, 'GET', ["voip", "incomingcalls1"]) ->
+    SessionID = utility:query_string(Arg, "session_id"),
+    {Node, Sid} = voice_handler:dec_sid(SessionID),
+    R=rpc:call(Node, voip_sup, get_rtp_stat, [Sid]),
+    io:format("ios GET icalls status:~p res:~p~n",[Sid,R]),
+    utility:pl2jso(R);
+
+handle(Arg, 'POST', [ "call_history"]) ->
+    _IP = utility:client_ip(Arg),
+    {UUID,StartId,_Num}= utility:decode(Arg, [{uuid, s},{start_id, i},{num,i}]),
+    LastTime=list_to_binary(utility:d2s(calendar:local_time())),
+    GroupId=get_group_id(UUID,Arg),
+    R=
+    case rpc:call('traffic@lwork.hk',traffic,get_recent_traffic,[{GroupId,UUID},StartId]) of
+    History when is_list(History)->
+        [{status,ok},{history,History}];
+    _->  [{status,failed},{reason,aaa}]
+    end,
+    utility:pl2jso(R);
+
+
 %% handle unknown request
 handle(_Arg, _Method, _Params) -> 
     [{status,405}].
@@ -252,15 +306,122 @@ sip_tp_call_handle(Arg,'POST', ["p2p_answer"],Opdata={obj,Pls})->
                 {failed, Reason}-> utility:pl2jso([{status, failed}, {reason, Reason}])
             end
         end;
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_poll"],_Opdata={obj,_Pls})->    
+    {{SessionID}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+     Result = case voice_handler:dec_sid(SessionID) of
+                {invalid_node,0}->   [{status, failed}, {reason, invalide_sid}];
+                {Node, Sid}->
+                    case rpc:call(Node, p2w, get_call_status, [Sid]) of
+                         {value, Status, Stats0}->
+                            io:format("stats:~p~n",[Stats0]),
+                            Stats=proplists:delete(ip,Stats0),
+                            [{status, ok}, {peer_status, Status},{stats,utility:pl2jso(Stats)}];
+                         {badrpc, Reason}-> 
+                             [{status, failed}, {reason, Reason}];
+                        {failed, Reason}-> [{status, failed}, {reason, Reason}]
+                    end
+                end,
+    utility:pl2jso(Result);
+    
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_poll1"],_Opdata={obj,_Pls})->    
+    {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    R=rpc:call(Node, voip_sup, get_rtp_stat, [Sid]),
+    io:format("p2p_ios_poll:~p res:~p~n",[Sid,R]),
+    utility:pl2jso(R);
+    
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_ringing"],_Opdata={obj,_Pls})->    
+    io:format("p2p_ios_ringing sid_str:~p~n", [p2p_ios_ringing]),
+    {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    io:format("p2p_ios_ringing sid_str:~p~n", [Sid_str]),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    R=case rpc:call(Node, p2w, sip_p2p_ring, [Sid]) of
+        ok-> [{status,ok}];
+        {failure,Reas}-> [{status,failed},{reason,Reas}]
+    end,
+    io:format("p2p_ringing:~p res:~p~n",[Sid_str,R]),
+    utility:pl2jso(R);
+    
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_ringing1"],_Opdata={obj,_Pls})->    
+    io:format("p2p_ios_ringing sid_str:~p~n", [p2p_ios_ringing]),
+    {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    io:format("p2p_ios_ringing sid_str:~p~n", [Sid_str]),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    R=case rpc:call(Node, voip_sup, p2p_ring, [Sid]) of
+        ok-> [{status,ok}];
+        {failure,Reas}-> [{status,failed},{reason,Reas}]
+    end,
+    io:format("p2p_ringing:~p res:~p~n",[Sid_str,R]),
+    utility:pl2jso(R);
+    
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_answer"],Opdata={obj,Pls})->    
+    {SDP,{SessionID}}= utility:decode(Arg, [{sdp,b},{opdata, o, [{session_id,s}]}]),
+    io:format("sip p2p_ios_answer sid_str:~p~n", [SessionID]),
+    Res=
+    case voice_handler:dec_sid(SessionID) of
+        {invalid_node,0}->   
+            [{status, failed}, {reason, invalide_sid}];
+        {Node, Sid}->
+            case rpc:call(Node, p2w, p2w_ios_answer, [Sid,SDP]) of
+                 {ok,AnsSDP}->
+                     utility:pl2jso_br([{status, ok}, {session_id, SessionID}, {sdp, AnsSDP}]);
+                 {badrpc, Reason}-> 
+                     utility:pl2jso([{status, failed}, {reason, Reason}]);
+                {failure, Reason}-> utility:pl2jso([{status, failed}, {reason, Reason}])
+            end
+        end,
+    io:format("ios p2p_ios_answer res:~p~n",[Res]),
+    Res;
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_answer1"],Opdata={obj,Pls})->    
+    {SDP,{SessionID}}= utility:decode(Arg, [{sdp,b},{opdata, o, [{session_id,s}]}]),
+    io:format("sip p2p_ios_answer sid_str:~p~n", [SessionID]),
+    Res=
+    case voice_handler:dec_sid(SessionID) of
+        {invalid_node,0}->   
+            [{status, failed}, {reason, invalide_sid}];
+        {Node, Sid}->
+            case rpc:call(Node, voip_sup, p2p_answer, [Sid,SDP]) of
+                 {ok,_Pid,AnsSDP}->
+                     utility:pl2jso_br([{status, ok}, {session_id, SessionID}, {sdp, AnsSDP}]);
+                 {badrpc, Reason}-> 
+                     utility:pl2jso([{status, failed}, {reason, Reason}]);
+                {failure, Reason}-> utility:pl2jso([{status, failed}, {reason, Reason}])
+            end
+        end,
+    io:format("ios p2p_ios_answer res:~p~n",[Res]),
+    Res;
+sip_tp_call_handle(Arg,'POST', ["p2p_ios_reject"],Clidata)->
+    {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    rpc:call(Node, wkr, stopVOIP, [Sid]),
+    utility:pl2jso([{status,ok}]);
 sip_tp_call_handle(Arg,'POST', ["p2p_reject"],Clidata)->
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
-    rpc:call(Node, avanda, stopNATIVE, [Sid]),
+    rpc:call(Node, voip_sup, p2p_reject, [Sid]),
     utility:pl2jso([{status,ok}]);
 sip_tp_call_handle(_Arg,'POST', _,_Clidata)->
     utility:pl2jso([{status,failed},{reason,sip_tp_call_unhandled}]).
 
 push(Phone1,Content)->
+    case login_processor:get_tuple_by_uuid_did(Phone1) of
+    #login_itm{devid=DevId,pls=Pls} when is_list(DevId) andalso length(DevId)>0->
+        case proplists:get_value(os_type,Pls) of
+            "ios"-> push_ios(Phone1,DevId,Content);
+            "android"-> push_android(Phone1,Content);
+            O-> 
+                io:format("lw_mobile:push unknown os_type ~p~n",[O]),
+                real_call
+        end;
+    O->
+        io:format("lw_mobile:push unknown item ~p~n",[O]),
+        real_call
+    end.
+push_ios(Phone1,DevId,Content)->
+    send_notification1(DevId,Content),
+    io:format("push_ios:Phone1,DevId,Content:~p~n",[{Phone1,DevId,Content}]),
+    ios_webcall.
+push_android(Phone1,Content)->
     Act0 = fun(PollPid, CustomContent) when is_pid(PollPid)-> 	 
                     io:format("lw_mobile:start_call0 to push ~p to :~p~n",[CustomContent,PollPid]),
                     xhr_poll:down(PollPid,CustomContent),
@@ -278,7 +439,7 @@ p2p_push(CallerNode,Phone,Content)->
         end
     end.
 
-get_maxtalkt(Arg)->
+get_maxtalkt(_UUID,Arg)->
    case utility:get_by_stringkey("userclass",Arg) of
    Class when Class == <<"registered">> orelse Class == <<"game">> ->  no_limit;
    _-> 75*1000
@@ -294,7 +455,7 @@ build_call_options(UUID, Arg)->
     Ip=utility:client_ip(Arg),
     { _CallerPhone, Phone, {IPs=[SessionIP|_], Port, Codec}, Class} = utility:decode(Arg, [{caller_phone, s}, {callee_phone, s},
 	                                   {sdp, o, [{ip, as}, {port, i}, {codec, s}]}, {userclass, s}]),
-    {MaxtalkT0,ServiceId} = {get_maxtalkt(Arg),get_group_id(UUID,Arg)},
+    {MaxtalkT0,ServiceId} = {get_maxtalkt(UUID,Arg),get_group_id(UUID,Arg)},
     Node=node(),
     Fun = fun(Charges)->
                  io:format("sadfasfdasfdasfdasf~n"),
@@ -349,14 +510,18 @@ start_call(UUID, Arg, XgAct) ->
                           <<"p2p">> -> XgAct(Node,Callee,CustomContent);
                           _-> real_call  
                           end,
-        	         rpc:call(Node, avanda, set_call_type, [SessionID, CallType]),
+                      if CallType==ios_webcall->
+                          rpc:call(Node, avanda, set_call_type, [SessionID, maybe_p2p_call]),
+                          rpc:call(Node, avanda, processSipP2pRing, [SessionID]);
+                      true->
+                          rpc:call(Node, avanda, set_call_type, [SessionID, CallType])
+                      end,
         	         utility:pl2jso([{status, ok},{session_id, voice_handler:enc_sid(Node, SessionID)}, {ip, list_to_binary(PeerIP)}, 
         	                              {port, PeerPort},{codec, 102}|Other]);
         	    {_, nodedown}-> utility:pl2jso([{status, failed},{reason,nodedown}]);
         	    {failed, Reason}-> utility:pl2jso([{status, failed},{reason,Reason}])
         	end
        end.
-
 
 get_wcg_node(_UUID,Ip)->
     case wcg_disp:choose_wcg() of
@@ -370,20 +535,30 @@ get_wcg_node(_UUID,Ip)->
         _->    wwwcfg:get(test_node)
     end.
 
+get_ios_node_by_ip(UUID,Ip)->  get_node_by_ip0(UUID,Ip).
+%    R0= wwwcfg:get_ios_wcgnode(utility:c2s(utility:country(Ip))),
+%    case lists:member(R0,nodes()) of
+%    true-> R0;
+%    _-> wwwcfg:get_wcgnode(default)
+%    end.
+    
+
 get_node_by_ip0(UUID,Ip)-> 
     R=get_node_by_ip(UUID,Ip),
     io:format("uuid:~p Ip:~p choose node:~p~n",[UUID,Ip,R]),
     R.
     
 
+get_internal_node_by_ip("862180246528",_Ip)-> 'gw@10.32.2.4';
 get_internal_node_by_ip(UUID,Ip)-> 
     wwwcfg:get_internal_wcgnode(utility:c2s(utility:country(Ip))).
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
-%get_node_by_ip(_luyin_test="008618017813673",_Ip)-> 'gw1@119.29.62.190'; %'gw_git@202.122.107.66'; %
+get_node_by_ip(_luyin_test="18017813673",_Ip)-> 'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
 get_node_by_ip(UUID=_yxwfztest="31230011",_)-> get_internal_node_by_ip(UUID,{168,167,165,245});
-get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
+%get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
-get_node_by_ip(UUID="00862180246"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);
+%get_node_by_ip(UUID="00862180246"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);
+get_node_by_ip(UUID,{203,222,195,122})-> get_internal_node_by_ip(UUID,{203,222,195,122});
 get_node_by_ip(UUID,Ip)->
     R0= wwwcfg:get_wcgnode(utility:c2s(utility:country(Ip))),
     case lists:member(R0,nodes()) of
@@ -394,16 +569,18 @@ get_node_by_ip(UUID,Ip)->
 start_callback(UUID={_,UserId}, LocalPhone, Phone, SessionIP) ->    % remove fzd
     case login_processor:autheticated(UserId,Phone) of
     [{status,ok},{uuid,_}]-> 
-        do_callback1(UUID,LocalPhone,Phone,no_limit);
+        WcgNode=get_node_by_ip(LocalPhone,SessionIP),
+        {_,SIPNODE} = rpc:call(WcgNode,avscfg,get,[sip_app_node]),
+        do_callback1(SIPNODE,UUID,LocalPhone,Phone,no_limit);
     R->
          utility:pl2jso(R)
     end.
 
-do_callback1(_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
+do_callback1(SIPNODE,_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
     {_A,B,_C}=erlang:now(),
     io:format("do_callback1,~p~n",[[{Groupid,Uuid++"@"++integer_to_list(B)}, fake_auditinfo,  {"", LocalPhone, 0.1}, {"", Remote_phone, 0.1}, MaxtalkTime]]),
     
-    case rpc:call(wwwcfg:get(voice_node), lw_voice, start_callback, 
+    case rpc:call(SIPNODE, lw_voice, start_callback, 
                  [{Groupid,Uuid++"@"++integer_to_list(B)}, [{groupid,fake_auditinfo},{caller,{"", LocalPhone, 0.1}},
                  {callee,{"", Remote_phone, 0.1}},{max_time,MaxtalkTime},{callback,{node(),lw_register,consume_coins,Uuid}}]]) of
       ok->
@@ -424,23 +601,152 @@ do_callback(_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
     end.
 
 sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid)->
+    sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,login_processor:get_phone_type(Callee)).
+sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,"ios")->
     io:format("Callee:~p~n",[{Callee,login_processor:get_ip_tuple(Callee)}]),
-    case login_processor:get_ip_tuple(Callee) of
-    undefined->  {failed, callee_not_exist};
-    Ip ->  
+    case login_processor:get_tuple_by_uuid_did(Callee) of
+    #login_itm{ip=Ip,phone=Phone,group_id=GroupId} ->  
         WcgNode=get_internal_node_by_ip(Callee,Ip),
+        Result= rpc:call(WcgNode, p2w,start, [call_ios,SipPid,
+                                 [{ss_sdp,SipSdp},{voip_ua,SipPid},{callee,Callee},{cid,Caller},{phone,Callee}]]),
         io:format("sip_p2p_tp_call Callee:~p Ip:~p choose node:~p Caller:~p~n",[Callee,Ip,WcgNode,Caller]),
-        case rpc:call(WcgNode, avanda, processSipP2pCall, [[{ss_sdp,SipSdp},{voip_ua,SipPid},{callee,Callee},{cid,Caller},{phone,Callee}]]) of
+        case Result of
+        {successful,SessionID,{PeerIP,PeerPort},Other}->
+            io:format("www sip_p2p_tp_call ios rpc ok"),
+            R=utility:pl2jso([{event,<<"sip_call_in">>},{caller,list_to_binary(Caller)},{callee,list_to_binary(Callee)},{session_id, voice_handler:enc_sid(WcgNode, SessionID)}, {ip, list_to_binary(PeerIP)}, 
+        	                              {port, PeerPort}|Other]),
+            CustomContent=[{alert,Caller},{badge,1},{'content-available',1},{sound,"lk_softcall_ringring.mp3"},{event,<<"p2p_inform_called">>},{caller,list_to_binary(Caller)},{opdata,R}],
+            CallType=push(Callee,CustomContent),
+            if 
+            CallType == real_call-> 
+                {failed,send_unavailable_to_wcgnode};
+            true->
+                {ok,{GroupId,Phone}}
+            end;
+        {failed, Reason}-> {failed,Reason}
+        end;
+    undefined->  {failed, callee_not_exist}
+    end;
+%not used    
+sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,"ios1")->
+    Ip = login_processor:get_ip_tuple(Callee),
+    io:format("ios Callee:~p~n",[{Callee,Ip}]),
+    case Ip of
+    undefined->  {failed, callee_not_exist};
+    _ ->  
+        WcgNode='wras@10.32.3.52',
+        Result=rpc:call(WcgNode, voice, incomingSipWebCall, [SipSdp,Callee,SipPid]),
+        io:format("ios sip_p2p_tp_call Callee:~p Ip:~p choose node:~p Caller:~p~n",[Callee,Ip,WcgNode,Caller]),
+        case Result of
+        {successful,SessionID}->
+            io:format("www sip_p2p_tp_call rpc ok"),
+            R=utility:pl2jso([{event,<<"sip_call_in">>},{caller,list_to_binary(Caller)},{callee,list_to_binary(Callee)},
+                          {session_id, voice_handler:enc_sid(WcgNode, SessionID)}]),
+            CustomContent=[{event,<<"p2p_inform_called">>},{caller,list_to_binary(Caller)},{opdata,R}],
+            CallType=push(Callee,CustomContent),
+            %rpc:call(WcgNode, avanda, processSipP2pRing, [SessionID]);
+            ok;
+        {failed, Reason}-> {failed,Reason}
+        end
+    end;
+sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,_)->
+    io:format("Callee:~p~n",[{Callee,login_processor:get_ip_tuple(Callee)}]),
+    case login_processor:get_tuple_by_uuid_did(Callee) of
+    #login_itm{ip=Ip,phone=Phone,group_id=GroupId} ->  
+        WcgNode=get_internal_node_by_ip(Callee,Ip),
+        Result= rpc:call(WcgNode, avanda, processSipP2pCall, [[{ss_sdp,SipSdp},{voip_ua,SipPid},{callee,Callee},{cid,Caller},
+                                {phone,Callee}]]),
+        io:format("sip_p2p_tp_call Callee:~p Ip:~p choose node:~p Caller:~p~n",[Callee,Ip,WcgNode,Caller]),
+        case Result of
         {successful,SessionID,{PeerIP,PeerPort},Other}->
             io:format("www sip_p2p_tp_call rpc ok"),
             R=utility:pl2jso([{event,<<"sip_call_in">>},{caller,list_to_binary(Caller)},{callee,list_to_binary(Callee)},{session_id, voice_handler:enc_sid(WcgNode, SessionID)}, {ip, list_to_binary(PeerIP)}, 
         	                              {port, PeerPort}|Other]),
             CustomContent=[{event,<<"p2p_inform_called">>},{caller,list_to_binary(Caller)},{opdata,R}],
             CallType=push(Callee,CustomContent),
-            if CallType == real_call-> send_unavailable_to_wcgnode;
-               true-> ok
+            if 
+            CallType == real_call-> 
+                {failed,send_unavailable_to_wcgnode};
+            true->
+                {ok,{GroupId,Phone}}
             end;
         {failed, Reason}-> {failed,Reason}
-        end
+        end;
+    undefined->  {failed, callee_not_exist}
     end.
+
+send_notification1(DeviceToken0,Content) ->
+    Aps0=Content,
+    Aps1=[{'content-available',1}]++Content,
+    Aps0_=utility:pl2jso_br(Aps0),
+    Aps1_=utility:pl2jso_br(Aps1),
+    Payload0=rfc4627:encode(utility:pl2jso([{aps,Aps0_}])),
+    Payload1=rfc4627:encode(utility:pl2jso([{aps,Aps1_}])),
+%    Payload = "{\"aps\":{\"alert\":\"" ++ Content ++ "\",\"badge\":" ++ Badge ++ ",\"sound\":\"" ++ "chime" ++ "\"}}",
+    DeviceToken  = str_spaceremoved(DeviceToken0),
+    Result=os:cmd("php priv/simplepush1.php "++DeviceToken++" '"++Payload0++"'"),
+    Result_r=os:cmd("php priv/simplepush1_r.php "++DeviceToken++" '"++Payload0++"'"),
+    io:format("send_notification1 result:~p~n result_r:~p~n",[Result,Result_r]),
+    ok.
+%% send_notification not used    
+send_notification(UUID,DeviceToken,Content) ->
+    Aps0=Content,
+    Aps=utility:pl2jso_br(Aps0),
+    Payload=rfc4627:encode(utility:pl2jso([{aps,Aps}])),
+%    Payload = "{\"aps\":{\"alert\":\"" ++ Content ++ "\",\"badge\":" ++ Badge ++ ",\"sound\":\"" ++ "chime" ++ "\"}}",
+    DeviceTokenBin  = hexstr_to_bin(DeviceToken),
+    DeviceTokenSize = erlang:size(DeviceTokenBin),
+    PayLoadBin  = list_to_binary(Payload),
+    PayloadSize = byte_size(PayLoadBin),
+    Packet = [<<0:8, DeviceTokenSize:16/big, DeviceTokenBin/binary, PayloadSize:16/big, PayLoadBin/binary>>],
+    io:format("send_notification~p,~p,~p,~p~n",[DeviceTokenSize,DeviceTokenBin,PayloadSize,PayLoadBin]),
+    send_noti(Packet),
+    Packet.
+
+send_noti(Packet)->
+    Address = "gateway.sandbox.push.apple.com",
+    Port    = 2195,
+    Cert    = filename:absname("priv/PushChatCert.pem"),
+    Key     = filename:absname("priv/PushChatKey.pem"),
+    Options = [{certfile, Cert}, {keyfile, Key}, {password, "livecom2015"}, {mode, binary}],
+    Timeout = 30000,
+    {ok, Socket} = ssl:connect(Address, Port, Options, Timeout),
+    ssl:send(Socket, Packet),
+    ssl:close(Socket).
+
+test()->
+    UUID="nihao",
+    DeviceToken="3408497c e46bd3f6 5e4b7446 5929218b a617cf63 b838e402 9f367cd6 8c3a9e51",
+    Aps0=[{alert,UUID},{sound,"default"},{event,<<"p2p_inform_called">>},{badge,1}],
+    Aps=utility:pl2jso_br(Aps0),
+    Payload=rfc4627:encode(utility:pl2jso([{aps,Aps}])),
+%    Payload = "{\"aps\":{\"alert\":\"" ++ Content ++ "\",\"badge\":" ++ Badge ++ ",\"sound\":\"" ++ "chime" ++ "\"}}",
+    DeviceTokenBin  = hexstr_to_bin(DeviceToken),
+    DeviceTokenSize = erlang:size(DeviceTokenBin),
+    PayLoadBin  = list_to_binary(Payload),
+    PayloadSize = byte_size(PayLoadBin),
+    Packet = [<<0:8, DeviceTokenSize:16/big, DeviceTokenBin/binary, PayloadSize:16/big, PayLoadBin/binary>>],
+    {ok,FH0} = file:open("msgerlang.txt", [write,raw,binary]),
+    file:write(FH0,Packet),
+    file:close(FH0),
+    send_noti(Packet),
+    Packet.
+
+    
+%%---------------------------------------------------------------------------------------------
+str_spaceremoved(S)->str_spaceremoved(S,[]).
+str_spaceremoved([$ |T],Acc)-> str_spaceremoved(T, Acc);
+str_spaceremoved([],Acc)-> lists:reverse(Acc);
+str_spaceremoved([H|T],Acc)-> str_spaceremoved(T,[H|Acc]).
+
+hexstr_to_bin(S) ->
+  hexstr_to_bin(S, []).
+hexstr_to_bin([], Acc) ->
+  list_to_binary(lists:reverse(Acc));
+hexstr_to_bin([$ |T], Acc) ->
+    hexstr_to_bin(T, Acc);
+hexstr_to_bin([X,Y|T], Acc) ->
+  {ok, [V], []} = io_lib:fread("~16u", [X,Y]),
+  hexstr_to_bin(T, [V | Acc]).
+
 

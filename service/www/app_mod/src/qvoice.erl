@@ -77,3 +77,9 @@ my_test()->
     random:seed(erlang:now()),
     Fun =fun()->  "189"++integer_to_list(random:uniform(99999999)) end,
     [test1(Fun(),Qno,"")||Qno<-test_qnos()].
+my_opdn_rand()->
+    integer_to_list(21970000000+random:uniform(9999999)).
+my_opdn_rand(Num)-> my_opdn_rand(Num,[]).
+my_opdn_rand(N,Res) when N=<0 -> Res;
+my_opdn_rand(Num,Res)-> my_opdn_rand(Num-1,[my_opdn_rand()|Res]).
+    

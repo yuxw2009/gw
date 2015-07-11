@@ -12,7 +12,7 @@
                to,
                dialog = null,
                sdp,
-               sdp_to_ss,
+               sdp_to_ss= <<>>,
                transaction_pid,
                invite_cseq = 0,
                invite_request,
@@ -40,33 +40,32 @@ init(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{th
     %imform (Caller,Callee, SDP, self()) to www,and wait selfSDP from w2p
     {_,#sipurl{user=Caller}}=sipheader:from(Header),
     #sipurl{user=Callee}=Request#request.uri,
-    io:format("p2p_tp_ua:init Caller ~p ~n",[Caller]),
+%    io:format("p2p_tp_ua:init Caller ~p ~n",[Caller]),
     case rpc:call(sipcfg:get(www_node),lw_mobile,sip_p2p_tp_call,[Caller,Callee,SDP,self()]) of
     {failed,_Reason}-> 
         io:format("p2p_tp_ua:init rpc:call failed ~p ~n",[_Reason]),
         transactionlayer:send_response_handler(THandler, 404, "user not found"),
         stop(self());
-    R-> 
-        io:format("p2p_tp_ua:init Caller rpc call: ~p ~n",[R]),
-        wait_wcg_ack
-    end,
+    {ok,UUID}-> 
+        io:format("p2p_tp_ua:init Caller rpc call uuid: ~p ~n",[UUID]),
+        % send 180 or 183
+        % create dialog and register dialog controller    Dialog = create_dialog(State#state.invite_request, Response),
+        Contact=siphelper:generate_contact_str(Caller),
+        {ok,ResponseToTag} = transactionlayer:get_my_to_tag(THandler),
+        Dialog=create_server_dialog(Request,ResponseToTag,Contact),
+        {ok,TRef} =  timer:send_after(60*1000,tp_ack_timeout),
+        State = #state{dialog=Dialog,invite_request=Request,tp_ack_timer=TRef,transaction_pid=THandler,uuid=UUID,phone=Caller,cid=Callee},
+        
+        transactionlayer:adopt_server_transaction_handler(THandler),
+        loop(tpwtring, State)
+    end.
      
-    % send 180 or 183
-    % create dialog and register dialog controller    Dialog = create_dialog(State#state.invite_request, Response),
-    Contact=siphelper:generate_contact_str(Caller),
-    {ok,ResponseToTag} = transactionlayer:get_my_to_tag(THandler),
-    Dialog=create_server_dialog(Request,ResponseToTag,Contact),
-    {ok,TRef} =  timer:send_after(10*1000,tp_ack_timeout),
-    State = #state{dialog=Dialog,invite_request=Request,tp_ack_timer=TRef,transaction_pid=THandler},
-    
-    transactionlayer:adopt_server_transaction_handler(THandler),
-    loop(tpwtring, State).
 	
 %% StateName: idle | trying | |ring | ready | cancel    
 loop(StateName,State=#state{}) ->
     receive
         Message -> 
-%            io:format("~p rec ~p~n",[?MODULE,Message]),
+            io:format("~p rec ~p~n",[?MODULE,Message]),
             case (catch on_message(Message,StateName,State)) of
                {'EXIT',R}-> 
 		      utility:log("UserAgent ~p exit with sip_signal_exit: ~p~n",[self(),R]),
@@ -84,25 +83,44 @@ terminate(State=#state{max_talkT=MaxTalkT,timer_ref=InviteT,owner=Owner})->
 	timer:cancel(MaxTalkT),
 	timer:cancel(InviteT),
 	timer:cancel(State#state.tp_ack_timer),
+	traffic(State),
 	stop.
 
-on_message({p2p_wcg_ack, Owner, SDP_TO_SS},tpwtring,State=#state{transaction_pid=THandler}) ->
+on_message({p2p_wcg_ack, Owner, <<>>},Status,State=#state{transaction_pid=THandler}) ->
     _Ref = erlang:monitor(process,Owner),
-    transactionlayer:send_response_handler(THandler, 183, "Session Progress", [], SDP_TO_SS),
-    {tpwtring,State#state{owner=Owner,sdp_to_ss=SDP_TO_SS}};    
+%    SDP_TO_SS1= <<"v=0\r\no=LVOS3000 1234 1 IN IP4 10.32.3.52\r\ns=phone-call\r\nc=IN IP4 10.32.3.52\r\nt=0 0\r\nm=audio 15030 RTP/AVP 0 101\r\na=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-11\r\na=ptime:20">>,
+    transactionlayer:send_response_handler(THandler, 180, "Session Progress", []),
+    {Status,State#state{owner=Owner}};    
 
-on_message({p2p_ring_ack, Owner},tpwtring,State=#state{owner=Owner}) ->
+on_message({p2p_wcg_ack, Owner, SDP_TO_SS},Status,State=#state{transaction_pid=THandler}) ->
+    _Ref = erlang:monitor(process,Owner),
+    transactionlayer:send_response_handler(THandler, 180, "Session Progress", []),
+    {Status,State#state{owner=Owner,sdp_to_ss=SDP_TO_SS}};    
+
+on_message({p2p_ring_ack, Owner},tpwtring,State=#state{transaction_pid=THandler,sdp_to_ss=SDP}) ->
+    _Ref = erlang:monitor(process,Owner),
     timer:cancel(State#state.tp_ack_timer),
+    io:format("p2p_ring_ack before send~n"),
+    transactionlayer:send_response_handler(THandler, 180, "Session Progress", [], SDP),
+%    SDP_TO_SS1= <<"v=0\r\no=LVOS3000 1234 1 IN IP4 10.32.3.52\r\ns=phone-call\r\nc=IN IP4 10.32.3.52\r\nt=0 0\r\nm=audio 15030 RTP/AVP 0 101\r\na=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-11\r\na=ptime:20">>,
+%    transactionlayer:send_response_handler(THandler, 180, "Session Progress", [], SDP_TO_SS1),    
+    io:format("p2p_ring_ack after send~n"),
     {ring,State};    
 
 on_message({p2p_answer, Owner},ring,State=#state{owner=Owner,transaction_pid=THandler,sdp_to_ss=SDP}) ->
+    _Ref = erlang:monitor(process,Owner),
     transactionlayer:send_response_handler(THandler, 200, "OK", [{"Content-Type", ["application/sdp"]}], SDP),
-    
-    {ready,State};    
+    {ready,State#state{start_time=calendar:local_time()}};    
 
-on_message({p2p_reject, Owner},tpwtring,State) ->
+on_message({p2p_answer, Owner, SDP},ring,State=#state{owner=Owner,transaction_pid=THandler}) ->
+    _Ref = erlang:monitor(process,Owner),
+    transactionlayer:send_response_handler(THandler, 200, "OK", [{"Content-Type", ["application/sdp"]}], SDP),
+    {ready,State#state{sdp_to_ss=SDP,start_time=calendar:local_time()}};    
+
+on_message({p2p_reject, Owner},tpwtring,State=#state{transaction_pid=THandler}) ->
     timer:cancel(State#state.tp_ack_timer),
-    {ring,State#state{owner=Owner}};    
+    transactionlayer:send_response_handler(THandler, 486, "user busy"),
+    stop;    
 
 on_message(tp_ack_timeout,_,State=#state{invite_request=InviteRequest}) ->
     THandler = transactionlayer:get_handler_for_request(InviteRequest),
@@ -116,9 +134,8 @@ on_message(stop,ready,State) ->
     send_bye(State),
     stop;
 
-on_message(stop,StateName,State) when StateName==trying;StateName==ring->
-    TID = State#state.transaction_pid,
-    gen_server:cast(TID,{cancel, "hangup", []}),
+on_message(stop,StateName,State=#state{transaction_pid=THandler})->
+    transactionlayer:send_response_handler(THandler, 403, "Unavailable"),
     stop;   
     
 on_message(stop,_,_State) ->
@@ -169,7 +186,7 @@ on_message({'EXIT', _, normal}, StateName,State) ->
    {StateName, State};
 
 on_message(Unhandeld,StateName,State=#state{role=Role}) ->
-    %%io:format("UserAgent ~p receive unhandled message: ~p STATE: ~p~n",[Role,Unhandeld,StateName]),
+    io:format("UserAgent ~p receive unhandled message: ~p STATE: ~p~n",[Role,Unhandeld,StateName]),
     logger:log(debug, "UserAgent ~p receive unhandled message: ~p STATE: ~p~n",[Role,Unhandeld,StateName]),
     {StateName,State}. 
 
@@ -257,4 +274,9 @@ generator_cdr(State)->
         true -> 
             no_cdr_needed
     end.
+
+traffic(St=#state{uuid=UUID,cid=Cid,phone=Phone,start_time=Starttime})->
+    Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
+      {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{direction,incoming}],
+    rpc:call('traffic@lwork.hk',traffic,add,[Trf]).
 

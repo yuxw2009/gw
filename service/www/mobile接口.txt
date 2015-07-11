@@ -47,7 +47,7 @@ ack: [{status,ok}]
 
 9 dth version
 get lwork/mobile/version_dth_no
-ack: [{status,ok}...]
+ack: [{status,ok},{i_version_no,version},{i_version_path,path},{i_version_info,i_info},{version_no,v},{version_path,v},{version_info,v_info}]
 
 9 common version
 get lwork/mobile/version_commont_no

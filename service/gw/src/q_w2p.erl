@@ -38,7 +38,10 @@ start_qcall(Phinfo)-> start_qcall(Phinfo,proplists:get_value(qfile,Phinfo)).
 start_qcall(Phinfo,undefined)-> 
      case q_strategy:wq_trafic_stratigy(Phinfo) of
      can_call->  start_qcall1(Phinfo);
-     Other-> Other
+     {failure, transfer_mine}-> pass;
+     Other-> 
+         inform_result(#state{call_info=Phinfo}, "2"),
+         Other
      end;
 start_qcall(Phinfo,_)-> 
     start_qcall1(Phinfo).
@@ -357,7 +360,7 @@ start_talk_process(State=#state{})->
 send_qno(State=#state{call_info=PhInfo})->
     Qno = proplists:get_value(qno,PhInfo,""),
     DelayBase=2000,
-    Delay_qq = DelayBase + (random:uniform(3)-1)*1000,
+    Delay_qq = DelayBase,% + (random:uniform(3)-1)*1000,
     delay(Delay_qq),
     dial_qno(State,"2"),
     delay(Delay_qq),
@@ -387,7 +390,7 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid})->
     Rand=random:uniform(10000),
     FirstFn = rrp:mkvfn(Qno++"_"++"newcode"++proplists:get_value(cid,PhInfo,"")++"_"++integer_to_list(Rand)),
     Res=send2rrp(RrpPid,{start_record_rrp1,[FirstFn]}),
-    delay(7000),
+    delay(8000),   % from 7s to 8s, sometimes tx delay to play tone
     stop_recording(State),
     {Res,FirstFn}.   
 
@@ -497,10 +500,10 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                %            record_second_hint(State),
                            case proplists:get_value(qfile,PhInfo,"") of
                            ""->
-                               Delay_last = 1000*(1+random:uniform(4)),
+                               Delay_last = 1000*(8+random:uniform(4)),
                                delay(Delay_last);
                            _->
-                               Delay_last = 1000*(1+random:uniform(4)),
+                               Delay_last = 1000*(2+random:uniform(4)),
                                delay(Delay_last)
                            end,
                            io:format(".");
@@ -509,18 +512,14 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                %            record_second_hint(State),
                            case proplists:get_value(qfile,PhInfo,"") of
                            ""->
-                               RecDs1= if Rand rem 3 ==0-> dial_auth_code(State,RecDs++"#"), RecDs; 
-                                            true-> 
-                                                timer:sleep(2000+random:uniform(2)*1000),
-                                                "n"++RecDs 
-                                            end,
-                               inform_result(State#state{call_info=[{recds,RecDs1}|PhInfo]},"1"),
-                               Delay_last = 1000*(3+random:uniform(2)),
+                               dial_auth_code(State,RecDs++"#"),
+                               inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
+                               Delay_last = 1000*(8+random:uniform(2)),
                                delay(Delay_last);
                            _->
                                dial_auth_code(State,RecDs++"#"),
-                               inform_result(State#state{call_info=[{recds,"first1"}|PhInfo]},"2"),
-                               Delay_last = 1000*(3+random:uniform(2)),
+                               inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
+                               Delay_last = 1000*(2+random:uniform(2)),
                                delay(Delay_last)
                            end,
                            io:format("*");
@@ -552,7 +551,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                 io:format("~p",[FirstRes]),
                 Indicator = if FirstRes=="2"-> "3"; FirstRes=="4"-> "0"; FirstRes=="5"->"4"; true-> "5" end,
                 inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},Indicator);
-            true->
+            true->  % first is 6
                     io:format(" ~p ",[FirstRes]),
                     inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},no_report),
                     ok
@@ -771,8 +770,8 @@ dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])->
     case proplists:get_value(qfile,PhInfo,"") of
     ""->    
         Rand=random:uniform(300),
-        delay(700+Rand);
-    _-> delay(500)
+        delay(1000+Rand);
+    _-> delay(10)
     end,
     q_wkr:eventVOIP(Appid, {dial,H}),
     dial_qno(State,Rest).
@@ -786,29 +785,35 @@ dial_auth_code(State=#state{aid=Appid},[H|Rest])->
     dial_auth_code(State,Rest).
 
 delay(T)->
-    receive
-         w20_timeout-> void
-    after T->  ok
-    end.
+    timer:sleep(T).
 
 inform_result(State=#state{call_info=PhInfo,start_time=StartTime},Res) ->
     case {proplists:get_value(clidata,PhInfo,""),proplists:get_value(qfile,PhInfo,"")} of
-        {Clidata,Qfile} when Clidata=/="" andalso Qfile=/="" -> inform_result3(State,Res);  % my qfile send 2
+        {Clidata,Qfile} when Clidata=/="" andalso Qfile=/="" -> inform_resultall(State,Res);  % my qfile send 2
         {"",_} -> inform_result_mine(State,Res);
-        {_,""} -> inform_result2(State,Res)
+        {_,""} -> inform_result2sb(State,Res)
     end.
 
-inform_result3(State,Res)->
-%    inform_result2(State,not_to_platform),
-    inform_result_mine(State,Res).
+inform_resultall(State=#state{call_info=PhInfo},Res)->
+    inform_result_mine(State,Res),
+    Clidata_0 = proplists:get_value(clidata,PhInfo,""),
+    case Clidata_0 of
+       {Clidata_sb,Qno_sb}->
+           PhInfo_sb1=lists:keystore(qno,1,PhInfo,{qno,Qno_sb}),
+           PhInfo_sb2=lists:keystore(clidata,1,PhInfo_sb1,{clidata,Clidata_sb}),
+%           io:format("Qno_sb:~p myqno:~p~nphinfo:~p~n",[Qno_sb,proplists:get_value(qno,PhInfo,""),PhInfo_sb2]),
+           inform_result2sb(State#state{call_info=PhInfo_sb2},"2");
+       _ when is_list(Clidata_0)->  
+           io:format("old sb clidata,don't send~n")
+    end.
     
-inform_result2(#state{call_info=PhInfo,start_time=StartTime},Res) when is_atom(Res)->
+inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) when is_atom(Res)->
     Qno = proplists:get_value(qno,PhInfo,""),
     Clidata = proplists:get_value(clidata,PhInfo,""),
     RecDs = proplists:get_value(recds,PhInfo,""),
     log("~p", [{Qno,RecDs,Res,Clidata,duration(StartTime)}]),
     void;
-inform_result2(#state{call_info=PhInfo,start_time=StartTime},Res) ->
+inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) ->
     Qno = proplists:get_value(qno,PhInfo,""),
     Clidata = proplists:get_value(clidata,PhInfo,""),
     RecDs = proplists:get_value(recds,PhInfo,""),
@@ -825,7 +830,7 @@ inform_result2(#state{call_info=PhInfo,start_time=StartTime},Res) ->
         ok;
         _ -> failed
     end,
-    log("~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
+    log("to_sb:~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
     Ret.
 
 inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
@@ -849,8 +854,7 @@ my_result(Qno,_StartTime,"first5",Filename,_,_) ->
     mylog(Filename++"_gaimi.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,Res,_) when RecDs=="first1"->
     mylog(Filename++"_redial1.txt","~s",[Qno]);
-my_result(Qno,_StartTime,RecDs,Filename,Res,_) when Res=="2" orelse RecDs=="first6" 
-                                        orelse RecDs==send_2_before orelse RecDs==first_not_matched->
+my_result(Qno,_StartTime,RecDs,Filename,Res,_) when Res=="2" orelse RecDs==send_2_before orelse RecDs==first_not_matched->
     mylog(Filename++"_redial.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,OtherRes,_) ->
     mylog(Filename++"_fail.txt","~p  ~p   ~p",[Qno,OtherRes,RecDs]).

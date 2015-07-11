@@ -219,6 +219,8 @@ a2jso(Tags, Values) ->
     	              [], PList)}.
 
 %% [[{a,1},{b,2}],[{a,3},{b,4}]] => [{obj, [{a, 1}, {b, 2}]}, {obj, [{a, 3}, {b, 4}]}]
+pl2jsos_br(PLists) ->
+    [pl2jso_br(I) || I<- PLists].
 pl2jsos(PLists) ->
     [pl2jso(I) || I<- PLists].
 
@@ -230,7 +232,7 @@ a2jsos(Tags, VLists) ->
     [a2jso(Tags, I) || I<- VLists].
 pl2jso_r(Pls)-> pl2jso_r(Pls,[]).
 pl2jso_r([],R)->pl2jso(lists:reverse(R));
-pl2jso_r([{K,V=[{_,_}|_]}|T], R)-> pl2jso_r(T, [{K,pl2jso_r(V)}|R]);
+pl2jso_r([{K,V=[{_,_}|_]}|T], R) when K=/=obj -> pl2jso_r(T, [{K,pl2jso_r(V)}|R]);
 pl2jso_r([H|T], R)-> pl2jso_r(T, [H|R]).
 
 v2b_r(Pls)->    v2b_r(Pls,[]).
@@ -310,10 +312,10 @@ log(Filename, Str, CmdList) ->
 log(Str, CmdList) ->log("log/debug.log",Str,CmdList).
 	
      
-d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}}) ->    
-    DateStr = string:join([integer_to_list(I) || I <- tuple_to_list(Date)], "-"),
-    TimeStr = string:join([integer_to_list(I) || I <- tuple_to_list(Time)], ":"),
-    DateStr ++" "++TimeStr.
+d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}}) ->
+    [Year0,Mon0,Day0,Hour0,Min0,Sec0]=[integer_to_list(I)||I<-[_Year, _Month, _Day,_Hour, _Minute, _Second]],
+    [Mon1,Day1,Hour1,Min1,Sec1]=[string:copies("0",2-length(I))++I||I<-[Mon0,Day0,Hour0,Min0,Sec0]],
+    Year0++"-"++Mon1++"-"++Day1++" "++Hour1++":"++Min1++":"++Sec1.
 
 delay(T)->
     receive
@@ -580,3 +582,7 @@ c2s("TO") -> "Oceania";
 c2s("CK") -> "Oceania";
 c2s(_)    -> "Asia".
 
+
+
+
+test_arg()-> #arg{client_ip_port={{119,29,62,190},808}}.

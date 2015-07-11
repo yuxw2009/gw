@@ -37,6 +37,14 @@
                 }).
 
 %% APIs
+get_rtp_port(AppId)->
+    case app_manager:lookup_app_pid(AppId) of
+	    {value, AppPid} ->
+              {value, _Aid, Port} = get_aid_port_pair(AppPid),
+              {value, Port};	
+		_ ->
+		    {failed, no_app_id}
+	end.
 sip_p2p_ring(AppId)->
     case app_manager:lookup_app_pid(AppId) of
 	    {value, AppPid} ->
@@ -93,6 +101,20 @@ peek(AppId) ->
 		_ ->
 		   {error, app_not_found}
 	end. 
+	
+init([{sip_call_in_ios,Options1}, Options2, SipInfo, PLType, CandidateAddr]) ->
+	{value, Aid}  = app_manager:register_app(self()),
+	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{report_to, self()}|Options1]), 
+	link(RtpPid),
+	rtp:info(RtpPid,{add_stream,audio,Options2}),
+	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
+	{ok, ATef} = my_timer:send_interval(?ALIVE_TIME, alive_timer),
+	llog("app ~p started rtp ~p rpt_port ~p user_info ~p PlType ~p",
+	                               [Aid,RtpPid, RtpPort,SipInfo, PLType]),
+	UA = proplists:get_value(voip_ua,SipInfo),
+	my_server:cast(self(),{stun_locked, Aid}),
+	{ok, #state{aid=Aid, status=idle, alive_tref=ATef,
+	            call_info=SipInfo, rtp_pid=RtpPid, rtp_port=RtpPort,pltype=PLType,call_type=sip_call_in,sip_ua=UA}};
 	
 init([{sip_call_in,Options1}, Options2, SipInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
@@ -340,7 +362,7 @@ get_local_sdp(LPort) ->
     
 'SAMPLE'(Port) -> 
 	HOST = avscfg:get(ip4sip),
-    Orig = #sdp_o{username = <<"VOS3000">>,
+    Orig = #sdp_o{username = <<"LVOS3000">>,
                   sessionid = "1234",
                   version = "1",
                   netaddrtype = inet4,

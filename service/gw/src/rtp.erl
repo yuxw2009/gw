@@ -35,7 +35,7 @@
 
 -define(PTIME,20).
 -define(ISACPTIME,30).
--define(ILBCPTIME,30).
+-define(ILBCPTIME,60).
 -define(OPUSPTIME,60).
 
 -define(AUDIO_JITTERLENGTH, 2).
@@ -128,6 +128,7 @@ init([Session,Socket,Options]) ->
 	{ok,NewState#state{sess=Session, transport_status=stunning, socket=Socket,vp8=#vp8_cdc{},base_wall_clock=BaseWC,report_to=ReportTo}}.
 
 handle_call({options,Options},_From,State) ->
+      io:format("rtp:options:~p~n",[Options]),
 	NewState = processOptions(State,Options),
 	{reply,ok,NewState};
 
@@ -154,6 +155,7 @@ handle_call(_Call, _From, State) ->
 
 	
 handle_cast({add_stream,audio,Options},State) ->
+      io:format("rtp:add_stream:~p~n",[Options]),
 	Media = proplists:get_value(media,Options),
 	KeyStrategy = proplists:get_value(key_strategy, Options),
 	{WriteSRTP, WriteSRTCP} = 
@@ -234,7 +236,7 @@ handle_cast({media_relay,Media}, #state{in_media=OldMedia}=State) when is_pid(Me
 	if is_pid(OldMedia) -> OldMedia ! {deplay,self()};
 	true -> ok end,
 	Media ! {play,self()},
-%	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
+	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
 	{noreply, State#state{in_media=Media,out_media=Media}};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	
@@ -371,7 +373,7 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 	{noreply,ST1#state{peer=Peer,r_base=Remote,stats=up_udp_stats(ST1#state.stats,Bin)}};
 
 handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:32,SSRC:32,_/binary>> },
-			#state{r_base=#base_info{seq=undefined,ssrc=SSRC}=Remote0,r_srtp=Cryp,transport_status=inservice,peer={Addr,Port}}=ST)
+			#state{r_base=#base_info{seq=undefined,ssrc=SSRC}=Remote0,r_srtp=Cryp,transport_status=inservice,peer={_Addr,_Port}}=ST)
 			when ?IS_RTP(Codec) -> %first packet from pc
 	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq},
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
@@ -675,7 +677,7 @@ handle_info({receive_packet,Seq,_WC,_Size}, #state{vr_base=RVideo,bw=BWE}=ST) ->
 
 %% ******** STUN ********
 handle_info({udp,_,_,_,<<0:7,_:1,_:8,_Len:14,0:2,_/binary>> },#state{ice_state=#st{ice=undefined}}=ST) ->			% STUN
-%	io:format("unknow/unset stun bin: ~p.~n",[Bin]),
+	io:format("rtp unknow/unset stun bin: .~n",[]),
 	{noreply,ST};
 handle_info({udp,Socket,Addr,Port,<<0:7,_:1,_:8,_Len:14,0:2,_/binary>> =Bin},#state{sess=Sess,ice_state=ICE}=ST) ->			% STUN
 	case stun:handle_msg({udp_receive,Addr,Port,Bin},ICE) of
@@ -1402,7 +1404,10 @@ get_expect_seq(LastROC,65535) ->
 get_expect_seq(LastROC,Seq) ->
 	{LastROC,Seq+1}.
 
+judge_bad_seq(LastSeq,InSeq) when is_number(LastSeq)->
+	judge_bad_seq(abs(InSeq - LastSeq),LastSeq,InSeq);
 judge_bad_seq(LastSeq,InSeq) ->
+      io:format("judge_bad_seq ~p ~p~n",[LastSeq,InSeq]),
 	judge_bad_seq(abs(InSeq - LastSeq),LastSeq,InSeq).
 judge_bad_seq(D,Last,In) when D < 32768 ->
 	if In > Last -> {forward,In-Last};
@@ -1588,6 +1593,7 @@ update_avg_rtt(#base_rtp{avg_rtt=RTT0, rtt_count=Count0, rtt=Rtt}=SCtx0) ->
 start_within(Session,Options,{BEGIN_UDP_RANGE,END_UDP_RANGE}) ->
 	case try_port(BEGIN_UDP_RANGE,END_UDP_RANGE) of
 		{ok,Port,Socket} ->
+		       io:format("rtp:start_within:~p~n",[Port]),
 			{ok,Pid} = my_server:start(?MODULE,[Session,Socket,Options],[]),
 			gen_udp:controlling_process(Socket, Pid),
 			{ok,Port,Pid};
