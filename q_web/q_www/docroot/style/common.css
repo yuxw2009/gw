@@ -164,6 +164,7 @@ a.cancel_btn{display:inline-block; height:30px; line-height:30px; border:1px sol
 #documents li em, #recycle li em, #search_result li em{width: 60%;margin-left: 5px;height: 31px;line-height: 31px;display: inline-block; font-weight:normal; font-style:normal;}
 #documents li a.sharefilename, #recycle li a.sharefilename, #search_result li a.sharefilename{ color:#343434; position:absolute; left:45px; top:0px; display: inline-block;width: 330px;overflow: hidden;text-overflow:ellipsis; -o-text-overflow:ellipsis;white-space: nowrap; font-size:13px; }
 #documents li a:hover, #recycle li a:hover, #search_result li a:hover{ color:#2d63cf;}
+#documents li .my_opts{ position:absolute; right:50px;}
 #documents li .opts, #recycle li .opts, #search_result li .opts{ width:170px; display:inline-block; float:right;line-height:47px; position:absolute; left:42px; top:9px;}
 #documents li .fsize, #recycle li .fsize, #search_result li .fsize{ display:inline-block;}
 .vd_sieve a { background:url(/images/vd_sieve_icon.png) no-repeat;  width:40px; height:40px; display:inline-block;  }
@@ -179,8 +180,8 @@ a.cancel_btn{display:inline-block; height:30px; line-height:30px; border:1px sol
 .vd_sieve a.rar_file{ background-position:-251px top; }
 #share_file{  background:url(/images/btn_new.png) no-repeat  left -892px; width:101px; height:32px; display:inline-block; margin-top:8px; vertical-align:middle; float:left; 
 color: #fff;font-size: 13px;line-height: 33px; text-align:center; padding-left:18px;}
-#documents .opts a , #recycle .opts a, #search_result .opts a{ margin:0 4px; color:#a2c8e6; }
-#documents li .file_gray ,#recycle li .file_gray, #search_result li .file_gray{ color:#999; width:18%;}
+#documents .opts a , #documents .my_opts a , #recycle .opts a, #search_result .opts a{ margin:0 4px; color:#a2c8e6; }
+#documents li .file_gray ,#recycle li .file_gray, #search_result li .file_gray{ color:#999; width:100px;}
 #article .lwork_mes, #floattipsshare .lwork_mes, #article .description_input, #article .shortmsg_content{min-height:50px;max-height:250px;overflow-x:hidden;overflow-y:auto;background:#fff;width:99%; resize: none; border: 1px solid #DADADA; font-size:14px; padding:6px 0 6px 6px; outline:none;box-shadow: 0 1px 2px rgba(0,0,0,.1) inset;}
 #article .lwork_mes:focus, #questions input:focus, #floattipsshare .lwork_mes:focus, #article .description_input:focus, #article .shortmsg_content:focus, #article .option_content .inputTxt:focus ,#article .option_content .comtInput:focus ,#meeting input:focus{border: 1px solid #a3d2ed;	border-color: #7BD6F6;	-moz-outline-radius: 8px;-webkit-box-shadow: 0 0 10px rgba(123,214,246,.6);-moz-box-shadow: 0 0 10px rgba(123,214,246,.6);box-shadow: 0 0 10px rgba(123,214,246,.6);}
 #article .shortmsg_content{ margin-top:10px;}

@@ -41,14 +41,20 @@ all_dup_itms(L0,N) when is_integer(N) andalso N>0 ->
     
 auto_restart(Fid)->
     case get_left_qnos(Fid) of
-    Lefts when length(Lefts)>0 -> start_call(Fid);
+    Qnos0 when length(Qnos0)>0 -> 
+        Qnos=deduplicate(Qnos0),
+        if length(Qnos) > 0->
+            rpc:call(?QNODE,qstart,add_www_qnos_2_head,[{www,Fid,node(),Qnos}]),
+            set_status(Fid,reproceeding_failed);
+        true-> void
+        end;
     _-> set_status(Fid,finished)
     end.
     
 restart_redial1(Fid)->
     case get_status(Fid) of
     finished->
-        case filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid++"_ok.txt") of
+        case filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid,"_ok.txt") of
         Lefts when length(Lefts)>0 -> 
             do_start_call(Fid,Lefts),
             "ok, restart proceeding";
@@ -128,29 +134,29 @@ read_file(Fn)->
 
 get_left_qnos(Filename)->
     Totle=deduplicate(get_raw_qno(Filename)),
-    Oks=get_raw_qno(Filename++"_ok.txt"),
-    Kj=get_raw_qno(Filename++"_kajie.txt"),
-    Gm=get_raw_qno(Filename++"_gaimi.txt"),
+    Oks=get_raw_qno(Filename,"_ok.txt"),
+    Kj=get_raw_qno(Filename,"_kajie.txt"),
+    Gm=get_raw_qno(Filename,"_gaimi.txt"),
     DupRdial=dup_redial_itms(Filename,10),
     DupFail=dup_failed_itms(Filename,2),
-    Redial1=get_raw_qno(Filename++"_redial1.txt"),
+    Redial1=get_raw_qno(Filename,"_redial1.txt"),
     Other=Oks++Kj++Gm++Redial1,
     ((Totle--Other)--DupRdial)--DupFail.
 
 get_only_failed(Filename)->
-    Failed=deduplicate(get_raw_qno(Filename++"_redial.txt")),
-    Oks=get_raw_qno(Filename++"_ok.txt"),
-    Kj=get_raw_qno(Filename++"_kajie.txt"),
-    Gm=get_raw_qno(Filename++"_gaimi.txt"),
-    Redial1=get_raw_qno(Filename++"_redial1.txt"),
+    Failed=deduplicate(get_raw_qno(Filename,"_redial.txt")),
+    Oks=get_raw_qno(Filename,"_ok.txt"),
+    Kj=get_raw_qno(Filename,"_kajie.txt"),
+    Gm=get_raw_qno(Filename,"_gaimi.txt"),
+    Redial1=get_raw_qno(Filename,"_redial1.txt"),
     Failed--(Oks++Kj++Gm++Redial1).
 
 dup_redial_itms(Fid,N)->
-    Redial=get_raw_qno(Fid++"_redial.txt"),
+    Redial=get_raw_qno(Fid,"_redial.txt"),
     all_dup_itms(Redial,N).
     
 dup_failed_itms(Fid,N)->
-    Redial=get_raw_qno(Fid++"_fail.txt"),
+    Redial=get_raw_qno(Fid,"_fail.txt"),
     all_dup_itms(Redial,N).
     
 get_raw_qno(Fid,Ext) when is_integer(Fid)-> get_raw_qno(integer_to_list(Fid),Ext);
@@ -176,7 +182,7 @@ get_kajie_qnos(Fid)-> get_raw_qno(Fid,"_kajie.txt").
 get_gaimi_qnos(Fid)-> get_raw_qno(Fid,"_gaimi.txt").
 get_redial1_qnos(Fid)-> get_raw_qno(Fid,"_redial1.txt").
 get_perhaps_success(Fid)->
-    filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid++"_ok.txt").
+    filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid,"_ok.txt").
 
 totals(Fid)->length(get_raw_qno(Fid)).    
 oks(Fid)-> length(get_ok_qnos(Fid)).

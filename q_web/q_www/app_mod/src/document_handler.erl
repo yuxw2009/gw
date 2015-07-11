@@ -48,13 +48,13 @@ handle(Arg, 'GET', []) ->
             {atomic,[#qfileinfo{status=S}]}->  S;
             _->  unknown
             end,
-            [fid:oks(Fid),fid:kajies(Fid),fid:gaimis(Fid),Status]
+            [fid:oks(Fid),fid:kajies(Fid),fid:gaimis(Fid),length(fid:get_left_qnos(Fid)),Status]
         end,
     NDocs=[tuple_to_list(Doc)++F(Doc)||Doc<-Docs],
     ContentSpec = [entity_id, name, file_id,
                               file_length, owner_id, from, content,
                               {create_time, fun erlang:list_to_binary/1},
-                              {timestamp, fun erlang:list_to_binary/1},oks,kjs,gms,status],
+                              {timestamp, fun erlang:list_to_binary/1},oks,kjs,gms,lefts,status],
     utility:pl2jso([{status, ok}, {documents, utility:a2jsos(ContentSpec, NDocs)}]).
 
 

@@ -244,8 +244,10 @@ is_string([X|T]) -> is_integer(X) andalso X>=0 andalso is_string(T);
 is_string(_) -> false.
     
 date_after_n(N)->
-    calendar:gregorian_days_to_date(calendar:date_to_gregorian_days(date())+N).
+    date_after_n(date(),N).
 
+date_after_n(Date,N)->
+    calendar:gregorian_days_to_date(calendar:date_to_gregorian_days(Date)+N).
 d2s(Date={Year, _Month, _Day}) ->    
     DateStr = string:join([integer_to_list(I) || I <- tuple_to_list(Date)], "-").
 

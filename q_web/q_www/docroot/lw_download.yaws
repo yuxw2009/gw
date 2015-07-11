@@ -22,7 +22,7 @@ out(A) ->
             DupRedials=fid:dup_redial_itms(FID,5),
             AgainFails=list_to_binary(string:join(DupRedials,"\r\n")),
             AgainBin=list_to_binary(string:join(fid:get_left_qnos(FID),"\r\n")),
-            {<<"解封成功\r\n",Okbin/binary,"\r\n卡解\r\n",Kjbin/binary,"\r\n改密\r\n",Gmbin/binary,"\r\n可能成功\r\n",PerhapsOk/binary,"\r\n需要再解\r\n",AgainBin/binary,"\r\n连续失败\r\n",AgainFails/binary>>, "_result.txt"}
+            {<<"已解\r\n",Okbin/binary,"\r\n卡解\r\n",Kjbin/binary,"\r\n改密\r\n",Gmbin/binary,"\r\n可能成功\r\n",PerhapsOk/binary,"\r\n需要再解\r\n",AgainBin/binary,"\r\n连续失败\r\n",AgainFails/binary>>, "_result.txt"}
     end,
 
 	case {fid:check(UUID,FID),fid:filename(FID)} of

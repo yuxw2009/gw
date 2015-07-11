@@ -54,12 +54,12 @@ get_recharge_item(AuthCode)->
     _-> undefined
     end.
 create_recharge_authcodes(Charge,Count)->    create_recharge_authcodes(Charge,Count,[]).
-create_recharge_authcodes(Charge,Count,Codes) when Charge>0.0 andalso Count>0  -> 
+create_recharge_authcodes(Charge,Count,Codes) when Count>0  -> 
     create_recharge_authcodes(Charge,Count-1,[create_recharge_authcode(Charge)|Codes]);
 create_recharge_authcodes(_,_,Codes)-> Codes.
 
 
-create_recharge_authcode(Charge)->
+create_recharge_authcode(Charge)->   % Charge: month/ float/ int
     Auth=authcode(Charge),
     ?DB_WRITE(#recharge_authcode{authcode=Auth,recharge=Charge}),
     Auth.

@@ -551,7 +551,10 @@
                 <span class="fsize file_gray">已解数</span>
                 <span class="fsize file_gray">卡解数</span>
                 <span class="fsize file_gray">改密数</span>
+                <span class="fsize file_gray">待解数</span>
                 <span class="fsize file_gray">状态</span>
+                <span class="fsize file_gray">上传时间</span>
+                <span class="fsize file_gray">操作</span>
               </li>
            </ul>   
           <div id="file_share_container" class="msg"  containdom="no"></div>

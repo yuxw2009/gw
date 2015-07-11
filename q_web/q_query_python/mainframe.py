@@ -44,7 +44,7 @@ g_band_delay_time = 0  #界面增加拨号延迟
 MY_PAUSE_TIME=1
 #thread_proxy_dict={proxy1:{},proxy2:{}}
 SELECT_RADIO_BUTTON='normal'
-g_proxy_list=[]
+g_proxy_list=["10.32.3.66:808"]
 g_log_times=0
 
 g_counter=0
@@ -214,7 +214,7 @@ class WorkerThread(threading.Thread):
             else: 
                 self.reconncet_band()
                 g_counter=0
-                timer.sleep(1)
+                time.sleep(1)
                 return 'reconnect_band_finished'
         return False
     def query_and_update(self, i,qno,proxy=None):
@@ -256,7 +256,7 @@ class WorkerThread(threading.Thread):
                     threading.Timer(0,self.query_and_update,[i,qno]).start()
                 else: 
                     self.query_and_update(i,qno,proxy=self.proxy)
-                time.sleep(2)
+                #time.sleep(2)
         print 'tiao chu for'
         #wx.CallAfter(self.window.log_message,string.split(time.ctime(),' ')[3]+'------>\n')
         #wx.CallAfter(self.window.log_message,u'查询停止!\n\n\n\n')

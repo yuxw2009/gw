@@ -32,6 +32,15 @@ def superman_get_code(uuid,cookiejar,proxyHandler):
 		upload_code(dict.get(response,'authcode'),cookie.value,proxyHandler=proxyHandler,uuid=uuid)
 	return response
 
+def yunsu_get_code(uuid,cookiejar,proxyHandler):
+	Jpgbin=getimg(cookiejar,proxyHandler)
+	if not Jpgbin: return {'status':'failed','reason':'jpg_not_availablele'}
+	response=yunsu_recognize_code(uuid,Jpgbin,proxyHandler)
+	cookie=get_cookie_from_cj(cookiejar)
+	if dict.get(response,'status') == 'ok':
+		upload_code(dict.get(response,'authcode'),cookie.value,proxyHandler=proxyHandler,uuid=uuid)
+	return response
+
 def fetch_code(uuid,proxyHandler):
 	Url="http://119.29.62.190:8180/aqqq/qv0/hqyzdm"
 	response=my_send_http(Url,{"uuid":uuid},proxyHandler)
@@ -48,10 +57,12 @@ def upload_code(code,session_value,proxyHandler=urllib2.ProxyHandler(),uuid=""):
 def get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,VERSION_TYPE='not_used',proxy_str=None):
 	if proxy_str: proxyHandler=urllib2.ProxyHandler({"http" : 'http://'+proxy_str})
 	else: proxyHandler=urllib2.ProxyHandler()
-	if not is_superman_logined():
-		return my_get_all_info(uuid,qno,if_jfcode=if_jfcode,use_auth2=use_auth2,proxyHandler=proxyHandler)
-	else:
+	if is_superman_logined(): 
 		return superman_get_all_info(uuid,qno,if_jfcode=if_jfcode,use_auth2=use_auth2,proxyHandler=proxyHandler)
+	if is_yunsu_logined():
+		return yunsu_get_all_info(uuid,qno,if_jfcode=if_jfcode,use_auth2=use_auth2,proxyHandler=proxyHandler)
+	return my_get_all_info(uuid,qno,if_jfcode=if_jfcode,use_auth2=use_auth2,proxyHandler=proxyHandler)
+		
 
 def my_get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHandler=urllib2.ProxyHandler()):
 	cookiejar=cookielib.CookieJar()
@@ -70,9 +81,11 @@ def my_get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHandler=u
 	else:
 		return {"status":"failed", "reason":"authcode_not_available"}
 def superman_get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHandler=urllib2.ProxyHandler()):
-	if not is_superman_logined(): 
-		#print 'superman_not_logined'
-		return {'status':'failed','reason':'superman_not_logined'}
+	return other_get_all_info(superman_get_code,superman_report_authcode_err,uuid,qno,if_jfcode=if_jfcode,use_auth2=use_auth2,proxyHandler=proxyHandler)
+def yunsu_get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHandler=urllib2.ProxyHandler()):
+	return other_get_all_info(yunsu_get_code,yunsu_report_authcode_err,uuid,qno,if_jfcode=if_jfcode,use_auth2=use_auth2,proxyHandler=proxyHandler)
+'''
+def superman_get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHandler=urllib2.ProxyHandler()):
 	cookiejar=cookielib.CookieJar()
 	response=superman_get_code(uuid,cookiejar,proxyHandler)
 	if dict.get(response,"status") == "ok":
@@ -81,6 +94,22 @@ def superman_get_all_info(uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHan
 		if dict.get(Status,"reason") == 'verify_code_err':
 			r=superman_report_authcode_err(uuid,imgId,proxyHandler)
 			print 'supermreport_authcode_err result:',r
+		if if_jfcode!="no_jfcode" and Status["state"]=="lock":
+			Status["jfcode"]=get_jfcode(qno,AuthCode,cookiejar)
+		return Status
+	else:
+		return {"status":"failed", "reason":"authcode_not_available"}
+'''		
+def other_get_all_info(recoFun,reportFun,uuid,qno,if_jfcode="no_jfcode",use_auth2=True,proxyHandler=urllib2.ProxyHandler()):
+	cookiejar=cookielib.CookieJar()
+	response=recoFun(uuid,cookiejar,proxyHandler)
+	print 'response',response
+	if dict.get(response,"status") == "ok":
+		AuthCode,imgId=dict.get(response,"authcode",""),dict.get(response,"imgId")
+		Status=get_status(qno,AuthCode,cookiejar,proxyHandler)
+		if dict.get(Status,"reason") == 'verify_code_err':
+			r=reportFun(uuid,imgId,proxyHandler)
+			print 'other_report_authcode_err result:',AuthCode,imgId,r
 		if if_jfcode!="no_jfcode" and Status["state"]=="lock":
 			Status["jfcode"]=get_jfcode(qno,AuthCode,cookiejar)
 		return Status
@@ -120,6 +149,11 @@ def getimg(cookiejar,proxyHandler):
 	r= my_get_form(jpgurl,cookiejar,proxyHandler=proxyHandler)
 	return r
 
+def getimg0():
+	jpgurl="http://captcha.qq.com/getimage?aid=2001601&0.5957661410793789"
+	r= my_get_form(jpgurl)
+	return r
+
 def restore_fee(uuid,Qua,proxyHandler):
     Url="http://119.29.62.190:8180/aqqq/qv0/restore_fee"
     response=my_send_http(Url,{"uuid":uuid,"qua":Qua},proxyHandler)
@@ -132,6 +166,8 @@ def report_authcode_err(uuid,imgId,proxyHandler):
     return response
 def superman_recognize_code(uuid,JpgBin,proxyHandler):
 	return get_superman_code(JpgBin,proxyHandler)
+def yunsu_recognize_code(uuid,JpgBin,proxyHandler):
+	return get_yunsu_code(JpgBin,proxyHandler)
 def recognize_code(uuid,JpgBin,proxyHandler):
 	Url="http://119.29.62.190:8180/aqqq/qv0/get_code0"
 	response=my_send_http(Url,{"uuid":uuid,"jpgbin":base64.b64encode(encrypt(JpgBin))},proxyHandler)
@@ -336,7 +372,7 @@ def login_superman(uname,pwd):
 def logout_superman():
 	global g_superman
 	g_superman=None
-def get_superman_code(img,proxyHandler):
+def get_superman_code(img,proxyHandler=urllib2.ProxyHandler()):
 	url='http://api2.sz789.net:88/RecvByte.ashx'
 	res= g_superman.recv_byte(img,proxyHandler=proxyHandler)
 	print 'superman authcode',res
@@ -403,8 +439,38 @@ class Chaoren:
 		except Exception as e:
 			print 'superman report_err exception is:',e
 			return False
+#--------------  yunsu账户直接访问方式相关接口----------------------------------
+import yunsu
+g_yunsu=None
+def yunsu_ins():
+	global g_yunsu
+	return g_yunsu
+def is_yunsu_logined():
+#	return False
+	return g_yunsu and g_yunsu.is_logined()
+def login_yunsu(uname,pwd):
+	global g_yunsu
+	g_yunsu=yunsu.APIClient(uname,pwd)
+	return g_yunsu.getUserInfo()
+login_yunsu('yyyys','321123')
+def logout_yunsu():
+	global g_yunsu
+	g_yunsu=None
+def get_yunsu_code(img,proxyHandler=None):
+	if proxyHandler:
+	    res= g_yunsu.recv_byte(img,proxyHandler=proxyHandler)
+	else:
+		res=g_yunsu.recv_byte(img)
+	print 'yunsu authcode',res
+	authcode=dict.get(res,'Result')
+	if res and type(res)==dict and authcode:
+		return {'status':'ok','authcode':authcode,'imgId':dict.get(res,'Id')}
+	else:
+		return {'status':'failed','reason':'no_authcode'}
+def yunsu_report_authcode_err(uuid,imgId,proxyHandler):
+    return yunsu_ins() and yunsu_ins().report_err(imgId,proxyHandler=proxyHandler)
 
-# test8888888888888888888888888888888888888888888888888
+# 免码qq登录 异地登录还是需要验证码
 import win32com.client
 def readJsFile(filename):
     fp = file( filename, 'r' )
