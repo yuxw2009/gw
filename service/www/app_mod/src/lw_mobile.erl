@@ -73,8 +73,8 @@ handle(Arg,'POST', ["query_status"])->
     {AccPhonePairs}= utility:decode(Arg, [{users, ao,[{acc,s},{phone,s}]}]),
 %    io:format("query_status:~p~n",[AccPhonePairs]),
     F = fun(Phone)->
-             case {login_processor:get_account_tuple(Phone),login_processor:get_poll_pid(Phone)} of
-             {_,Pid2} when is_pid(Pid2)-> online;
+             case {login_processor:get_account_tuple(Phone),login_processor:is_logined(Phone)} of
+             {_,true}-> online;
              {undefined,_} -> unregistered;
              {_,_}-> offline
           end end,
@@ -114,8 +114,10 @@ handle(Arg, 'GET', ["version_no"]) ->
     end;
 handle(Arg, 'GET', ["version_dth_no"]) ->
     case file:consult(?VERSION_DTH_INFO) of
-    {ok,Info}-> 
+    {ok,Info0}-> 
         Node=get_node_by_ip0(unused,utility:client_ip(Arg)),
+        AndroidPath=proplists:get_value(list_to_atom(atom_to_list(Node)++"_android"),Info0),
+        Info= if AndroidPath==undefined-> Info0; true-> lists:keystore(version_path,1, Info0,{version_path,AndroidPath}) end,
         VPath=proplists:get_value(Node,Info),
         Info1= if VPath==undefined-> Info; true-> lists:keystore(i_version_path,1, Info,{i_version_path,VPath}) end,
         utility:pl2jso_br([{status,ok}|Info1]);
@@ -159,7 +161,7 @@ handle(Arg, 'POST', ["voip", "dtmf"]) ->
 handle(Arg, 'POST', ["voip", "icalls"]) ->
     _IP = utility:client_ip(Arg),
     {UUID_SNO,Callee}= utility:decode(Arg, [{uuid, s},{phone, s}]),
-    Node=lw_mobile:get_ios_node_by_ip(UUID_SNO,utility:client_ip(Arg)),
+    Node=lw_mobile:get_node_by_ip0(Callee,UUID_SNO,utility:client_ip(Arg)),
     utility:log(?CALL, "ios:~s=>~s ~s ~s clidata:~p",[UUID_SNO,Callee,utility:make_ip_str(_IP),Node,utility:get_by_stringkey("clidata",Arg)]),
     case login_processor:autheticated(UUID_SNO,Callee) of
     [{status,ok},{uuid,UUID}]-> 
@@ -210,6 +212,31 @@ handle_tp_call_msg(Arg,Meth, Params,<<"sip_call_in">>)->
     {Opdata={obj,_}}= utility:decode(Arg, [{opdata,r}]),
     sip_tp_call_handle(Arg,Meth,Params,Opdata);
     
+handle_tp_call_msg(Arg,'POST', ["p2p_ios_ringing"],_)->
+    {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    io:format("p2p_ios_ringing sid_str:~p~n", [Sid_str]),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    R=case rpc:call(Node, avanda, processP2p_ios_ringing, [Sid]) of
+    ok-> [{status,ok}];
+    {failed,Reas}-> [{status,failed},{reason,Reas}]
+    end,
+    io:format("p2p_ios_ringing:~p res:~p~n",[Sid_str,R]),
+    utility:pl2jso(R);
+handle_tp_call_msg(Arg,'POST', ["p2p_ios_poll"],O)-> handle_tp_call_msg(Arg,'POST', ["p2p_poll"],O);
+handle_tp_call_msg(Arg,'POST', ["p2p_ios_answer"],_)->
+%    {{Sid_str},Clidata,UUID,Phone,{Port}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]},{clidata,r},{caller_phone,s},{callee_phone,s},{sdp, o, [{port, i}]}]),
+    {{Sid_str},SDP}= utility:decode(Arg, [{opdata, o, [{session_id,s}]},{sdp,b}]),
+    IP = utility:client_ip(Arg),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    R=rpc:call(Node, avanda, processP2p_ios_answer, [Sid,SDP]),
+    io:format("p2p_ios_answer res:~p~n",[R]),
+    
+    case R of
+    {ok,AnsSDP}->
+        utility:pl2jso_br([{status, ok},{session_id, Sid_str}, {sdp, AnsSDP}]);
+    {failed,Reason}->
+        utility:pl2jso_br([{status,failed}, {reason, Reason}])
+    end;
 handle_tp_call_msg(Arg,'POST', ["p2p_ringing"],_)->
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
     io:format("p2p_ringing sid_str:~p~n", [Sid_str]),
@@ -242,9 +269,10 @@ handle_tp_call_msg(Arg,'POST', ["p2p_answer"],_)->
     {{Sid_str},Clidata,UUID,Phone,{Port}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]},{clidata,r},{caller_phone,s},{callee_phone,s},{sdp, o, [{port, i}]}]),
     IP = utility:client_ip(Arg),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
-    utility:log(?CALL, "p2p_answer:~s=>~s ~s ~s clidata: ~p",[UUID,Phone,utility:make_ip_str(utility:client_ip(Arg)),atom_to_list(Node),Clidata]),
-    
-    case rpc:call(Node, avanda, processP2p_answer, [Sid,{IP, Port}]) of
+    R=rpc:call(Node, avanda, processP2p_answer, [Sid,{IP, Port}]),
+    io:format("p2p_answer:~s=>~s ~s ~s clidata: ~p",[UUID,Phone,utility:make_ip_str(utility:client_ip(Arg)),atom_to_list(Node),Clidata]),
+    io:format("answer res:~p~n",[R]),
+    case R of
     {successful,SessionID,{PeerIP,PeerPort}, Other}->
         utility:pl2jso([{status, ok},{session_id, voice_handler:enc_sid(Node, SessionID)}, {ip, list_to_binary(PeerIP)}, {port, PeerPort}|Other]);
     {failed,Reason}->
@@ -405,7 +433,7 @@ sip_tp_call_handle(_Arg,'POST', _,_Clidata)->
 
 push(Phone1,Content)->
     case login_processor:get_tuple_by_uuid_did(Phone1) of
-    #login_itm{devid=DevId,pls=Pls} when is_list(DevId) andalso length(DevId)>0->
+    #login_itm{devid=DevId,pls=Pls} when is_list(DevId) andalso length(DevId)>0 andalso DevId=/="push_not_permitted"->
         case proplists:get_value(os_type,Pls) of
             "ios"-> push_ios(Phone1,DevId,Content);
             "android"-> push_android(Phone1,Content);
@@ -433,10 +461,11 @@ p2p_push(CallerNode,Phone,Content)->
     case login_processor:get_ip_tuple(Phone) of
     undefined-> real_call;
     CalleeIp->
-        case get_node_by_ip0(Phone,CalleeIp) of
-        CallerNode->  push(Phone,Content);
-        _-> real_call
-        end
+%        case get_node_by_ip0(Phone,CalleeIp) of
+%        CallerNode->  push(Phone,Content);
+ %       _-> real_call
+%        end
+        push(Phone,Content)
     end.
 
 get_maxtalkt(_UUID,Arg)->
@@ -485,7 +514,7 @@ start_call0(UUID, Arg) ->
 start_call(UUID,Arg)-> start_call(UUID,Arg, fun(_,_)->   void end).
 start_call(UUID, Arg, XgAct) ->
 	{  Phone, {IPs=[SessionIP|_], Port}} = utility:decode(Arg, [{callee_phone, s}, {sdp, o, [{ip, as}, {port, i}]}]),
-      Node =get_node_by_ip0(UUID,utility:client_ip(Arg)),
+      Node =get_node_by_ip0(Phone,UUID,utility:client_ip(Arg)),
 	io:format("-"),
 	Ip=utility:client_ip(Arg),
 	utility:log(?CALL, "~s=>~s ~s ~s clidata:~p",[UUID,Phone,utility:make_ip_str(Ip),atom_to_list(Node),utility:get_by_stringkey("clidata",Arg)]),
@@ -504,18 +533,20 @@ start_call(UUID, Arg, XgAct) ->
                       %% xg transfer
                       Callee = proplists:get_value(phone,Options),
                       Cid=login_processor:trans_caller_phone(Callee,UUID),
-                      CustomContent=[{event,<<"p2p_inform_called">>},{caller,list_to_binary(Cid)},{opdata,R}],
+                      CustomContent=[{alert,list_to_binary(Cid)},{badge,1},{'content-available',1},{sound,<<"lk_softcall_ringring.mp3">>},{event,<<"p2p_inform_called">>},{caller,list_to_binary(Cid)},{opdata,R}],
                       CallType= 
                           case utility:get_by_stringkey("type",Arg) of
                           <<"p2p">> -> XgAct(Node,Callee,CustomContent);
                           _-> real_call  
                           end,
+%                      io:format("start_call:666666666666666666666666666666666~p",[CallType]),
                       if CallType==ios_webcall->
                           rpc:call(Node, avanda, set_call_type, [SessionID, maybe_p2p_call]),
                           rpc:call(Node, avanda, processSipP2pRing, [SessionID]);
                       true->
                           rpc:call(Node, avanda, set_call_type, [SessionID, CallType])
                       end,
+%                      io:format("start_call:9999999999999999999999999999999999~p",[CallType]),
         	         utility:pl2jso([{status, ok},{session_id, voice_handler:enc_sid(Node, SessionID)}, {ip, list_to_binary(PeerIP)}, 
         	                              {port, PeerPort},{codec, 102}|Other]);
         	    {_, nodedown}-> utility:pl2jso([{status, failed},{reason,nodedown}]);
@@ -535,18 +566,16 @@ get_wcg_node(_UUID,Ip)->
         _->    wwwcfg:get(test_node)
     end.
 
-get_ios_node_by_ip(UUID,Ip)->  get_node_by_ip0(UUID,Ip).
-%    R0= wwwcfg:get_ios_wcgnode(utility:c2s(utility:country(Ip))),
-%    case lists:member(R0,nodes()) of
-%    true-> R0;
-%    _-> wwwcfg:get_wcgnode(default)
-%    end.
-    
-
-get_node_by_ip0(UUID,Ip)-> 
+get_node_by_ip0(_Callee="00"++_,UUID,Ip) when UUID=/="18017813673"-> 
+    R=get_internal_node_by_ip(UUID,Ip),
+    io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
+    R;
+get_node_by_ip0(_Callee,UUID,Ip)->
     R=get_node_by_ip(UUID,Ip),
-    io:format("uuid:~p Ip:~p choose node:~p~n",[UUID,Ip,R]),
+    io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
     R.
+
+get_node_by_ip0(UUID,Ip)-> get_node_by_ip0(unused,UUID,Ip).
     
 
 get_internal_node_by_ip("862180246528",_Ip)-> 'gw@10.32.2.4';
@@ -554,9 +583,9 @@ get_internal_node_by_ip(UUID,Ip)->
     wwwcfg:get_internal_wcgnode(utility:c2s(utility:country(Ip))).
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
 get_node_by_ip(_luyin_test="18017813673",_Ip)-> 'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
-get_node_by_ip(UUID=_yxwfztest="31230011",_)-> get_internal_node_by_ip(UUID,{168,167,165,245});
+get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31230032" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
-get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
+%get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
 %get_node_by_ip(UUID="00862180246"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);
 get_node_by_ip(UUID,{203,222,195,122})-> get_internal_node_by_ip(UUID,{203,222,195,122});
 get_node_by_ip(UUID,Ip)->

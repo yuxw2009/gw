@@ -1,18 +1,23 @@
-{version_no,"1.2.7"}.   %150703
-{version_path, "http://lwork.hk:8080/version/ltalk_dth.apk"}.
-{version_info,"发现新版本v1.2.7\n1、解决二次拨号错误问题；2、错误原因提示更加明确；新开户的。\n是否立即下载体验新版本?"}.
+{version_no,"1.2.8"}.   %150718
+{version_path, "http://119.29.62.190:8080/version/ltalk_dth.apk"}.
+{version_info,"发现新版本v1.2.8\n1、增加网关集群，提高国内访问速度。\n2、拨出的时候声音去除。\n3、通话记录显示最近的100条。\n是否立即下载体验新版本?"}.
+%{version_no,"1.2.7"}.   %150703
+%{version_path, "http://lwork.hk:8080/version/ltalk_dth.apk"}.
+%{version_info,"发现新版本v1.2.7\n1、解决二次拨号错误问题；2、错误原因提示更加明确；新开户的。\n是否立即下载体验新版本?"}.
 
 %{version_no,"1.2.6"}.   %150604
 %{version_path, "http://lwork.hk:8080/version/ltalk_dth.apk"}.
 %{version_info,"发现新版本v1.2.6\n1、资费说明修改；2、修改android4.0.x版本的无法更新的bug。\n是否立即下载体验新版本?"}.
 
-{i_version_no,"1.0.4"}.   %150624
+{i_version_no,"1.0.5"}.   %150624
+{i_version_info,"发现新版本v1.0.5,\n1 未接电话显示\n2 一些界面优化\n是否立即下载体验新版本?"}.
+%{i_version_no,"1.0.4"}.   %150624
 {i_version_path, "https://lwork.hk/demo/ltalk.plist"}.
-{i_version_info,"发现新版本v1.0.4,\n1 增加绑定中国号码呼入功能\n2 一些界面优化\n是否立即下载体验新版本?"}.
+%{i_version_info,"发现新版本v1.0.4,\n1 增加绑定中国号码呼入功能\n2 一些界面优化\n是否立即下载体验新版本?"}.
 
-{{i_version_path,'gw1@119.29.62.190'},"https://lwork.hk/version/ltalk_mainland.plist"}.
-{{i_version_path,'gw@10.32.2.4'},"https://lwork.hk/demo/ltalk.plist"}.   
-{{i_version_path,'gw_git@202.122.107.66'},"https://lwork.hk/demo/ltalk.plist"}.   
+{'gw1@119.29.62.190',"https://lwork.hk/version/ltalk_mainland.plist"}.
+{'gw@10.32.2.4',"https://lwork.hk/demo/ltalk.plist"}.   
+{'gw_git@202.122.107.66',"https://lwork.hk/demo/ltalk.plist"}.   
                  
 %{i_version_no,"1.0.3"}.   %150617
 %{i_version_path, "https://lwork.hk/demo/ltalk.plist"}.

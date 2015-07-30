@@ -105,7 +105,7 @@ loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
                 {_,{_,_,NSt}}->
                     loop(NSt)
             end;
-    	{add, NewQnos}-> loop(St#st{qnos=Qnos++NewQnos});
+    	{add, NewQnos}-> loop(St#st{qnos=add_to_queue(Qnos,NewQnos)});
     	{add_head, NewQnosItem}-> loop(St#st{qnos=[NewQnosItem|Qnos]});
     	{pause}-> loop(St#st{status=deactive});
     	{restore}-> loop(St#st{status=active});
@@ -122,6 +122,11 @@ loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
     	    loop(St)
     	end.
 
+add_to_queue(Qnos0,NewQnos)->add_to_queue(Qnos0,NewQnos,Qnos0).
+add_to_queue(Qnos0,NewQnos,[])->    Qnos0++NewQnos;
+add_to_queue(Qnos0,NewQnos=[{first,{_,Fid,_,_}}],[{first,{_,Fid,_,_}}|Tail])->Qnos0;
+add_to_queue(Qnos0,NewQnos=[{first,{_,Fid,_,_}}],[{_,Fid,_,_}|Tail])->Qnos0;
+add_to_queue(Qnos0,NewQnos=[{first,{_,Fid,_,_}}],[_|Tail])->add_to_queue(Qnos0,NewQnos,Tail).
 pause()->
     case whereis(?MODULE) of
     	P when is_pid(P)->   P ! {pause};
@@ -172,7 +177,7 @@ add_cid()->add_cid({opdn_rand(),""}).
 add_cid(Cid) when is_list(Cid) orelse is_tuple(Cid)->
     io:format("~p~n",[Cid]),
     Act = fun(St=#st{qnos=[]})->
-                 {ok,St#st{pls=[{cids,[]}]}};
+                 {ok,St#st{pls=[{cids,[Cid]}]}};
              (St=#st{pls=[{cids,Cids}]})->
                  {ok,St#st{pls=[{cids,[Cid|Cids]}]}}
           end,

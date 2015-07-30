@@ -250,7 +250,7 @@ terminate(_Reason, St=#state{aid=Aid,rtp_pid=RtpPid,rrp_pid=RrpPid,alive_tref=AT
     if ST == undefined->
 %        io:format("q_w2p terminate no hookoff send 2"),
         io:format("d"),
-        inform_result(St, "2");
+        inform_result(St, "7");
     true-> void
     end,
     ok.	
@@ -621,7 +621,7 @@ start_talk_process_firstqq(State=#state{call_info=PhInfo,aid=Aid})->
                 inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},Indicator);
             true->
                     io:format(" ~p ",[FirstRes]),
-                    inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},no_report),
+                    inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},"2"),
                     ok
             end,
             q_wkr:stopVOIP(Aid),
@@ -798,11 +798,17 @@ inform_resultall(State=#state{call_info=PhInfo},Res)->
     inform_result_mine(State,Res),
     Clidata_0 = proplists:get_value(clidata,PhInfo,""),
     case Clidata_0 of
+       {Clidata_sb,Qno_sb,ToSBRes}->
+           PhInfo_sb1=lists:keystore(qno,1,PhInfo,{qno,Qno_sb}),
+           PhInfo_sb2=lists:keystore(clidata,1,PhInfo_sb1,{clidata,Clidata_sb}),
+           inform_result2sb(State#state{call_info=PhInfo_sb2},ToSBRes);
        {Clidata_sb,Qno_sb}->
            PhInfo_sb1=lists:keystore(qno,1,PhInfo,{qno,Qno_sb}),
            PhInfo_sb2=lists:keystore(clidata,1,PhInfo_sb1,{clidata,Clidata_sb}),
 %           io:format("Qno_sb:~p myqno:~p~nphinfo:~p~n",[Qno_sb,proplists:get_value(qno,PhInfo,""),PhInfo_sb2]),
-           inform_result2sb(State#state{call_info=PhInfo_sb2},"2");
+%           Res1= if Res=="7"-> "7"; true-> "2" end,
+           Res1="7",
+           inform_result2sb(State#state{call_info=PhInfo_sb2},Res1);
        _ when is_list(Clidata_0)->  
            io:format("old sb clidata,don't send~n")
     end.
@@ -811,7 +817,7 @@ inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) when is_atom
     Qno = proplists:get_value(qno,PhInfo,""),
     Clidata = proplists:get_value(clidata,PhInfo,""),
     RecDs = proplists:get_value(recds,PhInfo,""),
-    log("~p", [{Qno,RecDs,Res,Clidata,duration(StartTime)}]),
+    log("~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
     void;
 inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) ->
     Qno = proplists:get_value(qno,PhInfo,""),
@@ -831,6 +837,9 @@ inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) ->
         _ -> failed
     end,
     log("to_sb:~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
+    if Res =/= "2" andalso Res =/= "7"-> q_strategy:del_counter(Clidata); true-> false end,
+    CurFlag=if Res=="1"-> 1; true-> 0 end,
+    q_strategy:update_last10(CurFlag),
     Ret.
 
 inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->

@@ -7,9 +7,10 @@ get(sip_socket_ip)-> "10.32.7.28";
 get(www_node)-> 'www@58.221.60.121'.
 service_id()-> "fzd".
 callee_prefix()-> "".  %"00088818".
-group_callee_prefix("fzd")->  "";
-group_callee_prefix("dth")->  "00088818";
-group_callee_prefix("xh")->  "00088818";
-group_callee_prefix("livecom")->  "00099918";
+group_callee_prefix({"fzd",_})->  "";
+group_callee_prefix({"dth",_})->  "00088818";
+group_callee_prefix({"xh",_})->  "00088818";
+group_callee_prefix({"livecom",Caller="1"++_}) when length(Caller)==11 ->  "00099918";
 group_callee_prefix(_)->  "00088818".
+
 

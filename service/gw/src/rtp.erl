@@ -128,7 +128,6 @@ init([Session,Socket,Options]) ->
 	{ok,NewState#state{sess=Session, transport_status=stunning, socket=Socket,vp8=#vp8_cdc{},base_wall_clock=BaseWC,report_to=ReportTo}}.
 
 handle_call({options,Options},_From,State) ->
-      io:format("rtp:options:~p~n",[Options]),
 	NewState = processOptions(State,Options),
 	{reply,ok,NewState};
 
@@ -155,7 +154,6 @@ handle_call(_Call, _From, State) ->
 
 	
 handle_cast({add_stream,audio,Options},State) ->
-      io:format("rtp:add_stream:~p~n",[Options]),
 	Media = proplists:get_value(media,Options),
 	KeyStrategy = proplists:get_value(key_strategy, Options),
 	{WriteSRTP, WriteSRTCP} = 
@@ -236,7 +234,7 @@ handle_cast({media_relay,Media}, #state{in_media=OldMedia}=State) when is_pid(Me
 	if is_pid(OldMedia) -> OldMedia ! {deplay,self()};
 	true -> ok end,
 	Media ! {play,self()},
-	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
+%	io:format("rtp ~p media_relay ~p.~n",[self(),Media]),
 	{noreply, State#state{in_media=Media,out_media=Media}};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	
@@ -378,6 +376,8 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,Mark:1,Codec:7,InSeq:16,TS:3
 	Remote = Remote0#base_info{base_timecode=TS,base_seq=InSeq},
 	Samples = if Codec==?PCMU;Codec==?CN -> ?PSIZE;
 			  true -> 960 end,
+
+	rtp:info(ST#state.out_media, {media_relay,self()}),  % 暂时加下
 	AParams = [ST#state.out_media,Mark,Codec,{0,InSeq},Samples,SSRC,Cryp],
 	ST1=decryp_and_send_audio(ST,AParams,UdpMsg),
 	{noreply,ST1#state{r_base=Remote#base_info{pln=Codec,roc=0,seq=InSeq,timecode=TS,previous_ts={TS,now()},pkts_rcvd=1,cumu_rcvd=1}}};
@@ -677,7 +677,7 @@ handle_info({receive_packet,Seq,_WC,_Size}, #state{vr_base=RVideo,bw=BWE}=ST) ->
 
 %% ******** STUN ********
 handle_info({udp,_,_,_,<<0:7,_:1,_:8,_Len:14,0:2,_/binary>> },#state{ice_state=#st{ice=undefined}}=ST) ->			% STUN
-	io:format("rtp unknow/unset stun bin: .~n",[]),
+%	io:format("unknow/unset stun bin: ~p.~n",[Bin]),
 	{noreply,ST};
 handle_info({udp,Socket,Addr,Port,<<0:7,_:1,_:8,_Len:14,0:2,_/binary>> =Bin},#state{sess=Sess,ice_state=ICE}=ST) ->			% STUN
 	case stun:handle_msg({udp_receive,Addr,Port,Bin},ICE) of
@@ -749,9 +749,9 @@ handle_info({dtls, key_material, #srtp_params{protection_profile_name=PPN,
 %
 % ******** bad message, socket received *******
 %
-handle_info({udp, _Socket, _Addr, _Port, _Bin},ST=#state{transport_status=_TranStatus}) ->
-	llog1(ST,"rtp bad msg from ~p ~p ~p~n",[_Addr,_Port,_Bin]),
-%	io:format("b"),
+handle_info({udp, _Socket, _Addr, _Port, _Bin},ST=#state{transport_status=TranStatus}) ->
+%	llog1(ST,"rtp bad msg from ~p ~p ~p~n",[_Addr,_Port,_Bin]),
+	io:format("b:~p",[TranStatus]),
 %	if TranStatus == inservice-> 	llog1(ST,"rtp bad msg from ~p ~p~n~p~nST:~p~n",[Addr,Port,Bin,ST]);
 %	   true-> void
 %	end,
@@ -1593,7 +1593,6 @@ update_avg_rtt(#base_rtp{avg_rtt=RTT0, rtt_count=Count0, rtt=Rtt}=SCtx0) ->
 start_within(Session,Options,{BEGIN_UDP_RANGE,END_UDP_RANGE}) ->
 	case try_port(BEGIN_UDP_RANGE,END_UDP_RANGE) of
 		{ok,Port,Socket} ->
-		       io:format("rtp:start_within:~p~n",[Port]),
 			{ok,Pid} = my_server:start(?MODULE,[Session,Socket,Options],[]),
 			gen_udp:controlling_process(Socket, Pid),
 			{ok,Port,Pid};

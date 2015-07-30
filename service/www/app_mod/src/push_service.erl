@@ -10,15 +10,18 @@ handle(Arg,_Params)->
     {SelfPhone,Acc, Did,Clidata} = utility:decode(Arg,[{self_phone, s},{acc, s},{device_id, s},{clidata,r}]),
     utility:log("./log/xhr_poll.log","push_service:~p did:~p acc:~p~n clidata:~p~n",[SelfPhone,Did,Acc,Clidata]),
     case login_processor:get_account_tuple(SelfPhone) of
-    #login_itm{acc=Acc,devid=Did,ip=Ip0}=Itm-> 
+    #login_itm{acc=Acc,devid=Did,ip=Ip0,pls=Pls}=Itm-> 
+        Pid0=whereis(list_to_atom(Did)),
         Pid =
-            case whereis(list_to_atom(Did)) of
+            case Pid0 of
             undefined-> login_processor:start_poll(Did);
             P-> P
             end,
         xhr_poll:attrs(Pid,Params),
         xhr_poll:up(Pid),
-        if Ip =/=Ip0 -> login_processor:update_itm(Itm#login_itm{ip=Ip}); true-> void end,
+%        io:format("android_push:~p~n",[{SelfPhone,Pid0,Pid}]),
+        if Ip =/=Ip0 orelse Pid0=/=Pid -> 
+            login_processor:update_itm(Itm#login_itm{ip=Ip,pls=lists:keystore(push_pid,1,Pls,{push_pid,Pid})}); true-> void end,
         erlang:monitor(process,Pid),
         receive
             {failed,Reason}-> 

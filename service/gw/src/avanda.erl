@@ -70,10 +70,26 @@ processP2p_answer(Op_sessionId,Addr={_Ip,_port}) when is_integer(Op_sessionId) -
     R={failed,Reason}-> R
     end.
         
+processP2p_ios_ringing(Op_sessionId) when is_integer(Op_sessionId) ->
+	processP2p_ringing(Op_sessionId). % play ring_back_tone to op, and return ok or {failed,_Reason}
+
+processP2p_ios_answer(Op_sessionId,SDP) when is_integer(Op_sessionId) ->
+	% get rtp/rtcp port w2p:start(),
+	% return {successful,Aid,{avscfg:get(mhost_ip),LPort}, ToMobiles}
+    {L_SSRC,L_CName} = makessrc(),
+    case w2p:get_rtp_pid(Op_sessionId) of
+    OpRtpPid when is_pid(OpRtpPid)->
+        w2p:p2p_tp_answer(Op_sessionId),
+        {ok, Aid, AnsSDP} = w2p:start_p2p_ios_answer(SDP,OpRtpPid),
+        w2p:set_peer_aid_eachother(Op_sessionId,Aid),
+        {ok,AnsSDP};
+    R={failed,Reason}-> R
+    end.
+        
 
 processP2p_reject(Op_sessionId) when is_integer(Op_sessionId) ->
     % play busy tone to op user which appid is op_sessionId
-    todo.
+    notused.
 
 stopNATIVE(Orig) ->
 %	io:format("58.37 kill ~p~n",[Orig]),

@@ -1,8 +1,9 @@
 <?php
     
     // ??????????deviceToken???????????????
-    $deviceToken = '3408497ce46bd3f65e4b74465929218ba617cf63b838e4029f367cd68c3a9e51';
-    
+    //$deviceToken = '3408497ce46bd3f65e4b74465929218ba617cf63b838e4029f367cd68c3a9e51';
+    $deviceToken="66e0f3aaac56c75a7a1b71b9fbab255e8d05b7b461c6db0abc8b71ebcb839ad2";
+    //"53e6572f9ecfbce67712ffb540f9a2a2ca5955712c63b0ceaf8081a183e1c77e";//"24aea5bad9bc6b64f8b6491320feca11502aa5326fe28ca7b9e7a970fa593762";//
     // Put your private key's passphrase here:
     $passphrase = 'livecom2015';
     
@@ -12,7 +13,7 @@
     ////////////////////////////////////////////////////////////////////////////////
     
     $ctx = stream_context_create();
-    stream_context_set_option($ctx, 'ssl', 'local_cert', 'ck.pem');
+    stream_context_set_option($ctx, 'ssl', 'local_cert', 'priv/ck.pem');
     stream_context_set_option($ctx, 'ssl', 'passphrase', $passphrase);
     
     // Open a connection to the APNS server
@@ -31,7 +32,10 @@
     // Create the payload body
     $body['aps'] = array(
                          'alert' => $message,
-                         'sound' => 'default'
+                         'event' => 'login_otherwhere',//'p2p_inform_called',
+                         'opdata' => 'test',
+                         'content-available' => 1
+                     //    'sound' => 'lk_softcall_ringring.mp3'
 //                         'badge' => '10'
                          );
     
@@ -42,11 +46,8 @@
     $msg = chr(0) . pack('n', 32) . pack('H*', $deviceToken) . pack('n', strlen($payload)) . $payload;
     
     // Send it to the server  
-    //$result = fwrite($fp, $msg, strlen($msg));  
-    $myfile = fopen("msgphp.txt", "wb");
-    fwrite($myfile, $msg);
-    fclose($myfile);
-    
+    $result = fwrite($fp, $msg, strlen($msg));  
+   
     if (!$result)  
     echo 'Message not delivered' . PHP_EOL;  
     else  

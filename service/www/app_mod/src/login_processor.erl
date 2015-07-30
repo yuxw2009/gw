@@ -47,10 +47,10 @@ livecom_login(Account,Params,{_XgAccount,PassMD5,DevId})->
     Type = usr,
     DeviceToken = if is_list(DevId)-> list_to_binary(DevId); true-> <<"">> end,
     HttpParas=[{company,Company}, {account,list_to_binary(Account)},{password,list_to_binary(PassMD5)},{type,Type},{deviceToken,DeviceToken}],
-    case utility:httpc_call(post, "http://10.32.7.28/lwork/auth/livecom_mobile_auth", HttpParas) of
+    case utility:httpc_call(post, "http://fc2fc.com/lwork/auth/livecom_mobile_auth", HttpParas) of
     {obj,_PList=[{"status",<<"ok">>}|AuthInfos]}->
 %        ?MODULE ! {login, {Account,livecom}},
-        Json=utility:httpc_call(get, "http://10.32.7.28/lwork/auth/self_profile", AuthInfos),
+        Json=utility:httpc_call(get, "http://fc2fc.com/lwork/auth/self_profile", AuthInfos),
         {obj, ProfileList} = Json,
         {UUID,Name} =
             case proplists:get_value("info", ProfileList) of
@@ -147,7 +147,9 @@ push_trans_caller(Caller) ->trans_caller_phone("0086",Caller).
 unregister_user_login(UUID,DevId)-> 
     io:format("unregister_user_login ~p ~p ~n",[UUID,DevId]),
     case login_processor:get_account_tuple(UUID) of
-    #login_itm{devid=DevId}=Itm-> update_itm(Itm#login_itm{devid=""});
+    #login_itm{devid=DevId,pls=Pls}=Itm-> 
+        xhr_poll:stop(DevId),
+        update_itm(Itm#login_itm{devid="",pls=proplists:delete(push_pid,Pls)});
     _-> void
     end.
 register_user_login(_Params,[])-> {failed,no_phone_registered};
@@ -157,7 +159,7 @@ register_user_login(Params,[Phone1|_OtherPhones])->
                                                          proplists:get_value("device_id",Params),proplists:get_value("group_id",Params)},
     Ip=proplists:get_value("ip", Params),
     {Account,_PassMD5,DevId,GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
-    restart_poll(DevId),
+    P=restart_poll(DevId),
     {Status,Did,Pls}= case lw_agent_oss:get_item(Phone1) of
                                 #agent_oss_item{status=S,did=D,pls=P}-> {S,push_trans_caller(D),P};
                                 _-> {actived,undefined,[]}
@@ -166,7 +168,7 @@ register_user_login(Params,[Phone1|_OtherPhones])->
     io:format("register_user_login clidata ~p~n",[Clidata]),
     {OsType}= if Clidata==undefined-> {"ios"}; true-> utility:decode_json(Clidata,[{os_type,s}]) end,
     NL=#login_itm{phone=push_trans_caller(Phone1),acc=Account,devid=DevId,ip=Ip,group_id=GroupId,status=Status,
-           pls=[{os_type,OsType},{did,Did}|Pls]},
+           pls=[{os_type,OsType},{did,Did},{push_pid,P}|Pls]},
     ?DB_WRITE(NL).
 
 tick_old(Params,[Phone1|_OtherPhones])->
@@ -218,10 +220,27 @@ get_account_tuple_bydid(Did0)->
 
 get_poll_pid(Phone)->
     case get_tuple_by_uuid_did(Phone) of
-    #login_itm{devid=DevId}-> whereis(list_to_atom(DevId));
+    #login_itm{pls=Pls}-> 
+         Pid=proplists:get_value(push_pid,Pls,undefined),
+         case is_pid(Pid) of
+         true-> Pid; 
+         _-> undefined 
+         end;
     _-> undefined
     end.
     
+is_logined(Phone)->
+    case get_tuple_by_uuid_did(Phone) of
+    #login_itm{devid=DevId,pls=Pls} when is_list(DevId) andalso length(DevId)>0 -> 
+        case proplists:get_value(os_type,Pls) of
+            "ios"-> true;
+            _-> 
+                Pid=get_poll_pid(Phone),
+                if is_pid(Pid)-> rpc:call(node(Pid),erlang,is_process_alive,[Pid]); true-> false end
+        end;
+    _-> undefined
+    end.
+
 get_ip_tuple(Phone)->
     case get_tuple_by_uuid_did(Phone) of
     #login_itm{ip=Ip}-> Ip;
@@ -242,6 +261,7 @@ case {get_account_tuple(Phone), get_account_tuple_bydid(Phone)} of
 update_itm(Itm)->  ?DB_WRITE(Itm).
 show_usertab()-> ?DB_QUERY(login_itm).
     
+get_group_id(Phone) when Phone=="31230646" orelse Phone=="31230648" orelse Phone=="31230653"->  "livecom";
 get_group_id(Phone)->
     case get_tuple_by_uuid_did(Phone) of
     #login_itm{group_id=GroupId}-> GroupId;

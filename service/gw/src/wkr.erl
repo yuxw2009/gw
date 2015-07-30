@@ -14,7 +14,8 @@
 
 
 %% ---------------------------------
-decodeWebSDP(SDP,LPort)->
+decodeWebSDP(SDP,LPort)->decodeWebSDP(SDP,LPort,whereis(rbt)).
+decodeWebSDP(SDP,LPort,Media)->
 	try sdp:decode(SDP) of
 		{Session,Streams} ->
 			{HasAudio,Streama} =
@@ -25,7 +26,7 @@ decodeWebSDP(SDP,LPort)->
 			if HasAudio ->
 				case check_sdp_params_for_voip({Session,Streams}) of
 					{ok,Type} ->
-						get_rtp_params({Session,[Streama]},Type,getrandom(),LPort);
+						get_rtp_params({Session,[Streama]},Type,getrandom(),LPort,Media);
 					_ ->
 						{failure,sdp_bad_audio}
 				end;
@@ -36,7 +37,7 @@ decodeWebSDP(SDP,LPort)->
 			{failure,sdp_error}
 	end.
 
-get_rtp_params({Session,[Streama]},PLType,L_OrigID,LPort) ->
+get_rtp_params({Session,[Streama]},PLType,L_OrigID,LPort,Media) ->
 	{OSVer, R_OrigID} = fetchorig(Session),
 	%{RUfrag,RPwd,RK_S} = fetchkey(Streama),
 	{RUfrag,RPwd} = fetchicepara(Streama),
@@ -69,7 +70,6 @@ get_rtp_params({Session,[Streama]},PLType,L_OrigID,LPort) ->
 					   cname = R_CName,
 					   ice = {ice,RUfrag,RPwd}},
 	
-	Media = whereis(rbt),
 	Options1 = [{outmedia,Media},
 	           {key_strategy, KeyStrategy},
 	           {fingerprint, PeerFingerPrint},
@@ -110,7 +110,12 @@ processVOIP(SDP,PartySess,PhInfo) ->
 					[] -> {false,undefined}
 				end,
 			if HasAudio ->
-				case check_sdp_params_for_voip({Session,Streams}) of
+			      Fun=fun()->
+			                 case proplists:get_value(uuid,PhInfo) of
+			                 {_,"18017813673"}->  amr;
+			                 _-> avscfg:get(webrtc_web_codec)
+			                 end end,
+				case check_sdp_params_for_voip({Session,Streams},Fun()) of
 					{ok,Type} ->
 						doVOIP({Session,[Streama]},Type,PartySess,PhInfo);
 					_ ->
@@ -310,10 +315,11 @@ make_info(PhNo) ->
                    {"account",<<"0131000019">>},{"orgid",1}]}},
  {cid,"0085268895100"}].
 
-check_sdp_params_for_voip(Desc) ->
+check_sdp_params_for_voip(Desc) ->check_sdp_params_for_voip(Desc,avscfg:get(webrtc_web_codec)).
+check_sdp_params_for_voip(Desc,PLType) ->
 	case check_sdp_params(Desc) of
 		{_,[{audio,PLs,[true,true],true,true,_}|_]} ->
-			case avscfg:get(webrtc_web_codec) of
+			case PLType of
 				isac ->
 					case {lists:member(103,PLs),lists:member(105,PLs)} of
 						{true,true} -> {ok,isac};
@@ -344,6 +350,20 @@ check_sdp_params_for_voip(Desc) ->
 							case {lists:member(0,PLs),lists:member(13,PLs)} of
 								{true,true} -> {ok,pcmu};
 								_ -> err
+							end
+					end;
+			      amr->
+					case {lists:member(114,PLs)} of
+						{true} -> {ok,amr};
+						_ ->
+							case {lists:member(103,PLs),lists:member(105,PLs)} of
+								{true,true} -> {ok,isac};
+								_ ->
+									case {lists:member(0,PLs),lists:member(13,PLs)} of
+										{true,true} -> {ok,pcmu};
+										_ -> err
+									end
+
 							end
 					end;
 				pcmu ->

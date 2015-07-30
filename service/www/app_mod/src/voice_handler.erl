@@ -111,7 +111,7 @@ handle(Arg, M, Ps) ->
 handle_startcall("",Arg)->   handle_fzd_startcall(Arg);
 handle_startcall(GroupId,Arg)-> 
     {UUID}=utility:decode(Arg, [{uuid,s}]),
-    handle_startcall(lw_mobile:get_ios_node_by_ip(UUID,utility:client_ip(Arg)),GroupId,Arg).
+    handle_startcall(lw_mobile:get_node_by_ip0(UUID,utility:client_ip(Arg)),GroupId,Arg).
 handle_startcall(Node,GroupId,Arg)->
     case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
     {UUID, SDP, Phone,Class}->
@@ -120,9 +120,11 @@ handle_startcall(Node,GroupId,Arg)->
         case check_token(UUID, [Phone,GroupId,AuthCode]) of
             {pass, Phone2} ->
         		Res = start_voip(Node,GroupId,UUID, Class, Phone2, SDP, no_limit,utility:client_ip(Arg)),
-        		io:format("voice_handler start_voip node:~p res:~p~n",[Node,Res]),
+%        		io:format("voice_handler start_voip node:~p res:~p~n",[Node,Res]),
         		case Res of
-        			{SID, SDP2} -> utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
+        			{SID, SDP2} -> 
+        			    handleP2pCall(UUID,Phone,Node,SID,SDP2,Arg),
+        			    utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
         			Err -> utility:pl2jso([{status, failed},{reason,a}])
         		end;
         	_ ->
@@ -290,3 +292,24 @@ pretrans_qos([{Label,Value}|T], Acc) when Label == lrate orelse
                                        Label == rtt ->
     pretrans_qos(T, [{Label,list_to_binary(utility:f2s(Value))}|Acc]);
 pretrans_qos([H|T], Acc) -> pretrans_qos(T, [H|Acc]).
+
+handleP2pCall(UUID,Phone,Node,SID,SDP,Arg)->
+    Type =utility:get_by_stringkey("type",Arg),
+    io:format("handleP2pCall:~p~n",[{Type,UUID,Phone,Node,SID}]),
+    case Type of
+    <<"p2p">> ->
+        R=utility:pl2jso([{caller,list_to_binary(UUID)},{callee,list_to_binary(Phone)},{session_id, SID}]),
+        CustomContent=[{alert,UUID},{badge,1},{'content-available',1},{sound,"lk_softcall_ringring.mp3"},{event,<<"p2p_inform_called">>},
+                                 {caller,list_to_binary(UUID)},{opdata,R}],
+        case lw_mobile:p2p_push(Node,Phone,CustomContent) of
+        ios_webcall-> 
+            rpc:call(Node, avanda, set_call_type, [SID, p2p_call]),
+            rpc:call(Node, avanda, processP2p_ringing, [SID]);
+        CallType->
+            rpc:call(Node, avanda, set_call_type, [SID, CallType])
+        end;
+    _->
+        void
+    end.
+        
+    

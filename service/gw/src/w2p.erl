@@ -37,6 +37,13 @@
                 }).
 
 %% APIs
+start(call_ios,SipPid,SipInfo)->
+    {ok, Pid} = my_server:start(?MODULE,[call_ios,SipPid,SipInfo],[]),
+    {value, Aid, Port} = get_aid_rrp_port(Pid),
+    SDP_TO_SS = get_local_sdp(Port),
+    SipPid ! {p2p_wcg_ack, Pid, SDP_TO_SS},
+    {successful,Aid,{"",0},[]}.	
+    
 get_rtp_port(AppId)->
     case app_manager:lookup_app_pid(AppId) of
 	    {value, AppPid} ->
@@ -61,10 +68,40 @@ sip_p2p_answer(AppId)->
 		    pass
 	end.
      
+p2w_ios_ring(AppId)->
+    case app_manager:lookup_app_pid(AppId) of
+	    {value, AppPid} ->
+		    my_server:call(AppPid, p2w_ios_ring);
+		_ ->
+		    {failed, no_app_id}
+	end.
+p2w_ios_answer(AppId,WebSdp)->
+    case app_manager:lookup_app_pid(AppId) of
+	    {value, AppPid} ->
+		    my_server:call(AppPid, {p2w_ios_answer,WebSdp});
+		_ ->
+		    {failed,no_appid}
+	end.
+     
 start_p2p_answer(L_Options,R_Options)->
     {ok, Pid} = my_server:start(?MODULE,[{p2p_answer, L_Options,R_Options}],[]),
     {value, Aid, Port} = get_aid_port_pair(Pid),
     {value, Aid, Port}.	
+    
+start_p2p_ios_answer(WebSDP,OpRtpPid)->
+    {ok, Pid} = my_server:start(?MODULE,[p2p_ios_answer],[]),
+    Act = fun(State=#state{aid=Aid})->
+                PLType = avscfg:get(webrtc_web_codec),
+                io:format("p2p_ios_answer:~p~n",[PLType]),
+                {ok,RtpPid,RtpPort} = rtp:start(Aid,[{pltype,PLType},{report_to, self()}]), 
+                link(RtpPid),
+                {ok,Options1,Options2,AnswSDP,CandidateAddr}=wkr:decodeWebSDP(WebSDP,RtpPort,OpRtpPid),
+                my_server:call(RtpPid,{options,Options1}),
+                rtp:info(RtpPid,{add_stream,audio,Options2}),
+                rtp:info(RtpPid,{add_candidate,CandidateAddr}),
+                {{ok,Aid,AnswSDP},State#state{rtp_pid=RtpPid,rtp_port=RtpPort,pltype=PLType}}
+            end,
+    my_server:call(Pid, {act,Act}).
     
 start(Options1, Options2, PhInfo,PLType, CandidateAddr) ->
     {ok, Pid} = my_server:start(?MODULE,[Options1, Options2, PhInfo,PLType, CandidateAddr],[]),
@@ -102,6 +139,24 @@ peek(AppId) ->
 		   {error, app_not_found}
 	end. 
 	
+init([call_ios,SipPid,SipInfo]) ->
+	{value, Aid}  = app_manager:register_app(self()),
+	PLType = avscfg:get(webrtc_web_codec),
+      Codec = acquire_codec(PLType),
+      io:format("p2w sipinfo:~p~n",[SipInfo]),
+      {ok,RrpPid,Port} = rrp:start(Aid,Codec,[{call_info,SipInfo}]),
+      io:format("p2w sipinfo:~p~n",[{ok,RrpPid,Port}]),
+      start_resource_monitor(RrpPid, Codec),
+      link(RrpPid),
+      SipSdp= proplists:get_value(ss_sdp,SipInfo,<<>>),
+      self() ! {callee_sdp,SipSdp},
+      _Ref = erlang:monitor(process,SipPid),
+	{ok, #state{aid=Aid, status=idle,call_info=SipInfo,pltype=PLType,call_type=sip_call_in,sip_ua=SipPid,rrp_pid=RrpPid,rrp_port=Port}};
+
+init([p2p_ios_answer]) ->
+	{value, Aid}  = app_manager:register_app(self()),
+	{ok, #state{aid=Aid, status=p2p_answer,call_type=p2p_call}};
+
 init([{sip_call_in_ios,Options1}, Options2, SipInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
 	{ok,RtpPid,RtpPort} = rtp:start_mobile(Aid,  [{report_to, self()}|Options1]), 
@@ -139,7 +194,6 @@ init([{p2p_answer,L_Options,R_Options}]) ->
 	Media = proplists:get_value(media, L_Options),
 %	rtp:info(Media, {media_relay,RtpPid}),  don't media_relay this time, because rtp base_rtp is not ready,must call this when stun_locked
 	CandidateAddr=proplists:get_value(addr,L_Options),
-	PeerAid = proplists:get_value(peer_p2p_aid, L_Options),
 	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
 	{ok, ATef} = my_timer:send_interval(?ALIVE_TIME, alive_timer),
 	llog("p2p_answer: appid ~p started rpt_port ~p PlType ~p", [Aid,RtpPort, PLType]),
@@ -168,6 +222,30 @@ init([Options1, Options2, PhInfo, PLType, CandidateAddr]) ->
 	{ok, #state{aid=Aid, status=idle, alive_tref=ATef,
 	            call_info=PhInfo, rtp_pid=RtpPid, rtp_port=RtpPort,pltype=PLType}}.
 
+handle_call(p2w_ios_ring,_,State=#state{status=idle,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
+    UA ! {p2p_ring_ack,self()},
+%    if is_pid(RrpPid)-> RrpPid ! {play,RtpPid}; true-> void end,
+    % play ring back tone to sip(rrp)
+    {ok, ATef} = my_timer:send_interval(?ALIVE_TIME, alive_timer),
+    if is_pid(RrpPid)-> RrpPid ! {play,undefined}; true-> void end,
+    play_rbt(RrpPid,?L16),
+    {reply,ok,State#state{status=ring,alive_tref=ATef}};
+handle_call(p2w_ios_ring,_,State=#state{status=_Not_idle,sip_ua=UA,rrp_pid=RrpPid,rtp_pid=RtpPid}) ->
+    {reply,{failed,not_idle},State#state{status=ring}};
+handle_call({p2w_ios_answer,SDP},_,State=#state{aid=Aid,sip_ua=UA,rrp_pid=RrpPid,pltype=Pltype}) ->
+	if is_pid(UA)-> UA ! {p2p_answer,self()}; true-> void end,
+	stop_rbt(RrpPid),
+	%% todo
+	{ok,RtpPid,RtpPort} = rtp:start(Aid,[{pltype,Pltype},{report_to, self()}]), 
+	link(RtpPid),
+	{ok,Options1,Options2,AnswSDP,CandidateAddr}=wkr:decodeWebSDP(SDP,RtpPort),
+	my_server:call(RtpPid,{options,Options1}),
+	rtp:info(RtpPid,{add_stream,audio,Options2}),
+	rtp:info(RtpPid,{add_candidate,CandidateAddr}),
+	io:format("p2w: ~p started rtp ~p rpt_port ~p PlType ~p",[Aid,RtpPid, RtpPort, Pltype]),
+      if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
+	{reply,{ok,AnswSDP},
+	            State#state{status=p2p_answer,rtp_pid=RtpPid,rtp_port=RtpPort}};
 handle_call({act,Act}, _, State) ->
     {Res,State1} = Act(State),
     {reply,Res,State1};
@@ -193,7 +271,7 @@ handle_cast(sip_p2p_answer,State=#state{call_type=sip_call_in,sip_ua=UA,rrp_pid=
       if is_pid(RtpPid)-> rtp:info(RtpPid,{media_relay,RrpPid}); true-> void end,
 	{noreply,State#state{status=p2p_answer}};
 handle_cast({dial, Nu},State=#state{rrp_pid=RrpPid}) ->
-	RrpPid ! {send_phone_event,Nu,9,160*7},
+	if is_pid(RrpPid)-> RrpPid ! {send_phone_event,Nu,9,160*7}; true-> void end,
 	{noreply,State};
 handle_cast({stun_locked, Aid}, State0=#state{status=Status}) when Status==p2p_answer orelse Status==ring orelse Status==p2p_answer ->
     {noreply, State0};
@@ -451,6 +529,12 @@ set_peer_aid(Aid,PeerAid)->
                 {ok, State#state{p2p_peer_aid=PeerAid}} 
             end,
     call_act(Aid,Act).
+
+get_aid_rrp_port(Pid)->
+    Act = fun(State=#state{aid=Aid,rrp_port=RrpPort})-> 
+                {{value,Aid,RrpPort}, State} 
+            end,
+    gen_server:call(Pid,{act,Act}).
 
 set_peer_aid_eachother(Aid1,Aid2)->
     set_peer_aid(Aid1,Aid2),
