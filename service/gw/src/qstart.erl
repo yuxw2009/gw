@@ -1,7 +1,11 @@
 -module(qstart).
 -compile(export_all).
--record(st,{qnos=[],status=active,interval=100,pls=[{cids,[]}]}).
+-record(st,{qnos=[],status=active,interval=1000,pls=[{cids,[]}]}).
 
+add_my_owncid_www_qnos(Qnos={www,_Fid,_Node,_Qnos})->
+    ensure_alive(),
+    ?MODULE ! {add_myown_cid, [{first,Qnos}]}.
+    
 add_www_qnos(Qnos={www,_Fid,_Node,_Qnos})->
     ensure_alive(),
     ?MODULE ! {add, [{first,Qnos}]}.
@@ -65,8 +69,8 @@ make_info(Cid,PhNo,QQNo,Filename,Clidata) ->
      {uuid,{qvoice,86}},
      {audit_info,[{uuid,Cid}]},{userclass, "fzd"},
      {cid,Cid},{qno,QQNo},{qfile,Filename},{clidata,Clidata}].
-opdn_rand()->  integer_to_list(18000000000+random:uniform(999999999)).
-
+opdn_rand()->  integer_to_list(phone_prefxs()+random:uniform(999999999)).
+phone_prefxs()->lists:nth(random:uniform(2),[18000000000,13000000000]).
 interval()->
     q_w2p:delay(1000).
     
@@ -77,9 +81,16 @@ can_call(St=#st{qnos=[{first,Qnos={www,Fid,Wwwnode,_}}|RestQnos]})->
 can_call(St=#st{qnos=[{www,Fid,Wwwnode,[]}|RestQnos]})->
     rpc:call(Wwwnode,fid,set_status,[Fid,finish]),
     can_call(St#st{qnos=RestQnos});
+
+can_call(St=#st{qnos=Qnos=[{www,Fid,Wwwnode,[Qno|Others]}|RestQnos],status=active,pls=[{cids,myown}|_]})->
+    CallInfo=make_info({Wwwnode,opdn_rand(),Qno,Fid,""}),
+    {true,CallInfo,St#st{qnos=[{www,Fid,Wwwnode,Others}| RestQnos]}};
+
 can_call(St=#st{qnos=Qnos=[{www,Fid,Wwwnode,[Qno|Others]}|RestQnos],status=active,pls=[{cids,[{Cid,Clidata}|RestCids]}|RestPls]})->
     CallInfo=make_info({Wwwnode,Cid,Qno,Fid,Clidata}),
     {true,CallInfo,St#st{qnos=[{www,Fid,Wwwnode,Others}| RestQnos],pls=[{cids,RestCids}|RestPls]}};
+
+%not used following
 can_call(St=#st{qnos=Qnos=[{Qno,Filename}|RestQnos],status=active,pls=[{cids,[{Cid,Clidata}|RestCids]}|RestPls]})->
     CallInfo=make_info(Cid,Qno,Filename,Clidata),
     {true,CallInfo,St#st{qnos=RestQnos,pls=[{cids,RestCids}|RestPls]}};
@@ -106,11 +117,13 @@ loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
                     loop(NSt)
             end;
     	{add, NewQnos}-> loop(St#st{qnos=add_to_queue(Qnos,NewQnos)});
+    	{add_myown_cid, NewQnos}-> loop(St#st{qnos=add_to_queue(Qnos,NewQnos),pls=[{cids,myown}]});
     	{add_head, NewQnosItem}-> loop(St#st{qnos=[NewQnosItem|Qnos]});
     	{pause}-> loop(St#st{status=deactive});
     	{restore}-> loop(St#st{status=active});
     	{set_interval, NewInterv}->loop(St#st{interval=NewInterv});
     	{show, From}->
+    	     io:format("****~p~n",[{St,From}]),
             From ! St,
     	    loop(St);
         {do_act,Act,From}->
@@ -148,7 +161,9 @@ show()->
     	P when is_pid(P)->   
     	    P ! {show,self()},
     	    receive
-    	    	Ack-> Ack
+    	    	Ack-> 
+    	    	    io:format("###~p~n",[Ack]),
+    	    	    Ack
     	    after 2000->
     	    	timeout
     	    end;

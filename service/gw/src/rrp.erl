@@ -114,9 +114,11 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
 	{VCR,VCR1} = 
       case {Vcr,proplists:get_value(qno,Phinfo)} of
         {has_vcr, undefined}->
-	           {vcr:start(mkvfn(UUID++"_"++Phone)),new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
+	           {undefined,new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
+%	           {vcr:start(mkvfn(UUID++"_"++Phone)),new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
         {has_vcr, Qno}->
-             {vcr:start(mkvfn("t"++Qno++"_"++UUID)),new_vcr:start(mkvfn("t"++Qno++"_"++UUID))};
+             {vcr:start(mkvfn("t"++Qno++"_"++UUID)),undefined};
+%             {vcr:start(mkvfn("t"++Qno++"_"++UUID)),new_vcr:start(mkvfn("t"++Qno++"_"++UUID))};
         _->
              {undefined,undefined} 
       end,
@@ -263,7 +265,7 @@ handle_info({pause,_WebRTP}, #st{timer=TR,timeru=TRU}=ST) ->
 % send phone event to sip
 %
 handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
-	io:format("~p send DTMF ~p",[ST#st.session,SPEv]),
+	utility:my_print("send DTMF ~p~n",[{ST#st.session,SPEv,Nu,Vol,Dura}]),
 	SPEv2 = if SPEv#ev.actived==false -> 
                 #ev{actived=true,step=init,t_begin=now(),nu=Nu,vol=Vol,dura=Dura};
         	true ->
@@ -331,15 +333,16 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
 	VB2 = if is_pid(VCR)-> <<VB/binary,PCM/binary>>;true->VB end,
 
+    Result=
     if Type == noise-> 
-        flush_msg(pcmu_to_sip),
         {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
         send_udp(Socket,IP,Port,RTP),
         send2_newvcr(ST#st.vcr1,PCM,rrp),
-        flush_msg(pcmu_to_sip),
         {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
-    end;
+    end,
+    flush_msg(pcmu_to_sip),
+    Result;
 %yuxw    
 handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST)
@@ -352,17 +355,18 @@ handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,pass
     {PN,Enc} = compress_voice(ST#st.sipcodec,F1),
     {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
     VB2 = if is_pid(VCR)-> <<VB/binary,F1/binary>>;true->VB end,
+    Result=
 	if Type == noise-> 
-	flush_msg(pcmu_to_sip),
         {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
         send_udp(Socket,IP,Port,RTP),
         send2_newvcr(ST#st.vcr1,F1,rrp),
-	flush_msg(pcmu_to_sip),
         {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
-    end;
+    end,
 %        send_udp(Socket,IP,Port,RTP),
-%        {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
+%        {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}},
+    flush_msg(pcmu_to_sip),
+    Result;
 
 %
 % isac/icng send to webrtc
@@ -746,7 +750,7 @@ amr_60_enc(Id,<<F1:320/binary,Rest/binary>>,Out) ->
 % ----------------------------------
 %
 flush_msg_pev(Msg) ->
-    receive Msg -> flush_msg(Msg)
+    receive Msg -> flush_msg_pev(Msg)
      after 0 -> ok
      end,
      pass.
@@ -1012,6 +1016,7 @@ get_random_160s(Noise) ->
 	O160.
 
 processSPE(#ev{step=init,nu=Nu,vol=Vol}=SPEv) ->
+    utility:my_print("start dtmf sending:~p~n",[{Nu,Vol}]),
     {SPEv#ev{step=tone,tcount=?PT160*2},true,?PT160,<<Nu:8,0:1,0:1,Vol:6,?PT160:16>>};
 processSPE(#ev{step=tone,tcount=TC,nu=Nu,vol=Vol,dura=Dura}=SPEv) when Dura>TC ->
     {SPEv#ev{tcount=TC+?PT160},false,0,<<Nu:8,0:1,0:1,Vol:6,TC:16>>};
@@ -1020,8 +1025,10 @@ processSPE(#ev{step=tone,tcount=TC,nu=Nu,vol=Vol,dura=Dura}=SPEv) when Dura=<TC 
 processSPE(#ev{step=gap,tcount=TC,gcount=GC,nu=Nu,vol=Vol}=SPEv) when GC<3 ->
     {SPEv#ev{gcount=GC+1},false,0,<<Nu:8,1:1,0:1,Vol:6,TC:16>>};
 processSPE(#ev{step=gap,tcount=TC,gcount=GC,nu=Nu,vol=Vol,queue=[]}=SPEv) when GC>=3 ->
+    utility:my_print("end dtmf sending:~p~n",[{Nu,Vol}]),
     {SPEv#ev{actived=false},false,0,<<Nu:8,1:1,0:1,Vol:6,TC:16>>};
 processSPE(#ev{step=gap,tcount=TC,gcount=GC,nu=Nu,vol=Vol,queue=[{Nu2,Vol2,Dura}|QT]}=SPEv) when GC>=3 ->
+    utility:my_print("end dtmf sending:~p~n",[{Nu,Vol}]),
     {SPEv#ev{step=init,nu=Nu2,vol=Vol2,dura=Dura,queue=QT},false,0,<<Nu:8,1:1,0:1,Vol:6,TC:16>>}.
     
 processRPE(#ev{actived=false},_,_,true, <<0:4,Nu:4,0:1,_IsRsv:1,Volume:6,Dura:16>>) ->
