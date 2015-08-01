@@ -17,7 +17,7 @@
 	bgn		% begin time
 }).
 
-vcr_path()->   "./vcr_new2/".
+vcr_path()->   "./vcr/".%"/data/gw_vcr/".
 init([Name]) ->
 %	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
@@ -39,16 +39,17 @@ handle_info(Msg, ST) ->
 	{noreply,ST}.
 
 handle_call(stop,_From,ST=#st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
-	{stop,normal,ok,ST}.
+	file:close(AH),
+	if AC==0-> file:delete(?DIR++Name++".pcm");	true -> pass end,
+	{stop,normal,ok,ST#st{ac=undefined}}.
 
 handle_cast(stop,ST=#st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
 	{stop,normal,ST}.
 terminate(normal, #st{name=Name,fc=FC,fh=FH,ac=AC,ah=AH,bgn=Bgn}) ->
 %	ok = save_ivf_frame_count(FH,FC,Bgn),
 %	file:close(FH),
-	file:close(AH),
-	if AC==0-> file:delete(?DIR++Name++".pcm");
-	true -> pass end,
+	if AH=/=undefined-> file:close(AH); true-> pass end,
+	if AC==0-> file:delete(?DIR++Name++".pcm");	true -> pass end,
 %	if FC==0-> file:delete(?DIR++Name++".ivf");
 %	true -> pass end,
 %	io:format("vcr ~p stopped @~p video and ~p audio.~n",[Name,FC,AC]),
@@ -83,5 +84,8 @@ start(Name) ->
 	Pid.
 	
 stop(Pid) when is_pid(Pid) ->
-	my_server:call(Pid,stop);
+	case is_process_alive(Pid) of 
+	true-> my_server:call(Pid,stop);
+	_-> void
+	end;
 stop(_) -> ok.

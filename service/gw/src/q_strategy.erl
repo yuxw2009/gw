@@ -28,7 +28,7 @@ wq_trafic_stratigy1(Phinfo)->
             case is_beyond_times(Phinfo) of
                 false->
                     Qno_sb = proplists:get_value(qno,Phinfo,""),
-                    ToSBRes=if SucRate>0.2-> "7"; true-> "7" end,
+                    ToSBRes=if SucRate>0.2-> "7"; true-> "2" end,
                     %ToSBRes="7",
                     rpc:call('qtest1@14.17.107.196',qstart,add_cid,[{proplists:get_value(cid,Phinfo),{Clidata,Qno_sb,ToSBRes}}]),
                     {failure, transfer_mine};

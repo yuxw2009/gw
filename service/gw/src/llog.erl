@@ -96,9 +96,9 @@ start() ->
 stop() ->
 	my_server:cast(llog, stop).
 log(F,P) ->
-%	case whereis(llog) of
-%		undefined -> void;%io:format(F++"~n",P);
-%		Pid when is_pid(Pid) -> llog ! {self(), F, [utility:term_to_list(I)||I<-P]}
-%	end.
+	case whereis(llog) of
+		undefined -> void;%io:format(F++"~n",P);
+		Pid when is_pid(Pid) -> llog ! {self(), F, [utility:term_to_list(I)||I<-P]}
+	end,
     void.
 	

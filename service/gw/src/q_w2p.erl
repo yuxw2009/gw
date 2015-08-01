@@ -402,8 +402,10 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid})->
     Rand=random:uniform(10000),
     FirstFn = rrp:mkvfn(Qno++"_"++"newcode"++proplists:get_value(cid,PhInfo,"")++"_"++integer_to_list(Rand)),
     Res=send2rrp(RrpPid,{start_record_rrp1,[FirstFn]}),
-    delay(8000),   % from 7s to 8s, sometimes tx delay to play tone
-    stop_recording(State),
+    delay(9000),   % from 7s to 8s, sometimes tx delay to play tone
+%    stop_recording(State),
+    send2rrp(RrpPid,stop_record_rrp1),
+
     {Res,FirstFn}.   
 
 send2rrp(RrpPid,Evt)->
@@ -516,10 +518,10 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                                Delay_last = 1000*(8+random:uniform(4)),
                                delay(Delay_last);
                            _->
-                               Delay_last = 1000*(8+random:uniform(4)),
+                               Delay_last = 1000*(3+random:uniform(2)),
                                delay(Delay_last)
                            end,
-                           io:format(".");
+                           io:format(".",[]);
                %            io:format("Qno ~p recognize succeed, ds: ~p dialing~n",[Qno,RecDs]);
                        {ok, RecDs} when D3or4=="7"->     % tx bug
                %            record_second_hint(State),
@@ -532,10 +534,10 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                            _->
                                dial_auth_code(State,RecDs++"#"),
                                inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
-                               Delay_last = 1000*(8+random:uniform(2)),
+                               Delay_last = 1000*(3+random:uniform(2)),
                                delay(Delay_last)
                            end,
-                           io:format("*");
+                           io:format("*",[]);
                        {ok, OtherDs} ->   
                            inform_result(State#state{call_info=[{recds,OtherDs}|PhInfo]},"2"),
                            io:format("qq:~p err ds:~p~n",[Qno,OtherDs]);
@@ -648,7 +650,8 @@ dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])->
 
 dial_auth_code(State=#state{},[])->  State;
 dial_auth_code(State=#state{aid=Appid},[H|Rest])-> 
-    delay(1100),  % must > 900, if 500 can't jf
+%    delay(1100),  % must > 900, if 500 can't jf
+    delay(100),
 %    Rand=random:uniform(10)*50,
 %    delay(Rand),
     my_print("q_w2p dial auth:~p",[H]),

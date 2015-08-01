@@ -12,7 +12,7 @@
 -define(ISACPTIME,30).
 -define(ILBCPTIME,30).
 -define(OPUSPTIME,60).
--define(AMRPTIME,20).
+-define(AMRPTIME,40).
 
 -define(PCMU,0).
 -define(PCMA,8).
@@ -168,7 +168,7 @@ init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
                         RP when is_pid(RP)-> RP;
                         _-> undefined
                         end,
-      my_timer:send_interval(?STAT_INTERVAL, stats),
+%      my_timer:send_interval(?STAT_INTERVAL, stats),
 %      self() ! {start_record_rrp,[Phone]},
 %      self() ! {start_record_rtp,[UUID]},
     {ok,ST1#st{sipcodec=SipC,session=Session,socket=Socket,cdcparams=Params,monitor=Monitor,localport=Port}}.
@@ -280,20 +280,20 @@ handle_info({start_record_rrp1,[Fn]},#st{newvcr1=Nvcr}=ST) ->
     Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{newvcr1=Nvcr1}};
 handle_info(stop_record_rrp1,#st{newvcr1=Nvcr}=ST) ->
-    llog1(ST,"~p stop_record_rrp1",[ST#st.session]),
-%    io:format("~p stop_record_rrp ~n",[ST#st.session]),
     vcr:stop(Nvcr),	
+    llog1(ST,"~p stop_record_rrp1",[ST#st.session]),
+    utility:my_print("stop_record_rrp1 ~n",[]),
     {noreply,ST};
 handle_info({start_record_rrp,[Fn]},#st{newvcr=Nvcr}=ST) ->
-    llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
 %    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
     vcr:stop(Nvcr),
     Nvcr1=vcr:start(Fn),	
+    llog1(ST,"~p start_record_rrp file ~p",[ST#st.session,Fn]),
     {noreply,ST#st{newvcr=Nvcr1}};
 handle_info(stop_record_rrp,#st{newvcr=Nvcr}=ST) ->
-    llog1(ST,"~p stop_record_rrp",[ST#st.session]),
-%    io:format("~p stop_record_rrp ~n",[ST#st.session]),
     vcr:stop(Nvcr),	
+    llog1(ST,"~p stop_record_rrp",[ST#st.session]),
+    utility:my_print("stop_record_rrp ~n",[]),
     {noreply,ST};
 handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
     llog1(ST,"~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
@@ -301,6 +301,7 @@ handle_info({start_record_rtp,[Fn]},#st{rtpvcr=Nvcr}=ST) ->
     Nvcr1=vcr:start(Fn),	
     {noreply,ST#st{rtpvcr=Nvcr1}};
 handle_info(pcmu_to_sip,#st{snd_pev=#ev{actived=true}=SPEv,socket=Socket,peer={IP,Port},in_stream=BaseRTP}=ST) ->
+%    io:format(";"),
     {SPEv2,M,Samples,F1} = processSPE(SPEv),
     %%io:format("~p ~p~n",[M,F1]),
 	NewBaseRTP = inc_timecode(BaseRTP,Samples),
@@ -347,6 +348,7 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
 handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,passed=Passed,abuf=AB}=ToSip,
                         	in_stream=BaseRTP,socket=Socket,peer={IP,Port},vcr=VCR,vcr_buf=VB}=ST)
                         	when Wcdc==opus;Wcdc==ilbc;Wcdc==amr;Wcdc==undefined ->  %yxw
+%    io:format("'"),                        	
     {{Type,F1},RestAB} = if Trace==noise ->
                         	shift_to_voice_keep_get_samples(VAD,?FS8K,?PTIME,Passed,AB);
                          true ->
