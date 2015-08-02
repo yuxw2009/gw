@@ -402,7 +402,7 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid})->
     Rand=random:uniform(10000),
     FirstFn = rrp:mkvfn(Qno++"_"++"newcode"++proplists:get_value(cid,PhInfo,"")++"_"++integer_to_list(Rand)),
     Res=send2rrp(RrpPid,{start_record_rrp1,[FirstFn]}),
-    delay(9000),   % from 7s to 8s, sometimes tx delay to play tone
+    delay(8000),   % from 7s to 8s, sometimes tx delay to play tone
 %    stop_recording(State),
     send2rrp(RrpPid,stop_record_rrp1),
 
@@ -518,7 +518,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                                Delay_last = 1000*(8+random:uniform(4)),
                                delay(Delay_last);
                            _->
-                               Delay_last = 1000*(3+random:uniform(2)),
+                               Delay_last = 1000*(1+random:uniform(2)),
                                delay(Delay_last)
                            end,
                            io:format(".",[]);
@@ -534,7 +534,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                            _->
                                dial_auth_code(State,RecDs++"#"),
                                inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
-                               Delay_last = 1000*(3+random:uniform(2)),
+                               Delay_last = 1000*(1+random:uniform(2)),
                                delay(Delay_last)
                            end,
                            io:format("*",[]);
@@ -611,7 +611,7 @@ recognize(Fn0,TalkPid)->
         case {re:run(R, "d([0-9])\nd([0-9])\n(multi|add)", [global,{capture,all_but_first,list}]),re:run(R, "d([0-9])\n", [global,{capture,all_but_first,list}])} of
         {{match,[[Str1,Str2,"multi"]]},_}->        {ok,integer_to_list(list_to_integer(Str1)*list_to_integer(Str2))};
         {{match,[[Str1,Str2,"add"]]},_}->        {ok,integer_to_list(list_to_integer(Str1)+list_to_integer(Str2))};
-        {_,{match,Match}}->        {ok,lists:flatten(Match)};
+        {_,{match,Match=[_,_,_,_|_]}}->        {ok,lists:flatten(Match)};
         _-> {failed,not_matched}
         end,
     my_print("auth_reco_result:~p",[Result]),
@@ -649,11 +649,13 @@ dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])->
     dial_qno(State,Rest).
 
 dial_auth_code(State=#state{},[])->  State;
-dial_auth_code(State=#state{aid=Appid},[H|Rest])-> 
-%    delay(1100),  % must > 900, if 500 can't jf
-    delay(100),
-%    Rand=random:uniform(10)*50,
-%    delay(Rand),
+dial_auth_code(State=#state{aid=Appid,call_info=PhInfo},[H|Rest])-> 
+    case proplists:get_value(qfile,PhInfo,"") of
+    ""->    
+        Rand=random:uniform(300),
+        delay(1000+Rand);  % must > 900, if 500 can't jf
+    _-> delay(100)
+    end,
     my_print("q_w2p dial auth:~p",[H]),
     q_wkr:eventVOIP(Appid, {dial,H}),
     dial_auth_code(State,Rest).
@@ -754,7 +756,7 @@ my_result(Qno,_StartTime,RecDs,Filename,Res,_) when RecDs=="first1"->
     mylog(Filename++"_redial1.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,OtherRes,_) when RecDs=="first6"->  %maybe succeed
     mylog(Filename++"_fail.txt","~p  ~p   ~p",[Qno,OtherRes,RecDs]);
-my_result(Qno,_StartTime,RecDs,Filename,Res,_) when Res=="7" orelse RecDs==send_2_before orelse RecDs==first_not_matched->
+my_result(Qno,_StartTime,RecDs,Filename,Res,_)-> %when Res=="7" orelse RecDs==send_2_before orelse RecDs==first_not_matched->
     mylog(Filename++"_redial.txt","~s",[Qno]).
 
 mylog(Fn,Fmt,Args)-> 

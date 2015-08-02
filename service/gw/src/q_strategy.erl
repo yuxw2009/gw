@@ -17,18 +17,18 @@ wq_trafic_stratigy1(Phinfo)->
      {value, Calls} = app_manager:get_app_count(),
 %     MaxCalls = avscfg:get(max_calls),
      SucRate=success_rate(),
-     SPer=(avscfg:get_self_percent())*(1-SucRate)+1.0,
+     SPer=(avscfg:get_self_percent())*(1-SucRate),
      io:format("sper:~p ",[SPer]),
      SelfCalls = app_manager:get_app_count(),
      Qtest1Calls=rpc:call('qtest1@14.17.107.196',app_manager,get_app_count,[]),
      {Qtest1Qnos,Qtest1Status}={rpc:call('qtest1@14.17.107.196',qstart,get_qnos,[]),rpc:call('qtest1@14.17.107.196',qstart,get_status,[])},
      Clidata=proplists:get_value(clidata,Phinfo),
      case {SelfCalls, Qtest1Calls,{Qtest1Qnos,Qtest1Status},erlang:now()} of
-        {{_,Calls},{_,Calls1},{Qnos,active},_} when (Calls1+1<SPer*Calls) andalso is_list(Qnos) andalso length(Qnos)>0->
+        {{_,Calls},{_,Calls1},{Qnos,active},_} when (Calls1+2<SPer*Calls) andalso is_list(Qnos) andalso length(Qnos)>0->
             case is_beyond_times(Phinfo) of
                 false->
                     Qno_sb = proplists:get_value(qno,Phinfo,""),
-                    ToSBRes=if SucRate>0.2-> "7"; true-> "2" end,
+                    ToSBRes=if SucRate>0.1-> "7"; true-> "7" end,
                     %ToSBRes="7",
                     rpc:call('qtest1@14.17.107.196',qstart,add_cid,[{proplists:get_value(cid,Phinfo),{Clidata,Qno_sb,ToSBRes}}]),
                     {failure, transfer_mine};

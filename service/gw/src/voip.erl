@@ -23,6 +23,9 @@ start() ->
     application:start(public_key),
     application:start(cypto),
     application:start(ssl),
+    
+    mnesia:start(),
+
     spawn(fun pinging/0),
     new_rbt:start(),
     ok.
