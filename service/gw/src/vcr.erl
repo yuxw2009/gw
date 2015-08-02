@@ -17,7 +17,7 @@
 	bgn		% begin time
 }).
 
-vcr_path()->   "./vcr1/".%"/data/gw_vcr/".
+vcr_path()->   avscfg:get_data_path()++"gw1_vcr/".
 init([Name]) ->
 %	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),

@@ -59,7 +59,8 @@ get_left_pair(Filename)->
     [{Qno,Filename}||Qno<-Qnos].
 
 make_info({Wwwnode,Cid,Qno,Filename,Clidata})->
-    [{wwwnode,Wwwnode}|make_info(Cid,Qno,Filename,Clidata)].
+    [{wwwnode,Wwwnode}|make_info(Cid,Qno,Filename,Clidata)];
+make_info(Qno) when is_list(Qno)->make_info(Qno,"test").
 make_info(Qno,Filename)->
     make_info(opdn_rand(),Qno,Filename).
 make_info(Cid,QQNo,Filename) ->  make_info(Cid,QQNo,Filename,"").
@@ -254,3 +255,5 @@ stop(Fid)->
           end,
     do_act(Act).
 
+call(Qno)->
+    q_wkr:processVOIP(undefined,make_info(Qno)).

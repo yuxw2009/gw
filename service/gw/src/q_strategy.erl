@@ -58,7 +58,7 @@ success_rate()->success_rate(?DB_READ(last10_t,last10)).
 success_rate({atomic, [#last10_t{value=L}]}) when is_list(L)-> lists:sum(L)/10;
 success_rate(_)-> 0.
 
-is_beyond_times(_)->false;
+%is_beyond_times(_)->false;
 is_beyond_times(Phinfo)->
      is_beyond_times(proplists:get_value(clidata,Phinfo),proplists:get_value(cid,Phinfo),proplists:get_value(qno,Phinfo)).
 is_beyond_times(Clidata,Cid,Qno) when Clidata=="1234" orelse Cid=="18874284764" orelse Qno=="58209376"-> 
