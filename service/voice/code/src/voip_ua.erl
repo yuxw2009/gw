@@ -426,4 +426,5 @@ maxtalk_judge(State0=#state{max_time=Maxtime})->
 traffic(St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
     Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
       {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
+    io:format("voice traffic uuid:~p~n",[UUID]),
     rpc:call('traffic@lwork.hk',traffic,add,[Trf]).

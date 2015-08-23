@@ -4,10 +4,17 @@
 -include("yaws_api.hrl").
 
 %% yaws callback entry
-out(Arg) ->
-    Uri = yaws_api:request_url(Arg),
+out(Arg0) ->
+    Uri = yaws_api:request_url(Arg0),
     [_|Path] = string:tokens(Uri#url.path, "/"), 
-    Method = (Arg#arg.req)#http_request.method,
+    Method = (Arg0#arg.req)#http_request.method,
+    Arg= 
+    case catch rfc4627:decode(Arg0#arg.clidata) of
+    {ok,{obj,[{"data_enc",<<_:7/binary,Base64_Json_bin/binary>>}]},_}->
+        Json_bin=utility:fb_decode_base64(Base64_Json_bin),
+        Arg0#arg{clidata=Json_bin};
+    _-> Arg0
+    end,
 
     JsonObj =
     case catch handle(Arg, Method, Path) of

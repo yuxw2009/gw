@@ -4,15 +4,21 @@
 -include("lwdb.hrl").
 
 -define(DIR,"/data/fid/").
--define(QNODE,'qtest1@14.17.107.196').
+-define(DEFAULT_QNODE,'qtest1@14.17.107.196').
 
+%start_call(Node,Fid)->
 start_call(Fid)->    
     Qnos=get_left_qnos(Fid),
     do_start_call(Fid,Qnos).
-do_start_call(Fid,Qnos0)-> 
+stop_call(Fid)->    
+    rpc:call(get_node(Fid),qstart,stop,[Fid]),
+    set_status(Fid,stop).
+do_start_call(Fid,Qnos0)-> do_start_call(get_node(Fid),Fid,Qnos0).    
+do_start_call(Node,Fid,Qnos0)-> 
+    Cmd=if Node==?DEFAULT_QNODE-> add_www_qnos;true-> add_my_owncid_www_qnos end,
     Qnos=deduplicate(Qnos0),
     if length(Qnos) > 0->
-        rpc:call(?QNODE,qstart,add_www_qnos,[{www,Fid,node(),Qnos}]),
+        rpc:call(Node,qstart,Cmd,[{www,Fid,node(),Qnos}]),
         case get_status(Fid) of
         waiting_judge_restart-> set_status(Fid,reproceeding_failed);
         _->  set_status(Fid,queue)
@@ -22,7 +28,8 @@ do_start_call(Fid,Qnos0)->
 start_only_failed(Fid)->
     Failed=get_only_failed(Fid),
     do_start_call(Fid,Failed).
-deduplicate(L)-> deduplicate(L,[]).
+deduplicate(L)-> lists:usort(L).    
+%deduplicate(L)-> deduplicate(L,[]).
 deduplicate([],Res)-> lists:reverse(Res);
 deduplicate([H|Rest],Res)->
     case lists:member(H,Res) of
@@ -44,7 +51,7 @@ auto_restart(Fid)->
     Qnos0 when length(Qnos0)>0 -> 
         Qnos=deduplicate(Qnos0),
         if length(Qnos) > 0->
-            rpc:call(?QNODE,qstart,add_www_qnos_2_head,[{www,Fid,node(),Qnos}]),
+            rpc:call(get_node(Fid),qstart,add_www_qnos_2_head,[{www,Fid,node(),Qnos}]),
             set_status(Fid,reproceeding_failed);
         true-> void
         end;
@@ -87,7 +94,7 @@ id()->
     integer_to_list(Fid).
 
 add_db(UUID,Fid,Fn)->
-    ?DB_WRITE(#qfileinfo{fid=Fid,fn=Fn}),
+    ?DB_WRITE(#qfileinfo{fid=Fid,fn=#fn_info{fnname=Fn,uuid=UUID}}),
     case ?DB_READ(qfiles,UUID) of
     {atomic,[Qfiles=#qfiles{files=Files}]}->
         ?DB_WRITE(Qfiles#qfiles{files=[Fid|Files]});
@@ -141,8 +148,16 @@ get_left_qnos(Filename)->
     DupFail=dup_failed_itms(Filename,2),
     Redial1=get_raw_qno(Filename,"_redial1.txt"),
     Other=Oks++Kj++Gm++Redial1,
-    ((Totle--Other)--DupRdial)--DupFail.
-
+    lists:reverse(((Totle--Other)--DupRdial)--DupFail).
+get_left_qnos_len(Filename)->
+    Totle=deduplicate(get_raw_qno(Filename)),
+    Oks=get_raw_qno(Filename,"_ok.txt"),
+    Kj=get_raw_qno(Filename,"_kajie.txt"),
+    Gm=get_raw_qno(Filename,"_gaimi.txt"),
+    DupRdial=dup_redial_itms(Filename,10),
+    DupFail=dup_failed_itms(Filename,2),
+    length(Totle)-length(Oks)-length(Kj)-length(Gm)-length(DupRdial)-length(DupFail).
+    
 get_only_failed(Filename)->
     Failed=deduplicate(get_raw_qno(Filename,"_redial.txt")),
     Oks=get_raw_qno(Filename,"_ok.txt"),
@@ -182,7 +197,9 @@ get_kajie_qnos(Fid)-> get_raw_qno(Fid,"_kajie.txt").
 get_gaimi_qnos(Fid)-> get_raw_qno(Fid,"_gaimi.txt").
 get_redial1_qnos(Fid)-> get_raw_qno(Fid,"_redial1.txt").
 get_perhaps_success(Fid)->
-    filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid,"_ok.txt").
+%    filter_dup(get_redial1_qnos(Fid))--get_raw_qno(Fid,"_ok.txt").
+    Failed=dup_failed_itms(Fid,2),
+    Failed.
 
 totals(Fid)->length(get_raw_qno(Fid)).    
 oks(Fid)-> length(get_ok_qnos(Fid)).
@@ -194,10 +211,20 @@ fileinfo(Fid)->    ?DB_READ(qfileinfo,Fid).
 
 filename(Fid)->
     case fileinfo(Fid) of
+    {atomic,[#qfileinfo{fn=#fn_info{fnname=Fn}}]}-> Fn;
     {atomic,[#qfileinfo{fn=Fn}]}-> Fn;
-    _-> ""
+    _-> <<"">>
     end.
-
+get_node_by_EmpId("gw1")-> 'gw1@119.29.62.190';
+get_node_by_EmpId("ddd")-> 'gw@119.29.62.190';
+get_node_by_EmpId(_)-> ?DEFAULT_QNODE.
+get_node(Fid)->
+    case fileinfo(Fid) of
+    {atomic,[#qfileinfo{fn=#fn_info{uuid=UUID}}]}->
+        [{_,EmployeeId,_,_}]=auth_handler:lookup_names([UUID]),
+        get_node_by_EmpId(EmployeeId);
+    _-> ?DEFAULT_QNODE
+    end.
 check(UUID,Fid)->
     case ?DB_READ(qfiles,UUID) of
     {atomic,[#qfiles{files=Files}]}->

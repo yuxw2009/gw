@@ -38,11 +38,15 @@ out(A) ->
 	{Fid,UUID} = {proplists:get_value("fid",Param),list_to_integer(proplists:get_value("uuid",Param))},
     Result=fid:check(UUID,Fid),
     if Result->
-        case proplists:get_value("uuid",Param) of
+        case proplists:get_value("cmd",Param) of
             "zj"->
                 {html,fid:restart_redial1(Fid)};
-            "stop"-> void;
-            "restart"-> void
+            "start"-> 
+                fid:start_call(Fid),
+                "";
+            "stop"-> 
+                 fid:stop_call(Fid),
+                 ""
             end;
         true-> "failed, reason: no authorized"
     end.

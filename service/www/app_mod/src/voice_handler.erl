@@ -178,6 +178,7 @@ handle_fzd_startcall(Arg)->
         utility:pl2jso([{status, failed},{reason,c}])
     end.
 
+check_token(UUID, [Phone, GroupId, AuthCode]) when is_binary(GroupId)-> check_token(UUID, [Phone, binary_to_list(GroupId), AuthCode]);
 check_token(UUID, [Phone, "dth", _]) -> {pass,Phone};
 check_token(UUID, [Phone, "livecom", _]) -> {pass,Phone};
 check_token(UUID, [Phone, "xh", "xhlivecom"]) -> {pass,Phone};
@@ -303,8 +304,9 @@ handleP2pCall(UUID,Phone,Node,SID,SDP,Arg)->
                                  {caller,list_to_binary(UUID)},{opdata,R}],
         case lw_mobile:p2p_push(Node,Phone,CustomContent) of
         ios_webcall-> 
-            rpc:call(Node, avanda, set_call_type, [SID, p2p_call]),
-            rpc:call(Node, avanda, processP2p_ringing, [SID]);
+            {_,SessId}=dec_sid(SID),
+            rpc:call(Node, avanda, set_call_type, [SessId, p2p_call]),
+            rpc:call(Node, avanda, processP2p_ringing, [SessId]);
         CallType->
             rpc:call(Node, avanda, set_call_type, [SID, CallType])
         end;

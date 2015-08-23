@@ -45,13 +45,22 @@ init_db() ->
         io:format("wcg_manager:init_db other:~p~n",[Other])
     end.
 
-
+db_nodes_detect()->
+    case lists:member('www_dth@10.32.3.52',mnesia:system_info(running_db_nodes)) of
+    true-> pass;
+    _->
+        io:format("******db_nodes down~n"),
+        mnesia:stop(),
+        mnesia:start()
+    end.
+        
 
 pinging()->
     Ml=net_adm:ping(wwwcfg:get_wcgnode("Mainland")),
     Eu=net_adm:ping(wwwcfg:get_wcgnode("Europe")),
     As=net_adm:ping(wwwcfg:get_wcgnode("Asia")),
-    io:format("pinging result:~p~n",[{Ml,Eu,As}]),
+    io:format("ping:~p ",[{Ml,Eu,As}]),
+    db_nodes_detect(),
     receive
     impossible-> void
     after 60*1000->

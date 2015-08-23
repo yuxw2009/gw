@@ -7,6 +7,7 @@
 -record(id_table, {key, value}).
 -record(qfileinfo,{fid,fn,uptime=erlang:localtime(),status=init}).
 -record(qfiles, {uuid,files=[]}).
+-record(fn_info,{fnname,uuid,node,pls=[]}).
 
 
 -define(UNACTIVED_STATUS,unactivated).

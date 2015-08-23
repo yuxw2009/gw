@@ -44,6 +44,20 @@ gen_payment(Json)->
         [{status,failed},{reason,error_params}]
     end.
     
+gen_types_payid(Json)->  
+    [UUID, Money,PayTypes,GroupId] =[utility:get_binary(Json,"uuid"),utility:get_integer(Json,"money"),utility:get_integer(Json,"pay_type"),utility:get_integer(Json,"group_id")],
+    case  lw_register:get_register_info_by_uuid(UUID) of
+    {atomic,[_LR]} when Money>0 ->
+        Payid=payid(),
+        Payment=#pay_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,coins=Coins,gen_time=erlang:localtime()},
+        ?DB_WRITE(Payment),
+        [{status,ok},{payid,Payid},{uuid,UUID}];
+    {atomic,[]}->
+        [{status,failed},{reason,account_not_existed}];
+    _->
+        [{status,failed},{reason,error_params}]
+    end.
+    
         
             
 payid()->

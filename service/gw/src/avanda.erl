@@ -82,7 +82,7 @@ processP2p_ios_answer(Op_sessionId,SDP) when is_integer(Op_sessionId) ->
         w2p:p2p_tp_answer(Op_sessionId),
         {ok, Aid, AnsSDP} = w2p:start_p2p_ios_answer(SDP,OpRtpPid),
         w2p:set_peer_aid_eachother(Op_sessionId,Aid),
-        {ok,AnsSDP};
+        {ok,AnsSDP,Aid};
     R={failed,Reason}-> R
     end.
         

@@ -126,17 +126,23 @@ ack: {status:ok}   {status:failed, reason:R}
 
 19 register:
 post lwork/mobile/register
-params: {type: "sms" or "delegate",uuid:u,device_id:D, auth_code:a, name:n, pwd:p}
+params: {uuid:u,device_id:D, auth_code:a, name:n, pwd:p,group_id:g}
 ack: {status:ok}   {status:failed, reason:r}
+
+无激活码注册:
+post lwork/mobile/self_register
+params: {acc:n,name:n, pwd:p,auth_code:a,device_id:D,group_id:g,crc:c}
+ack: {status:ok,name:n,account:n,uuid:u,did:""}   {status:failed, reason:r}
+crc:md5(acc+device_id+group_id)
 
 20 forget pwd:
 post lwork/mobile/forget_pwd
-params: {type:"sms" or "delegate", uuid:u,device_id:D, auth_code:a,  pwd:p,name:n}
-ack: {status:ok}   {status:failed, reason:r}
+params: {acc:a, uuid:u,device_id:D, auth_code:a,pwd:p,name:n,group_id:g}
+ack: {status:ok}   {status:failed, reason:r}  invalid_auth_code/username_not_exist/account_not_exist/
 
 21 modify pwd:
 post lwork/mobile/modify_pwd
-params: {type:"sms" or "delegate", uuid:u,device_id:D, old_pwd:a,  pwd:p}
+params: {uuid:u,device_id:D, old_pwd:a,  pwd:p}
 ack: {status:ok}   {status:failed, reason:r}
 
 22 add user info :
@@ -147,14 +153,53 @@ ack: {status:ok}   {status:failed, reason:r}
 login 修改
 3 login接口
 post lwork/mobile/login
-req: {acc: a, pwd: s,device_id:did, clidata:{os_type:"android"},name:n,group_id:g}
-ack: {status:ok, uuid:u,info:info}
+req: {acc: a, pwd: s,device_id:did, clidata:{os_type:"android"},group_id:g}
+ack: {status:ok, uuid:u,info:info,{name,Name},}
+
+
 
 12 查询被叫在线状态
-post lwork/mobile/query_status
+post lwork/mobile1/query_status
 req: {users:[{acc:acc,phone:phone}]}
 ack: {status:ok, data:[{acc:acc,phone:phone,state:s}]}  or {status:failed, reason:reason}
  state: online/offline/unregistered
+
+13 第三方账号登陆情况
+post: lwork/mobile1/third_login?acc=a
+req: {acc: a,pwd:s, crc:c,device_id:did, clidata:{os_type:"android",},group_id:g}
+qq登陆接口：
+acc: "qq_"+openid
+group_id:"dth_common"
+crc: md5(acc+device_id+group_id)
+pwd:填openid
+ack:{status:ok,uuid:u,class:reg or not_reg,name:n,info:info,account:a,did:d}
+    {status:failed,reason:crc_invalid}
+
+如果没有注册过，则第三方注册接口:
+14 第三方账号注册并登录
+post: lwork/mobile1/third_reg?acc=a&name=n
+req: {acc:a,name:n,pwd:s, crc:c,device_id:did, clidata:{os_type:"android",},group_id:g}
+qq接口：
+acc: "qq_"+openid
+group_id:"dth_common"
+crc: md5(acc+device_id+group_id)
+name:用户填
+pwd:用户填
+ack:{status:ok,uuid:u,name:n,info:info,account:a,did:d}
+    {status:failed,reason:crc_invalid or username_already_existed}    
+
+15 获取套餐接口
+post: lwork/mobile1/ltalk_package
+req:{uuid:u,group_id:"dth_common"}
+ack: [{status,ok},{packages,p}]
+packages如下内容数组
+[{type,dth_basic1},{name,"季度基础套餐"},{price,56},{period,month},{limit,300},{cycles,3}].
+[{type,dth_basic2},{name,"年基础套餐"},{price,205},{period,month},{limit,300},{cycles,12}].
+[{type,dth_std1},{name,"季度标准套餐"},{price,110},{period,month},{limit,1000},{cycles,3}].
+[{type,dth_std2},{name,"年标准套餐"},{price,360},{period,month},{limit,1000},{cycles,12}].
+[{type,dth_unlmt1},{name,"季度畅聊套餐"},{price,236},{period,month},{limit,unlimit},{cycles,3}].
+[{type,dth_unlmt2},{name,"年畅聊套餐"},{price,732},{period,month},{limit,unlimit},{cycles,12}].
+
 
 
 1   dth相关运营工作，包括以下接口实现：
@@ -198,5 +243,10 @@ ack: {status:ok, payid:payid,uuid:uuid}
 post lwork/mobile/get_recharges
 req: {uuid:u,device_id:dvid}
 ack: {status:ok, recharges:[{year:y,month:m,date:d,hour:h,minute:min,second:s,money:money,coins:coins}]}
+
+4 获取支付订单
+post lwork/mobile/get_types_payid
+req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type}
+ack: {status:ok, payid:payid,uuid:uuid}
 
 

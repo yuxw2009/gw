@@ -155,7 +155,8 @@ init([call_ios,SipPid,SipInfo]) ->
 
 init([p2p_ios_answer]) ->
 	{value, Aid}  = app_manager:register_app(self()),
-	{ok, #state{aid=Aid, status=p2p_answer,call_type=p2p_call}};
+	{ok, ATef} = my_timer:send_interval(?ALIVE_TIME, alive_timer),
+	{ok, #state{aid=Aid, status=p2p_answer,call_type=p2p_call,alive_tref=ATef}};
 
 init([{sip_call_in_ios,Options1}, Options2, SipInfo, PLType, CandidateAddr]) ->
 	{value, Aid}  = app_manager:register_app(self()),
@@ -496,8 +497,8 @@ p2p_tp_ringing(OpAppId)->
                 my_timer:cancel(Tref),
                 % play ring back tone to caller
 %                play_rbt(RrpPid,?iLBC),
-                {ok,State#state{status=ring}};
-                (State)-> {{failed,already_tele_calling},State}
+                {ok,State};
+                (State=#state{status=Status})-> {{failed,Status},State}
             end,
     call_act(OpAppId,Act).
 	

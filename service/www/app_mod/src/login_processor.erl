@@ -9,7 +9,7 @@ login(Params) when is_list(Params)->
     case proplists:get_value("acc",Params) of
     undefined->  login(Params, <<"uuid">>);
     Acc when is_binary(Acc) ->
-        UUID = case ?DB_READ(name2uuid, Acc) of
+        UUID = case lw_register:get_name_item(Acc) of
                        {atomic, [#name2uuid{uuid=U}]}->  U;
                        _-> Acc
                    end,
@@ -17,19 +17,19 @@ login(Params) when is_list(Params)->
     end.
 login(Params,_) when is_list(Params)->
     {Acc0,Pwd0,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),proplists:get_value("device_id",Params)},
-    {XgAccount,PassMD5,DevId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0)},
-    utility:log("./log/xhr_poll.log","login_processor login:did:~p acc:~p ~n",[DevId,XgAccount]),
-    io:format("login_processor login:did:~p acc:~p ~n",[DevId,XgAccount]),
+    {RawAccount,PassMD5,DevId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0)},
+    utility:log("./log/xhr_poll.log","login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
+    io:format("login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
     case local_login(Params) of
     {islocal,LocalJson}-> 
         register_user_login(Params,[Acc0]),
         LocalJson;
     _->
-        Account=    case XgAccount of
+        Account=    case RawAccount of
                           "livecom_"++Account1 -> Account1;
                           Account2-> Account2
                         end,
-        livecom_login(Account,Params,{XgAccount,PassMD5,DevId})
+        company_login(Account,Params,{RawAccount,PassMD5,DevId})
     end.
 
 logout(Params) when is_list(Params)->
@@ -40,9 +40,28 @@ logout(Params) when is_list(Params)->
     unregister_user_login(UUID_STR,DevId),
 %    io:format("~p logouted res:~p~n",[XgAccount,R]),
     utility:pl2jso([{status,ok}]).
-    
 
-livecom_login(Account,Params,{_XgAccount,PassMD5,DevId})->
+check_crc(Params)->
+    {Acc,DevId,GroupId,Crc}={proplists:get_value("acc",Params),proplists:get_value("device_id",Params),proplists:get_value("group_id",Params),proplists:get_value("crc",Params)},
+    case list_to_binary(hex:to(crypto:hash(md5,<<Acc/binary,DevId/binary,GroupId/binary>>))) of
+    Crc-> true;
+    _-> false
+    end.
+third_login(Acc="qq_"++_OpenId,Params)->
+    io:format("third_login~n"),
+    case check_crc(Params) of
+    true->
+        case lw_register:get_third_reg_info(Acc) of
+        {atomic,[#third_reg_t{uuid=UUID,name=Name}]}->
+            NewParams=lists:keystore("acc",1, Params,{"acc",Name}),
+            register_user_login([{"uuid",UUID}|NewParams],[UUID]),
+            utility:pl2jso_br([{status,ok},{uuid,UUID},{name, Name},{account,Name},{class,reg},{did,""}]);
+        _-> utility:pl2jso_br([{status,ok},{account,Acc},{class,not_reg},{did,""}])
+        end;
+    _-> utility:pl2jso_br([{status,failed},{reason,crc_error}])
+    end.
+
+company_login(Account,Params,{_XgAccount,PassMD5,DevId})->
     Company = livecom,
     Type = usr,
     DeviceToken = if is_list(DevId)-> list_to_binary(DevId); true-> <<"">> end,
@@ -71,13 +90,14 @@ livecom_login(Account,Params,{_XgAccount,PassMD5,DevId})->
 local_login(Params)->
     UUID=proplists:get_value("uuid",Params),
     Pwd=proplists:get_value("pwd",Params),
+    Acc=proplists:get_value("acc",Params),
     io:format("login:~p,~p~n",[UUID,Pwd]),
     {Status,Res}=
     case lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pwd=Pwd,name=Name,pls=Pls}]}-> 
         Info=proplists:get_value(info,Pls,""),
         Did= proplists:get_value(did,Pls,""),
-        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,UUID},{did,Did}]};
+        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,Acc},{did,Did}]};
     {atomic,[#lw_register{}]}-> {islocal,[{status,failed},{reason,pwd_not_match}]};
     _-> {not_local,[{status,failed},{reason,account_not_existed}]}
     end,
@@ -102,9 +122,12 @@ check_auth(UUID,"*"++_)->  [{status,ok},{uuid,UUID}];
 check_auth(UUID,_)->
    case get_tuple_by_uuid_did(UUID) of
    undefined->
-       [{status,failed},{reason,list_to_atom(UUID++"_no_logined")}];
-   #login_itm{status=?ACTIVED_STATUS}->
-       [{status,ok},{uuid,UUID}];
+       [{status,failed},{reason,no_logined}];
+   #login_itm{phone=Phone,status=?ACTIVED_STATUS}->
+       case lw_register:check_balance(Phone) of
+       {true,Bal}-> [{status,ok},{uuid,UUID},{balance,Bal}];
+       _-> [{status,false},{reason,balance_not_enough}]
+       end;
    #login_itm{}->
        [{status,failed},{reason,not_actived}]
    end.
@@ -143,7 +166,7 @@ push_trans_caller(undefined)-> undefined;
 push_trans_caller("0086"++P)-> P;
 push_trans_caller(Caller) when is_binary(Caller)-> push_trans_caller(string:strip(binary_to_list(Caller)));    
 push_trans_caller(Caller) ->trans_caller_phone("0086",Caller).
-    
+
 unregister_user_login(UUID,DevId)-> 
     io:format("unregister_user_login ~p ~p ~n",[UUID,DevId]),
     case login_processor:get_account_tuple(UUID) of
@@ -155,7 +178,7 @@ unregister_user_login(UUID,DevId)->
 register_user_login(_Params,[])-> {failed,no_phone_registered};
 register_user_login(Params,[Phone1|_OtherPhones])->
     tick_old(Params,[Phone1|_OtherPhones]),
-    {Acc0,Pwd0,DevId0,GroupId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),
+    {Acc0,Pwd0,DevId0,GroupId0}={proplists:get_value("acc",Params),proplists:get_value("pwd",Params),
                                                          proplists:get_value("device_id",Params),proplists:get_value("group_id",Params)},
     Ip=proplists:get_value("ip", Params),
     {Account,_PassMD5,DevId,GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
@@ -202,6 +225,9 @@ start_poll(Clt_chanPid)->
         BA
     end.
 
+del_account_tuple(Phone0)->
+    Phone = push_trans_caller(Phone0),
+    ?DB_DELETE({login_itm,Phone}).
 get_account_tuple(Phone0)->
     Phone = push_trans_caller(Phone0),
     case ?DB_READ(login_itm,Phone) of
@@ -264,7 +290,7 @@ show_usertab()-> ?DB_QUERY(login_itm).
 get_group_id(Phone) when Phone=="31230646" orelse Phone=="31230648" orelse Phone=="31230653"->  "livecom";
 get_group_id(Phone)->
     case get_tuple_by_uuid_did(Phone) of
-    #login_itm{group_id=GroupId}-> GroupId;
+    #login_itm{phone=UUID}-> lw_register:get_group_id(UUID);
     _-> undefined
     end.
     
@@ -279,3 +305,12 @@ set_status(UUID,Status)->
 
 login_otherwhere_notes(UUID)->
     "您的账号"++UUID++"在其他设备登录".
+    
+gen_uuid(Acc) when is_binary(Acc)-> gen_uuid(binary_to_list(Acc));
+gen_uuid(Acc="qq"++_)-> gen_uuid(Acc,17020010000);
+gen_uuid(Acc="wx"++_)->gen_uuid(Acc,17030010000);
+gen_uuid(Acc)-> gen_uuid(Acc,17080010000).
+gen_uuid(_Acc,Base)->    list_to_binary(integer_to_list(Base+mnesia:dirty_update_counter(id_table, uuid, 1))).
+
+    
+    

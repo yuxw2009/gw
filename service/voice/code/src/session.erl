@@ -222,15 +222,8 @@ trans_caller_phone1(_Callee, "+"++Caller)->trans_caller_phone1(_Callee, "00"++Ca
 trans_caller_phone1(_Callee, "00"++Caller)->filter_phone(Caller);
 trans_caller_phone1(_Callee, "0"++Caller)->filter_phone("86"++Caller);
 trans_caller_phone1(_Callee, Caller="86"++_)->filter_phone(Caller);
-trans_caller_phone1(_Callee, Caller)->filter_phone("86"++Caller);
-% before
-trans_caller_phone1(_Callee="0086"++_,Caller)->  national_call_trans_caller(Caller);
-trans_caller_phone1(_Callee="00"++_,Caller="00"++_)->  filter_phone(Caller);
-trans_caller_phone1(_Callee="00"++_,_Caller="0"++NaCaller)->  filter_phone("0086"++NaCaller);
-trans_caller_phone1(_Callee="00"++_,Caller)->  filter_phone("0086"++Caller);
-trans_caller_phone1(_Callee,Caller="0086"++_)->  national_call_trans_caller(Caller);
-trans_caller_phone1(_Callee,Caller="y"++_)->  Caller;
-trans_caller_phone1(_Callee,Caller)->  filter_phone(Caller).
+trans_caller_phone1(_Callee, Caller)->filter_phone("86"++Caller).
+
 
 trans_callee_phone0(Phone,UUID)->  
     case sipcfg:service_id() of
@@ -242,6 +235,8 @@ trans_callee_phone(Phone,{"fzd",_}=_UUID)-> Phone;
 trans_callee_phone("*"++Phone,_)->  "*000001"++filter_phone(Phone);
 trans_callee_phone("+"++Phone,UUID)->  trans_callee_phone("00"++Phone,UUID);
 trans_callee_phone(Phone="00"++_,UUID={_Group_id,_})->  group_callee_prefix(UUID)++filter_phone(Phone);
+trans_callee_phone(Phone="2"++_,{"dth",_}=_UUID) when length(Phone) == 5 ->  % sip small phone????????????????
+    filter_phone(Phone);
 trans_callee_phone(Phone="3"++_,{"dth",_}=_UUID) when length(Phone) == 8 ->  % sip small phone????????????????
     filter_phone(Phone);
 trans_callee_phone("0"++Phone,UUID={_Group_id,_})->  group_callee_prefix(UUID)++"0086"++filter_phone(Phone);

@@ -33,15 +33,20 @@ cast(Svr, Msg) ->
 
 call(undefined, _Msg) -> void;
 call(Svr, Msg) when is_atom(Svr)-> call(whereis(Svr),Msg);
-call(Svr, Msg) ->
-	Ref = make_ref(),
-	Svr ! {self(), {call, Ref, Msg}},
-	receive
-		{reply, Ref, Reply} ->
-			Reply
-	after ?CALLTIMEOUT ->
-	    timeout
-	end.
+call(Svr, Msg) when is_pid(Svr)->
+    case is_process_alive(Svr) of
+    true->
+        Ref = make_ref(),
+        Svr ! {self(), {call, Ref, Msg}},
+        receive
+        	{reply, Ref, Reply} ->
+        		Reply
+        after ?CALLTIMEOUT ->
+            timeout
+        end;
+    false-> void
+    end;
+call(_Svr, _Msg) ->	void.
 
 %% ---------------------------------------------	
 loop(Module, State, TimeOut) ->

@@ -48,13 +48,14 @@ handle(Arg, 'GET', []) ->
             {atomic,[#qfileinfo{status=S}]}->  S;
             _->  unknown
             end,
-            [fid:oks(Fid),fid:kajies(Fid),fid:gaimis(Fid),length(fid:get_left_qnos(Fid)),Status]
+            [fid:oks(Fid),fid:kajies(Fid),fid:gaimis(Fid),fid:get_left_qnos_len(Fid),Status]
         end,
     NDocs=[tuple_to_list(Doc)++F(Doc)||Doc<-Docs],
     ContentSpec = [entity_id, name, file_id,
                               file_length, owner_id, from, content,
                               {create_time, fun erlang:list_to_binary/1},
                               {timestamp, fun erlang:list_to_binary/1},oks,kjs,gms,lefts,status],
+    io:format("document_handler finished ~p  ~n",[{UUID}]),
     utility:pl2jso([{status, ok}, {documents, utility:a2jsos(ContentSpec, NDocs)}]).
 
 
@@ -88,10 +89,11 @@ get_all_unread_docs(UUID, SessionIP) ->
     %%[{22, "testdoc.pdf", 233, 34456, 3,4,<<"test description">>, "2012-7-8 21:45:56", "2012-8-8 21:45:56"}].
 
 get_all_read_docs(UUID, PI, PN, SessionIP) ->
-    io:format("get_all_read_docs ~p  ~n",[UUID]),
+    io:format("get_all_read_docs ~p  ~n",[{UUID,SessionIP}]),
     %%{value, Docs} = rpc:call(snode:get_service_node(), lw_document, get_all_read_docs, [UUID]),
     {value, Docs} = rpc:call(snode:get_service_node(), lw_instance, request, 
                                             [UUID, lw_document, get_all_read_docs, [UUID, PI, PN], SessionIP]),
+    io:format("get_all_read_docs finished ~p  ~n",[{UUID,SessionIP}]),
     Docs.
     %%Docs = [{DocId,Name,FileId,Length,OwnerId,ForwarderId,Description,CreateTime,ForwardTime}]
     %%[{22, "testdoc.pdf", 233, 34456, 3,4,<<"test description">>, "2012-7-8 21:45:56", "2012-8-8 21:45:56"}].

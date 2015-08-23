@@ -9,6 +9,7 @@
 -include("login_info.hrl").
 -define(CALL,"./log/call.log").
 -define(VERSION_INFO, "./docroot/version/version.info").
+-define(DTH_COMMON_PACKAGE_CONFIG, "./priv/package.info").
 -define(VERSION_DTH_INFO, "./docroot/version/version_dth.info").
 -define(VERSION_COMMON_INFO, "./docroot/version/version_common.info").
 
@@ -21,6 +22,15 @@ handle(Arg,'POST', ["register"])->
     end,
     io:format("register:req:~p ack:~p~n",[Json,Res]),
     utility:pl2jso(Res);
+handle(Arg,'POST', ["self_register"])->
+    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    Res=
+    case proplists:get_value("group_id",Params) of
+    <<"dth_common">> ->    lw_register:self_noauth_register(Params);
+    _-> [{status,failed},{reason,invalid_params}]
+    end,
+    io:format("self_register:req:~p ack:~p~n",[Params,Res]),
+    Res;
 handle(Arg,'POST', ["add_info"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
     Res= lw_register:add_info(Json),
@@ -28,7 +38,7 @@ handle(Arg,'POST', ["add_info"])->
 handle(Arg,'POST', ["forget_pwd"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
     Res= lw_register:forgetpwd(Json),
-    utility:pl2jso(Res);
+    Res;
 handle(Arg,'POST', ["modify_pwd"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
     Res= lw_register:modifypwd(Json),
@@ -46,17 +56,45 @@ handle(Arg,'POST', ["login"])->
     Res=login_processor:login([{"ip",IP}|Params]),
     io:format("logined  res:~p~n",[Res]),
     Res;
+handle(Arg,'POST', ["third_reg"])->
+    IP = utility:client_ip(Arg),
+    Acc = utility:query_string(Arg, "acc"),
+    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    io:format("third_register req:~p~n",[Params]),
+    Res=lw_register:third_register(Acc,[{"ip",IP}|Params]),
+    io:format("third_register res:~p~n",[Res]),
+    Res;
+handle(Arg,'POST', ["third_login"])->
+    IP = utility:client_ip(Arg),
+    Acc = utility:query_string(Arg, "acc"),
+    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    Res=login_processor:third_login(Acc,[{"ip",IP}|Params]),
+    io:format("third_login res:~p~n",[Res]),
+    Res;
 handle(Arg,'POST', ["logout"])->
     IP = utility:client_ip(Arg),
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     R=login_processor:logout([{"ip",IP}|Params]),
     R;
+handle(Arg,'POST', ["ltalk_package"])->
+    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    io:format("ltalk_package~n:req:~p~n",[Params]),
+    case {proplists:get_value("group_id",Params), file:consult(?DTH_COMMON_PACKAGE_CONFIG)} of
+    {<<"dth_common">>, {ok,Info}}-> utility:pl2jso([{status,ok},{package,utility:pl2jsos_br(Info)}]);
+    _-> utility:pl2jso_br([{status,failed}])
+    end;
 handle(Arg,'POST', ["get_payid"])->
     utility:log("get_payid clidata:~p~n",[Arg#arg.clidata]),
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
     io:format("get_payid:req:~p~n",[Json]),
     Res=pay:gen_payment(Json),
     io:format("get_payid:ack:~p~n",[Res]),
+    utility:pl2jso_br(Res);
+handle(Arg,'POST', ["get_types_payid"])->
+    {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
+    io:format("get_types_payid:req:~p~n",[Json]),
+    Res=pay:gen_types_payid(Json),
+    io:format("get_types_payid:ack:~p~n",[Res]),
     utility:pl2jso_br(Res);
 handle(Arg,'POST', ["get_coin"])->
     {UUID}= utility:decode(Arg, [{uuid, s}]),
@@ -94,10 +132,12 @@ handle(Arg,'POST', ["login1"])->
 handle(Arg, 'POST', ["voip", "calls"]) ->
     _IP = utility:client_ip(Arg),
     {UUID_SNO,Callee}= utility:decode(Arg, [{user_id, s},{callee_phone, s}]),
-    case login_processor:autheticated(UUID_SNO,Callee) of
-    [{status,ok},{uuid,UUID}]-> start_call0(UUID, Arg);
-    R->
-         utility:pl2jso(R)
+    R=login_processor:autheticated(UUID_SNO,Callee),
+%    io:format("call auth result:~p~n",[{UUID_SNO,R}]),
+    case R of
+    [{status,ok},{uuid,UUID}|_]-> start_call0(UUID, Arg);
+    [{status,failed},{reason,Reason}]->
+        utility:pl2jso(get_failed_note(Reason))
     end;
 handle(Arg, 'DELETE', [ "voip", "calls"]) ->
     SessionID = utility:query_string(Arg, "session_id"),
@@ -164,11 +204,11 @@ handle(Arg, 'POST', ["voip", "icalls"]) ->
     Node=lw_mobile:get_node_by_ip0(Callee,UUID_SNO,utility:client_ip(Arg)),
     utility:log(?CALL, "ios:~s=>~s ~s ~s clidata:~p",[UUID_SNO,Callee,utility:make_ip_str(_IP),Node,utility:get_by_stringkey("clidata",Arg)]),
     case login_processor:autheticated(UUID_SNO,Callee) of
-    [{status,ok},{uuid,UUID}]-> 
+    [{status,ok},{uuid,UUID}|_]-> 
         GroupId=get_group_id(UUID,Arg),
         voice_handler:handle_startcall(Node,GroupId,Arg);
-    R->
-         utility:pl2jso(R)
+    [{status,failed},{reason,Reason}]->
+        utility:pl2jso(get_failed_note(Reason))
     end;
 
 handle(Arg, 'DELETE', [ "voip", "icalls"]) ->
@@ -222,6 +262,11 @@ handle_tp_call_msg(Arg,'POST', ["p2p_ios_ringing"],_)->
     end,
     io:format("p2p_ios_ringing:~p res:~p~n",[Sid_str,R]),
     utility:pl2jso(R);
+handle_tp_call_msg(Arg,'POST', ["p2p_ios_reject"],_)->
+    {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    rpc:call(Node, wkr, stopVOIP, [Sid]),
+    utility:pl2jso([{status,ok}]);
 handle_tp_call_msg(Arg,'POST', ["p2p_ios_poll"],O)-> handle_tp_call_msg(Arg,'POST', ["p2p_poll"],O);
 handle_tp_call_msg(Arg,'POST', ["p2p_ios_answer"],_)->
 %    {{Sid_str},Clidata,UUID,Phone,{Port}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]},{clidata,r},{caller_phone,s},{callee_phone,s},{sdp, o, [{port, i}]}]),
@@ -232,6 +277,8 @@ handle_tp_call_msg(Arg,'POST', ["p2p_ios_answer"],_)->
     io:format("p2p_ios_answer res:~p~n",[R]),
     
     case R of
+    {ok,AnsSDP,SelfSid}->
+        utility:pl2jso_br([{status, ok},{session_id, voice_handler:enc_sid(Node, SelfSid)}, {sdp, AnsSDP}]);
     {ok,AnsSDP}->
         utility:pl2jso_br([{status, ok},{session_id, Sid_str}, {sdp, AnsSDP}]);
     {failed,Reason}->
@@ -426,7 +473,7 @@ sip_tp_call_handle(Arg,'POST', ["p2p_ios_reject"],Clidata)->
 sip_tp_call_handle(Arg,'POST', ["p2p_reject"],Clidata)->
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
-    rpc:call(Node, voip_sup, p2p_reject, [Sid]),
+    rpc:call(Node, avanda, stopNATIVE, [Sid]),
     utility:pl2jso([{status,ok}]);
 sip_tp_call_handle(_Arg,'POST', _,_Clidata)->
     utility:pl2jso([{status,failed},{reason,sip_tp_call_unhandled}]).
@@ -468,10 +515,11 @@ p2p_push(CallerNode,Phone,Content)->
         push(Phone,Content)
     end.
 
-get_maxtalkt(_UUID,Arg)->
-   case utility:get_by_stringkey("userclass",Arg) of
-   Class when Class == <<"registered">> orelse Class == <<"game">> ->  no_limit;
-   _-> 75*1000
+get_maxtalkt(UUID,_Arg)->
+   case lw_register:check_balance(UUID) of
+   {true,Lefts} when is_number(Lefts) -> Lefts*60;
+   {false,_} -> 0;
+   {true,no_limit}-> no_limit
    end.
 %get_group_id(Arg)->   
 %    case utility:get_by_stringkey("group_id",Arg) of
@@ -541,7 +589,7 @@ start_call(UUID, Arg, XgAct) ->
                           end,
 %                      io:format("start_call:666666666666666666666666666666666~p",[CallType]),
                       if CallType==ios_webcall->
-                          rpc:call(Node, avanda, set_call_type, [SessionID, maybe_p2p_call]),
+                          rpc:call(Node, avanda, set_call_type, [SessionID, p2p_call]),
                           rpc:call(Node, avanda, processSipP2pRing, [SessionID]);
                       true->
                           rpc:call(Node, avanda, set_call_type, [SessionID, CallType])
@@ -566,7 +614,11 @@ get_wcg_node(_UUID,Ip)->
         _->    wwwcfg:get(test_node)
     end.
 
-get_node_by_ip0(_Callee="00"++_,UUID,Ip) when UUID=/="18017813673"-> 
+get_node_by_ip0(_Callee="0086"++_,UUID,Ip)-> 
+    R=get_node_by_ip(UUID,Ip),
+    io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
+    R;
+get_node_by_ip0(_Callee="00"++_,UUID,Ip) -> 
     R=get_internal_node_by_ip(UUID,Ip),
     io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
     R;
@@ -582,7 +634,9 @@ get_internal_node_by_ip("862180246528",_Ip)-> 'gw@10.32.2.4';
 get_internal_node_by_ip(UUID,Ip)-> 
     wwwcfg:get_internal_wcgnode(utility:c2s(utility:country(Ip))).
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
-get_node_by_ip(_luyin_test="18017813673",_Ip)-> 'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
+%get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
+%    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
+get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230914" -> 'gw1@119.29.62.190';
 get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31230032" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 %get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
@@ -778,4 +832,14 @@ hexstr_to_bin([X,Y|T], Acc) ->
   {ok, [V], []} = io_lib:fread("~16u", [X,Y]),
   hexstr_to_bin(T, [V | Acc]).
 
-
+get_failed_note(balance_not_enough)->
+    [{status,failed},{reason,balance_not_enough},{type,alert},{timelen,5},
+      {content,<<"亲爱的用户,您的账户余额不足,请充值。如有疑问请拨打*812或者*810,谢谢！">>}];
+get_failed_note(not_actived)->
+    [{status,failed},{reason,not_actived},{type,alert},{timelen,5},
+      {content,<<"呼叫失败：电话未激活，可能原因：1额度用完；2 套餐到期；3 当天拨打超过限制时长，请与代理商或者管理员联系。">>}];
+get_failed_note(no_logined)->
+    [{status,failed},{reason,no_logined},{type,tips},{timelen,5},
+      {content,<<"您好,为确保账户安全,麻烦您重新登录,给您带来不便,敬请谅解">>}];
+get_failed_note(Other)->
+    [{status,failed},{reason,Other},{type,tips},{timelen,5},{content,Other}].

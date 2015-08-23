@@ -4,6 +4,7 @@
 
 do_this_once() ->
     mnesia:start(),
+    mnesia:create_table(third_reg_t,[{attributes,record_info(fields,third_reg_t)},{disc_copies,[node()]}]),
     mnesia:create_table(pay_record,[{attributes,record_info(fields,pay_record)},{disc_copies,[node()]}]),
     mnesia:create_table(id_table, [{disc_copies, [node()]},{attributes, record_info(fields, id_table)}]),                                    
     mnesia:create_table(name2uuid,[{attributes,record_info(fields,name2uuid)},{disc_copies,[node()]}]),
@@ -44,7 +45,7 @@ stop() ->
     
 tables()-> ram_tables()++disc_tables().    
 disc_tables()->
-    [lw_register,agent_did2sip,name2uuid,agent_oss_item,pay_record,id_table].
+    [lw_register,agent_did2sip,name2uuid,agent_oss_item,pay_record,id_table,third_reg_t].
 ram_tables()->
     [login_itm,wcg_queue].
 delete_tables()->

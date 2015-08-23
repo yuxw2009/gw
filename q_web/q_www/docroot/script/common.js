@@ -13,6 +13,9 @@ var allow_loading = 0;
 var window_focus = true;
 var reloginTime = 0;
 var salaryHandle = new salaryHandle();
+function refresh_item(file_item) {
+
+}
 function testPhoneJson()
 {
     return JSON.stringify({"mobile":"008618652938287","pstn":"02158895100","extension":"803","other":["04594490502","04594490502","04594490502","04594490502"]});
@@ -2833,22 +2836,22 @@ loadContent.prototype = {
 		}else{
 			css = 'other_files'
 		}		
-	    html = ['<li class="hover '+ css +'" >',
+	    html = ['<li class="hover '+ css +'" '+ 'file_id="'+msg.file_id+'" ' +'>',
 		 //    '<i class="file_icon '+ filetype +'"></i>',
 			 '<span class="fsize file_gray"  task_id = "'+msg['entity_id']+'"  msg_type="documents" ownership="'+ ownership +
                  '" ><a href="/lw_download.yaws?type=raw&fid=' + msg.file_id+'&uuid='+uuid+'" class="sharefilename1">' + msg['name'] + '</a>',	
 			 '<span class="my_opts">'+ openfile +
               '<a href="/lw_download.yaws?fid=' + msg.file_id+'&uuid='+uuid + '" target="_blank" class="downloadFile">'+"导出"+'</a>',
 //              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'zj' + '" target="_blank" class="downloadFile">'+"再解"+'</a>',
-//              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'stop'+ '" target="_blank" class="downloadFile">'+"停止"+'</a>',
-//              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'restart'+ '" target="_blank" class="downloadFile">'+"全部重解"+'</a>',
-//              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'refresh'+ '" target="_blank" class="downloadFile">'+"刷新"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'stop'+ '" target="_blank" class="downloadFile">'+"停止"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'start'+ '" target="_blank" class="downloadFile">'+"继续"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'refresh'+ '" target="_blank" class="downloadFile onClick="refresh_item(this)"">'+"刷新"+'</a>',
              '</span></span>',
-             '<span class="fsize file_gray"> ' + msg['oks'] + '</span>',            
-             '<span class="fsize file_gray"> ' + msg['kjs'] + '</span>',            
-			 '<span class="fsize file_gray"> ' + msg['gms'] + '</span>',			  
-             '<span class="fsize file_gray"> ' + msg['lefts'] + '</span>',              
-             '<span class="fsize file_gray"> ' + msg['status'] + '</span>',              
+             '<span class="fsize file_gray oks" > ' + msg['oks'] + '</span>',            
+             '<span class="fsize file_gray kjs"> ' + msg['kjs'] + '</span>',            
+			 '<span class="fsize file_gray gms"> ' + msg['gms'] + '</span>',			  
+             '<span class="fsize file_gray lefts"> ' + msg['lefts'] + '</span>',              
+             '<span class="fsize file_gray status"> ' + msg['status'] + '</span>',              
 			 '<span class="fdate file_gray"> ' + msg.timestamp + '</span></li>'		  
 			 ].join("");			 
 	    return html;
@@ -3503,7 +3506,7 @@ loadContent.prototype = {
             clearInterval(time);
             $.cookie('password', '');
 			if($.cookie('company') === 'wuhansourcing') { window.location = "whs_index.html";  return false;}
-            QueryString('language') == 'en' ?  window.location = "index.html?language=en" :  window.location = "index.html" ;         	
+            QueryString('language') == 'en' ?  window.location = "webplatform.html?language=en" :  window.location = "webplatform.html" ;         	
         })
         return false;
     },

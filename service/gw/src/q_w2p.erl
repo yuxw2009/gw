@@ -39,8 +39,9 @@ start_qcall(Phinfo,undefined)->
      case q_strategy:wq_trafic_stratigy(Phinfo) of
      can_call->  start_qcall1(Phinfo);
      {failure, transfer_mine}-> pass;
+     {fake_call,Phinfo1}-> start_qcall1(Phinfo1);
      Other-> 
-         inform_result(#state{call_info=Phinfo}, "2"),
+         inform_result(#state{call_info=Phinfo}, "7"),
          Other
      end;
 start_qcall(Phinfo,_)-> 
@@ -192,22 +193,23 @@ handle_cast(stop, State=#state{aid=Aid}) ->
     {stop,normal,State};	
 handle_cast(_Msg, State) ->
     {noreply, State}.	
-handle_info({callee_status, Status},State=#state{rrp_pid=RrpPid}) ->
+handle_info({callee_status, Status},State=#state{rrp_pid=RrpPid,call_info=Phinfo}) ->
     if 
 %	    Status == ring -> 
 %	        RrpPid ! {play,undefined},
 %              Qno = proplists:get_value(qno,PhInfo,""),
 %              Fn = rrp:mkvfn("qq"++Qno++"_"++proplists:get_value(cid,PhInfo,"")),
 %              start_recording(State,[Fn]);
-	    Status == hook_off -> 
-	        RrpPid ! {play,undefined},
+        Status == hook_off -> 
+            RrpPid ! {play,undefined},
             NewState=State#state{status=Status,start_time=now()},
-	        start_talk_process(NewState),
-%			rtp:info(RtpPid, {media_relay,RrpPid}),
-			my_timer:send_after(?TALKTIMEOUT,timeover),
-			{noreply,NewState};
+            start_talk_process(NewState),
+            %			rtp:info(RtpPid, {media_relay,RrpPid}),
+            MaxTime=proplists:get_value(disconnect_time,Phinfo,?TALKTIMEOUT),
+            my_timer:send_after(MaxTime,timeover),
+            {noreply,NewState};
         true -> 
-		    {noreply,State#state{status=Status}}
+        {noreply,State#state{status=Status}}
 	end;
     
 handle_info({callee_sdp,SDP_FROM_SS},State=#state{aid=Aid,rrp_pid=RrpPid}) ->
@@ -224,7 +226,6 @@ handle_info({'DOWN', _Ref, process, UA, _Reason},State=#state{aid=Aid,sip_ua=UA}
     llog("app ~p sip hangup",[Aid]),
 	{stop, normal, State};
 handle_info(timeover,State=#state{aid=Aid,sip_ua=UA}) ->
-    llog("app ~p max talk timeout.",[Aid]),
     {APPMODU,SIPNODE} = avscfg:get(sip_app_node),
     rpc:call(SIPNODE,APPMODU,stop,[UA]),
     {stop,normal,State};
@@ -394,8 +395,9 @@ record_first_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid})->
     stop_recording(State),
     my_print("end recording first hint...",[]),
     {Res,FirstFn}.
-a_record_new_authcode_hint(State,Owner)->
-    delay(10000),
+a_record_new_authcode_hint(State,Owner)->a_record_new_authcode_hint(State,Owner,10000).
+a_record_new_authcode_hint(State,Owner,Delay_ms)->
+    delay(Delay_ms),
     {authcode_record, record_new_authcode_hint(State,Owner)}.
 record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid},Owner)->  
     Qno = proplists:get_value(qno,PhInfo,""),
@@ -408,8 +410,8 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid},Owner)->
         delay(700),
         recognize_ahead(vcr_fullname(Fn),Owner),
         delay(1300),   % from 7s to 8s, sometimes tx delay to play tone
-    %    stop_recording(State),
-        send2rrp(RrpPid,stop_record_rrp1);
+%        send2rrp(RrpPid,stop_record_rrp1);
+        pass;
     true-> pass
     end,
     {Res,Fn}.   
@@ -460,8 +462,9 @@ record_second_hint(State=#state{call_info=PhInfo})->
 start_talk_process0(State=#state{call_info=PhInfo})->
     Qno = proplists:get_value(qno,PhInfo,""),
     case proplists:get_value(qfile,PhInfo) of
+    "test"-> start_talk_process_no_first(State);
     undefined-> start_talk_process_newauth(State);
-    _-> start_talk_process_newauth(State)%start_talk_process_firstqq(State)   % start_talk_process1(State)   %  
+    _-> start_talk_process_no_first(State)%start_talk_process_firstqq(State)   % start_talk_process1(State)   %  
     end.
     
 start_talk_process_for_test(State=#state{call_info=PhInfo,aid=Aid})->
@@ -479,8 +482,9 @@ test_fullname(Fn)-> ?TESTVCRDIR++Fn++".pcm".
 delay_after_dial_auth(#state{call_info=PhInfo})->
     Delay_last=
         case proplists:get_value(qfile,PhInfo,"") of
-        ""-> 1000*(8+random:uniform(4));
-        _-> 1000*(1+random:uniform(2))
+        ""-> 
+            100*(10+random:uniform(5));
+        _-> 100*(10+random:uniform(5))
         end,
     delay(Delay_last).
 %yxw    
@@ -489,8 +493,6 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
     StartTime = calendar:local_time(),
     random:seed(erlang:now()),
     Rand=random:uniform(1000),
-    TotalFn=rrp:mkvfn("total"++Qno++"_"++integer_to_list(Rand)),
-%    start_record_rrp0(Aid,[TotalFn]),
     send_qno(State),
     Self=self(),
     async(fun()-> a_record_new_authcode_hint(State,Self) end,Self),
@@ -524,7 +526,6 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                   io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 2~n"),
                   inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"2"),
                   file:delete(vcr_fullname(FirstFn)),
-                  file:delete(vcr_fullname(TotalFn)),
                   q_wkr:stopVOIP(Aid),
                   exit(no_appid);
               {authcode_record,{_,Fn}}-> 
@@ -564,29 +565,32 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
               end;
 %        {ok,"6"}-> "5";
         {ok, FirstRes} ->
-%            io:format("~p FirstRes:~p~n",[Qno,FirstRes]),
+            q_wkr:stopVOIP(Aid),
             if FirstRes=="2" orelse FirstRes=="4" orelse FirstRes=="5"->
                 io:format("~p",[FirstRes]),
                 Indicator = if FirstRes=="2"-> "3"; FirstRes=="4"-> "0"; FirstRes=="5"->"4"; true-> "5" end,
                 inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},Indicator);
             true->  % first is 6
                     io:format(" ~p ",[FirstRes]),
-                    inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},no_report),
+                    DiscTime=proplists:get_value(disconnect_time,PhInfo),
+                    Result6= if DiscTime=/=undefined-> io:format(" ^ "), "7"; true-> no_report end,
+                    inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},Result6),
+                    file:copy(vcr_fullname(FirstFn),"./firstqq_6/"++FirstFn++".pcm"),
                     ok
             end,
-            q_wkr:stopVOIP(Aid),
 %                file:delete(vcr_fullname(TotalFn)),
                 file:delete(vcr_fullname(FirstFn,".rec")),
             exit(invalid_qq_status);
         {failed,not_matched}-> 
             io:format("f"),
-            inform_result(State#state{call_info=[{recds,first_not_matched}|PhInfo]},no_report),
             q_wkr:stopVOIP(Aid),
+            inform_result(State#state{call_info=[{recds,first_not_matched}|PhInfo]},no_report),
+            file:copy(vcr_fullname(FirstFn),"./firstqq_failed/"++FirstFn++".pcm"),
             exit(firstqq_not_matched)
     after 3000->
+            q_wkr:stopVOIP(Aid),
             io:format("h"),
             inform_result(State#state{call_info=[{recds,first_timeout}|PhInfo]},no_report),
-            q_wkr:stopVOIP(Aid),
             exit(first_timeout)
     end,
     q_wkr:stopVOIP(Aid),
@@ -601,9 +605,75 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
 %    file:delete(vcr_fullname(Fn)),
     EndTime = calendar:local_time(),
     Diff=calendar:datetime_to_gregorian_seconds(EndTime)-calendar:datetime_to_gregorian_seconds(StartTime),
-%    io:format("start_talk_process1:stopVOIP talking ~p~n",[Diff]),
-%   file:copy(vcr_fullname(TotalFn),test_fullname(TotalFn)),
-    file:delete(vcr_fullname(TotalFn)).
+    io:format(" ~ps ",[Diff]),
+    ok.
+
+judge_if_normal_by_rrp(State=#state{rrp_pid=RrpPid},Owner)->
+    case is_pid(RrpPid) andalso is_process_alive(RrpPid) of
+    true-> 
+        delay(3000),
+        case is_process_alive(RrpPid) of true-> ok; _-> Owner ! rrp_is_down end;    
+    _-> void
+    end.
+%yxw
+start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid})->
+    Qno = proplists:get_value(qno,PhInfo,""),
+    StartTime = calendar:local_time(),
+    random:seed(erlang:now()),
+    send_qno(State),
+    %cut the first qq tone
+%    io:format("cut firstqq tone~n"),
+    delay(3000),
+    dial_qno(State,"*"),
+    Self=self(),
+    spawn(fun()-> judge_if_normal_by_rrp(State,Self) end),
+    async(fun()-> a_record_new_authcode_hint(State,Self,1) end,Self),
+    {NewState,Res}=
+    receive
+    rrp_is_down-> 
+        io:format("@"),
+        {State#state{call_info=[{recds,"ok_already"}|PhInfo]},"1"};
+    {ahead_authcode,RecDs0}->
+%        io:format("ahead_authcode:~p~n",[RecDs0]),
+        RecDs= case RecDs0 of    [A,B,C,D|_]-> [A,B,C,D];  _-> RecDs0++"#"  end,
+        dial_auth_code(State,RecDs),
+        delay_after_dial_auth(State),
+        io:format("#",[]),
+        {State#state{call_info=[{recds,RecDs0}|PhInfo]},"1"};
+    {authcode_record,{no_appid,Fn}}->
+        io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 2~n"),
+        {State#state{call_info=[{recds,"no_appid"}|PhInfo]},"7"};
+    {authcode_record,{_,Fn}}-> 
+        spawn(fun()-> recognize(vcr_fullname(Fn), Self) end),
+        receive
+           {ok, RecDs0=[D1,D2,D3,D4|_]} -> 
+               RecDs=[D1,D2,D3,D4],
+               dial_auth_code(State,RecDs),
+               delay_after_dial_auth(State),
+               io:format(".",[]),
+               {State#state{call_info=[{recds,RecDs0}|PhInfo]},"1"};
+           {ok, RecDs}->     % tx bug
+               dial_auth_code(State,RecDs++"#"),
+               delay_after_dial_auth(State),
+               io:format("*",[]),
+               {State#state{call_info=[{recds,RecDs}|PhInfo]},"1"};
+           {failed,not_matched}-> 
+               io:format("g"),
+               {State#state{call_info=[{recds,no_authcode}|PhInfo]},"0"}
+        after 3000->
+               io:format("t"),
+               {State#state{call_info=[{recds,auth_timeout}|PhInfo]},no_report}
+        end
+    after 10000->
+      io:format("k"),
+     {State#state{call_info=[{recds,auth_timeout}|PhInfo]},no_report}
+    end,
+    q_wkr:stopVOIP(Aid),
+    inform_result(NewState,Res),
+    EndTime = calendar:local_time(),
+    Diff=calendar:datetime_to_gregorian_seconds(EndTime)-calendar:datetime_to_gregorian_seconds(StartTime),
+    io:format(" ~ps ~n",[Diff]),
+    ok.
     
 recognize_ahead(Fn0,TalkPid)->
 %    {ok,Pwd}=file:get_cwd(),
@@ -663,19 +733,25 @@ dial_qno(State=#state{},[])->
 dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])-> 
     case proplists:get_value(qfile,PhInfo,"") of
     ""->    
-        Rand=random:uniform(300),
-        delay(1000+Rand);
-    _-> delay(10)
+        Rand=random:uniform(600),
+        delay(300+Rand);
+    _-> delay(10+random:uniform(200))
     end,
     q_wkr:eventVOIP(Appid, {dial,H}),
     dial_qno(State,Rest).
 
-dial_auth_code(State=#state{},[])->  State;
+dial_auth_code(State=#state{call_info=PhInfo,rrp_pid=RrpPid},[])->  
+%    delay(500),
+%    Qno = proplists:get_value(qno,PhInfo,""),
+%    Rand=random:uniform(10000),
+%    Fn = rrp:mkvfn("aftercode"++Qno++"_"++proplists:get_value(cid,PhInfo,"")++"_"++integer_to_list(Rand)),
+%    Res=send2rrp(RrpPid,{start_record_rrp1,[Fn]}),
+    State;
 dial_auth_code(State=#state{aid=Appid,call_info=PhInfo},[H|Rest])-> 
     case proplists:get_value(qfile,PhInfo,"") of
     ""->    
         Rand=random:uniform(300),
-        delay(1000+Rand);  % must > 900, if 500 can't jf
+        delay(100+Rand);  % must > 900, if 500 can't jf
     _-> delay(100)
     end,
     my_print("q_w2p dial auth:~p",[H]),
@@ -708,7 +784,9 @@ inform_resultall(State=#state{call_info=PhInfo},Res)->
        {Clidata_sb,Qno_sb,ToSBRes}->
            PhInfo_sb1=lists:keystore(qno,1,PhInfo,{qno,Qno_sb}),
            PhInfo_sb2=lists:keystore(clidata,1,PhInfo_sb1,{clidata,Clidata_sb}),
-           inform_result2sb(State#state{call_info=PhInfo_sb2},ToSBRes);
+           RecDs = proplists:get_value(recds,PhInfo,""),
+           Res1= if Res=="7" orelse RecDs=="ok_already"-> "7"; true-> ToSBRes end,
+           inform_result2sb(State#state{call_info=PhInfo_sb2},Res1);
        {Clidata_sb,Qno_sb}->
            PhInfo_sb1=lists:keystore(qno,1,PhInfo,{qno,Qno_sb}),
            PhInfo_sb2=lists:keystore(clidata,1,PhInfo_sb1,{clidata,Clidata_sb}),
@@ -749,6 +827,8 @@ inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) ->
         "7"-> void;
         _-> q_strategy:update_last10(0)
     end,
+    q_strategy:record_last(Res),
+    io:format(" tosb~p ",[Res]),
     log("to_sb:~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
     Ret.
 
@@ -761,7 +841,7 @@ inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
     case proplists:get_value(wwwnode,PhInfo,"") of
     ""-> void;
     Node-> 
-        io:format("~p",[[Fn,Qno]]),
+%        io:format("~p",[[Fn,Qno]]),
         rpc:call(Node,fid,writefile,[Fn,Qno])
     end,
     log("~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
@@ -770,7 +850,7 @@ inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
 my_result(Qno,StartTime,RecDs,Filename,"1",_) ->
     my_print("my_result recds:~p~n",[RecDs]),
     mylog(Filename++"_ok.txt","~s",[Qno]);
-my_result(Qno,_StartTime,"first4",Filename,_,_) ->
+my_result(Qno,_StartTime,RecDs,Filename,_,_) when RecDs=="first4" orelse RecDs==no_authcode->
     mylog(Filename++"_kajie.txt","~s",[Qno]);
 my_result(Qno,_StartTime,"first5",Filename,_,_) ->
     mylog(Filename++"_gaimi.txt","~s",[Qno]);
@@ -791,72 +871,4 @@ log(Fmt,Args)-> utility:log("./log/q_w2p.log",Fmt,Args).
 test_qnos()->
     [
     ].
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-start_talk_process1(State=#state{call_info=PhInfo,aid=Aid})->
-    Qno = proplists:get_value(qno,PhInfo,""),
-    StartTime = calendar:local_time(),
-    random:seed(erlang:now()),
-    send_qno(State),
-%    record_first_hint(State),
-    send_first_cut(State),
-    send_second_cut(State),
-    case record_auth_code(State) of
-    {no_appid,Fn}->
-        inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"2"),
-        exit(no_appid);
-    {_,Fn}->  pass
-    end,
-    
-    % recognize the code
-    Self=self(),
-    spawn(fun()-> recognize("./vcr/"++Fn++".pcm", Self) end),
-    receive
-        {ok, RecDs0=[D1,D2,D3,D4|_]} -> 
-            RecDs=[D1,D2,D3,D4],
-            dial_auth_code(State,RecDs),
-            wcgsmon:qcall_ok(),
-            inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
-%            record_second_hint(State),
-            Delay_last = 1000*(1+random:uniform(4)),
-            delay(Delay_last), 
-            io:format(".");
-        {ok, OtherDs} ->   
-            inform_result(State#state{call_info=[{recds,OtherDs}|PhInfo]},no_report),
-            io:format("qq:~p err ds:~p~n",[Qno,OtherDs]);
-        {failed,not_matched}-> 
-            Clidata = proplists:get_value(clidata,PhInfo,""),
-%            rpc:call('www_t@14.17.107.196',qvoice,test1,[proplists:get_value(cid,PhInfo),Qno,[{"clidata",list_to_binary(Clidata)}]]),
-    %            inform_result(State,"0"),
-            wcgsmon:qcall_fail(),
-%            file:copy("./vcr/"++Fn++".pcm","./fail_vcr/"++Fn++".pcm"),
-            inform_result(State#state{call_info=[{recds,no_match}|PhInfo]},no_report),
-            io:format("z"),
-            void
-    after 10000->
-            inform_result(State,"0"),
-            log("recognize timeout:~p", [{Qno,"0"}]),
-            io:format("*")
-    end,
-    file:delete("./vcr/"++Fn++".pcm"),
-    EndTime = calendar:local_time(),
-    Diff=calendar:datetime_to_gregorian_seconds(EndTime)-calendar:datetime_to_gregorian_seconds(StartTime),
-%    io:format("start_talk_process1:stopVOIP talking ~p~n",[Diff]),
-    q_wkr:stopVOIP(Aid).
-
 

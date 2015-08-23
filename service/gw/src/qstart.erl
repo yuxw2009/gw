@@ -1,6 +1,6 @@
 -module(qstart).
 -compile(export_all).
--record(st,{qnos=[],status=active,interval=1000,pls=[{cids,[]}]}).
+-record(st,{qnos=[],status=active,interval=100,pls=[{cids,[]}]}).
 
 add_my_owncid_www_qnos(Qnos={www,_Fid,_Node,_Qnos})->
     ensure_alive(),
