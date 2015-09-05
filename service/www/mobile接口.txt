@@ -244,9 +244,15 @@ post lwork/mobile/get_recharges
 req: {uuid:u,device_id:dvid}
 ack: {status:ok, recharges:[{year:y,month:m,date:d,hour:h,minute:min,second:s,money:money,coins:coins}]}
 
+1 查询套餐使用情况：
+post lwork/mobile/package_usage
+req: {uuid: u}
+ack: {status:ok, lefts:c, gifts:gc,month_consumed:mc}
+
 4 获取支付订单
 post lwork/mobile/get_types_payid
-req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type}
+req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type,name:name,acc:acc}
 ack: {status:ok, payid:payid,uuid:uuid}
 
-
+支付宝回调url:
+http://119.29.62.190:8080/lwork/mobile1/paytest/package_pay

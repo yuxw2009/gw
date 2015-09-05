@@ -8,7 +8,7 @@ t2str({H, M, S}) ->
 	int2(H) ++ ":" ++ int2(M) ++ ":" ++ int2(S).
 
 d2str({Y, M, D}) ->
-	int4(Y) ++ "/" ++ int2(M) ++ "/" ++ int2(D).
+	int4(Y) ++ "-" ++ int2(M) ++ "-" ++ int2(D).
 
 
 int2(I) ->

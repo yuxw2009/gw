@@ -79,7 +79,7 @@ handle(Arg,'POST', ["logout"])->
 handle(Arg,'POST', ["ltalk_package"])->
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     io:format("ltalk_package~n:req:~p~n",[Params]),
-    case {proplists:get_value("group_id",Params), file:consult(?DTH_COMMON_PACKAGE_CONFIG)} of
+    case {proplists:get_value("group_id",Params), packages_info()} of
     {<<"dth_common">>, {ok,Info}}-> utility:pl2jso([{status,ok},{package,utility:pl2jsos_br(Info)}]);
     _-> utility:pl2jso_br([{status,failed}])
     end;
@@ -101,6 +101,12 @@ handle(Arg,'POST', ["get_coin"])->
     Res=lw_register:get_coin(UUID),
     io:format("get_coin:ack:~p~n",[Res]),
     utility:pl2jso(Res);
+handle(Arg,'POST', ["package_usage"])->
+    {UUID}= utility:decode(Arg, [{uuid, s}]),
+    Res=lw_register:get_pkginfo(UUID),
+    io:format("package_usage:ack:~p~n",[Res]),
+    utility:pl2jso(Res);
+    
 handle(Arg,'POST', ["get_recharges"])->
     {UUID}= utility:decode(Arg, [{uuid, s}]),
     Res=lw_register:get_recharges(UUID),
@@ -532,14 +538,12 @@ build_call_options(UUID, Arg)->
     Ip=utility:client_ip(Arg),
     { _CallerPhone, Phone, {IPs=[SessionIP|_], Port, Codec}, Class} = utility:decode(Arg, [{caller_phone, s}, {callee_phone, s},
 	                                   {sdp, o, [{ip, as}, {port, i}, {codec, s}]}, {userclass, s}]),
-    {MaxtalkT0,ServiceId} = {get_maxtalkt(UUID,Arg),get_group_id(UUID,Arg)},
+    {MaxtalkT0,GroupId} = {get_maxtalkt(UUID,Arg),get_group_id(UUID,Arg)},
     Node=node(),
-    Fun = fun(Charges)->
-                 io:format("sadfasfdasfdasfdasf~n"),
-                 lw_register:consume_coins(UUID,Charges)
-             end,
-    Options0=[{uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,utility:make_ip_str(Ip)}]},{cid,UUID},{userclass, Class},{codec,Codec},
-                     {callback,{node(),lw_register,consume_coins,UUID}}],
+    Fun= if GroupId=="dth_common"-> consume_minutes; true-> consume_coins end,
+    io:format("starcall callback:~p~n",[Fun]),
+    Options0=[{uuid, {GroupId, UUID}}, {audit_info, [{uuid,UUID},{ip,utility:make_ip_str(Ip)}]},{cid,UUID},{userclass, Class},{codec,Codec},
+                     {callback,{node(),lw_register,Fun,UUID}}],
     case voice_handler:check_token(UUID, string:tokens(Phone,"@")) of
         {pass, Phone2,Others=[FeeLength]} ->
     %		         io:format("Phone:~p Others:~p~n",[Phone,Others]),
@@ -570,6 +574,7 @@ start_call(UUID, Arg, XgAct) ->
       if length(Phone) < 3 ->  utility:pl2jso([{status, failed},{reason,phone_too_short}]);
       true->
 %            io:format("start_call req:~p~noptions:~p~n",[Arg#arg.clidata, Options]),
+             Res=
         	case rpc:call(Node, avanda, processNATIVE, [[utility:make_ip_str(Ip)], Port, Options]) of
         	    {successful,SessionID,{PeerIP,PeerPort}}->
         	         utility:pl2jso([{status, ok},{session_id, voice_handler:enc_sid(Node, SessionID)}, {ip, list_to_binary(PeerIP)}, 
@@ -599,7 +604,9 @@ start_call(UUID, Arg, XgAct) ->
         	                              {port, PeerPort},{codec, 102}|Other]);
         	    {_, nodedown}-> utility:pl2jso([{status, failed},{reason,nodedown}]);
         	    {failed, Reason}-> utility:pl2jso([{status, failed},{reason,Reason}])
-        	end
+        	end,
+        	io:format("lw_mobile startcall res:~p~n", [Res]),
+        	Res
        end.
 
 get_wcg_node(_UUID,Ip)->
@@ -636,7 +643,7 @@ get_internal_node_by_ip(UUID,Ip)->
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
 %get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
 %    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
-get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230914" -> 'gw1@119.29.62.190';
+get_node_by_ip(UUID=_yxwfztest,_) when UUID=="18017813673" -> 'gw_git@202.122.107.66';
 get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31230032" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 %get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
@@ -843,3 +850,5 @@ get_failed_note(no_logined)->
       {content,<<"您好,为确保账户安全,麻烦您重新登录,给您带来不便,敬请谅解">>}];
 get_failed_note(Other)->
     [{status,failed},{reason,Other},{type,tips},{timelen,5},{content,Other}].
+    
+packages_info()-> file:consult(?DTH_COMMON_PACKAGE_CONFIG).    

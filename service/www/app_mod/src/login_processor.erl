@@ -25,11 +25,15 @@ login(Params,_) when is_list(Params)->
         register_user_login(Params,[Acc0]),
         LocalJson;
     _->
-        Account=    case RawAccount of
-                          "livecom_"++Account1 -> Account1;
-                          Account2-> Account2
+        {Company,Account}=    case RawAccount of
+                          "livecom_"++Account1 -> {livecom,Account1};
+                          Account2-> 
+                              case string:tokens(Account2,"@") of
+                              [Account3]-> {livecom,Account3};
+                              [Account3,Company_]-> {list_to_binary(Company_),Account3}
+                              end
                         end,
-        company_login(Account,Params,{RawAccount,PassMD5,DevId})
+        company_login(Company,Account,Params,{RawAccount,PassMD5,DevId})
     end.
 
 logout(Params) when is_list(Params)->
@@ -61,8 +65,8 @@ third_login(Acc="qq_"++_OpenId,Params)->
     _-> utility:pl2jso_br([{status,failed},{reason,crc_error}])
     end.
 
-company_login(Account,Params,{_XgAccount,PassMD5,DevId})->
-    Company = livecom,
+company_login(Account,Params,{_XgAccount,PassMD5,DevId})->company_login(livecom,Account,Params,{_XgAccount,PassMD5,DevId}).
+company_login(Company,Account,Params,{_XgAccount,PassMD5,DevId})->
     Type = usr,
     DeviceToken = if is_list(DevId)-> list_to_binary(DevId); true-> <<"">> end,
     HttpParas=[{company,Company}, {account,list_to_binary(Account)},{password,list_to_binary(PassMD5)},{type,Type},{deviceToken,DeviceToken}],
@@ -289,10 +293,16 @@ show_usertab()-> ?DB_QUERY(login_itm).
     
 get_group_id(Phone) when Phone=="31230646" orelse Phone=="31230648" orelse Phone=="31230653"->  "livecom";
 get_group_id(Phone)->
+    R=
     case get_tuple_by_uuid_did(Phone) of
-    #login_itm{phone=UUID}-> lw_register:get_group_id(UUID);
+    #login_itm{phone=UUID,group_id=GroupId1}-> 
+        case lw_register:get_group_id(UUID) of
+        unregistered-> GroupId1;
+        GroupId2-> GroupId2
+        end;
     _-> undefined
-    end.
+    end,
+    if is_binary(R)-> binary_to_list(R); true-> R end.
     
 set_status(UUID,Status)->
     case get_tuple_by_uuid_did(UUID) of

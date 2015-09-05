@@ -243,17 +243,22 @@ add_payids(UUID, Payids)->
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
-get_payrecord(Payid)->
+get_payrecord(G,Payid) when is_binary(G)->get_payrecord(binary_to_list(G),Payid);
+get_payrecord("dth_common",Payid)->
+    ?DB_READ(pay_types_record,Payid);
+get_payrecord(_,Payid)->
     ?DB_READ(pay_record,Payid).
 get_recharges(UUID)->
     case get_register_info_by_uuid(UUID) of
-    {atomic,[#lw_register{pls=Pls}]}->  
+    {atomic,[#lw_register{pls=Pls,group_id=GrpId}]}->  
         Payids=proplists:get_value(payids,Pls,[]),
         F=fun({atomic,[#pay_record{status=paid,paid_time=Ptime,money=M,coins=C}]})->
                     [{time,list_to_binary(utility:d2s(Ptime))},{money,M},{coins,C}];
+                ({atomic,[#pay_types_record{status=paid,paid_time=Ptime,money=M}]})->
+                    [{time,list_to_binary(utility:d2s(Ptime))},{money,M}];
                 (_)-> []
             end,
-        PayRecords=[get_payrecord(Id)||Id<-Payids],
+        PayRecords=[get_payrecord(GrpId,Id)||Id<-Payids],
         Array=[F(Item)||Item<-PayRecords],
         Recharges=utility:pl2jsos([Item||Item<-Array,Item=/=[]]),
         [{status,ok},{recharges,Recharges}];
@@ -261,6 +266,16 @@ get_recharges(UUID)->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
     
+add_pkg(UUID, Pkg)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[Item=#lw_register{pls=Pls}]}->  
+        Pkgs0=proplists:get_value(pkgs,Pls,[]),
+        Npls=lists:keystore(pkgs,1, Pls, {pkgs,Pkgs0++[Pkg]}),
+        ?DB_WRITE(Item#lw_register{pls=Npls}),
+        [{status,ok}];
+    _->
+        [{status,failed},{reason,register_uuid_not_existed}]
+    end.
 add_coins(UUID, Added)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls}]}->  
@@ -276,6 +291,35 @@ add_coins(UUID, Added)->
 %    Charges=proplists:get_value(charges,Pls,0),
 %    consume_coins(UUID,Charges),
 %    Cdr=proplists:get_value(cdr,Pls,[]),
+circles(Type,FromDate)-> circles(Type,FromDate,date()).
+circles(month,FromDate,ToDate)->
+    {Y0,M0,D0}=FromDate,
+    {Y,M,D}=ToDate,
+    (Y-Y0)*12+M-M0+ if D>=D0-> 1; true-> 0 end.
+package_consume([],_)-> [];
+package_consume([H=#package_info{circles=Circles0}|T], Mins) when (Circles0==undefined)->
+    package_consume(T,Mins);
+package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=FromDate,circles=Circles0,limits=Limits,cur_consumed=Consumed0}|T],
+                                Mins) when is_integer(Circles0)->
+    CurCircle=circles(Period,FromDate),
+    if  CurCircle> Circles0-> package_consume(T,Mins);
+        Consumed0+Mins>Limits-> [H#package_info{cur_consumed=Limits}|package_consume(T,Consumed0+Mins-Limits)];
+        CurCircle>CurCircle0-> [H#package_info{cur_circle=CurCircle,cur_consumed=Mins}|T];
+        true-> [H#package_info{cur_consumed=Consumed0+Mins}|T]
+    end.
+consume_minutes(UUID,Minutes)->
+    io:format("consume_minutes called:~p~n",[{UUID,Minutes}]),
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[Item=#lw_register{pls=Pls,group_id=GroupId}]}->  
+        Pkgs=proplists:get_value(pkgs,Pls,[]),
+        NewPkgs=package_consume(Pkgs,Minutes),
+        Npls=lists:keystore(pkgs,1,Pls,{pkgs,NewPkgs}),
+        ?DB_WRITE(Item#lw_register{pls=Npls}),
+        [{status,ok}];
+    _->
+        [{status,failed},{reason,register_uuid_not_existed}]
+    end.
+    
 consume_coins(UUID,Minutes)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls,group_id=GroupId}]}->  
@@ -309,12 +353,24 @@ get_coin(UUID)->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
     
-transform_tables()->  %% for mnesia database updating, very good 
-    Transformer = fun({lw_register,UUID,Dvid,Name,Pwd,Pls})->
-                              #lw_register{uuid=UUID,device_id=Dvid,name=Name,pwd=Pwd,pls=Pls}
-    				 end,
-    {atomic,ok}=mnesia:transform_table(lw_register,Transformer, record_info(fields, lw_register) ).    
+get_pkginfo(UUID)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[#lw_register{pls=Pls}]}->  
+        case package_consume(proplists:get_value(pkgs,Pls,[]),0) of
+        [Pkg=#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_]->
+            {Year,Mon,Day}=From,
+            LeftMonths= Mon+Circles,
+            NYear=Year+(LeftMonths div 13),
+            NMon=LeftMonths rem 13,
+            Expire=integer_to_list(NYear)++"/"++integer_to_list(NMon)++"/"++integer_to_list(Day),
+            [{status,ok},{lefts,Limits-Consumed},{cur_consumed,Consumed},{gifts,Gifts},{expir_date,list_to_binary(Expire)}];
+        []-> [{status,failed},{reason,no_packages}]
+        end;
+    _->
+        [{status,failed},{reason,register_uuid_not_existed}]
+    end.
 
+check_balance(_UUID)->  {true,no_limit};
 check_balance(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{group_id=GroupId,pls=Pls}]} when GroupId== <<"dth_common">> orelse GroupId== <<"common">> ->   % unit is minutes
@@ -327,6 +383,6 @@ check_balance(UUID)->
 get_group_id(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{group_id=GroupId}]} ->   GroupId;
-    _-> unregistered
+    _-> "livecom"
     end.
     

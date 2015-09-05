@@ -139,4 +139,34 @@ transform_tables()->  %% for mnesia database updating, very good
                      end,
     Fun= fun()-> mnesia:foldl(Transformer,[],traffic) end,
     mnesia:transaction(Fun).
+
+dump()->
+    {atomic, Cdrs}=get_all(),
+    dump(Cdrs).
+dump(Cdrs)->
+    io:format("dumdafasf"),
+    DuraF=fun(St={_,_},Et={_,_})-> 
+                      seconds(Et)-seconds(St);
+                  (_,_)-> 0
+                  end,
     
+    R0=[{Id,EndTime,UUID,Callee,DuraF(StartTime,EndTime)}||I=#traffic1{id=Id,uuid={GroupId,UUID}, callee=Callee,talktime=StartTime,endtime=EndTime}<-Cdrs,GroupId=="dth"],
+    R=lists:reverse(lists:sort(R0)),
+    stats2file(R).
+    
+seconds(Localtime)->    
+    UnixEpoch={{1970,1,1},{0,0,0}},
+    calendar:datetime_to_gregorian_seconds(Localtime)-calendar:datetime_to_gregorian_seconds(UnixEpoch).
+    
+stats2file(CdrTuples)->
+    {ok, IODev} = file:open("./cdr.txt", [write]),
+    Format = "~-8s~-25s~-25s~-25s~-10s\r\n",
+    io:format(IODev, Format , ["ID",  "time",  "caller",   "Phone", "Secs"]),
+    F = fun({Id,EndTime={_,_},UUID,Callee,Dur})->
+            Dstr = integer_to_list(Dur),
+            Bidstr = integer_to_list(Id),
+            io:format(IODev,Format, [Bidstr,utility:d2s(EndTime),UUID, Callee,Dstr]);
+        (_)-> void
+    end,
+    lists:foreach(F, CdrTuples),
+    file:close(IODev).    

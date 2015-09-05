@@ -6,6 +6,7 @@
 %%---------------------------------------------------------------------------------------
 -module(wcg_manager).
 -export([start/0,pinging/0]).
+-compile(export_all).
 
 start() ->
        io:format("6666666666666666666**********************~n"),
@@ -47,13 +48,22 @@ init_db() ->
 
 db_nodes_detect()->
     case lists:member('www_dth@10.32.3.52',mnesia:system_info(running_db_nodes)) of
-    true-> pass;
+    true-> 
+        io:format("(db nodes ok)"),
+        pass;
     _->
         io:format("******db_nodes down~n"),
         mnesia:stop(),
         mnesia:start()
     end.
-        
+
+interval_do(T,Fun)->    
+    Fun(),
+    receive
+    impossible-> void
+    after 60*1000->
+        interval_do(T,Fun)
+    end.    
 
 pinging()->
     Ml=net_adm:ping(wwwcfg:get_wcgnode("Mainland")),

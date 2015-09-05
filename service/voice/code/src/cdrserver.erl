@@ -122,6 +122,8 @@ to_minute(Duration) ->
 service_id({Service_id, _UUID})-> Service_id;
 service_id(S)-> S.
 
+get_rate(GroupId,Type,Phone) when is_binary(GroupId)-> get_rate(binary_to_list(GroupId),Type,Phone);
+get_rate("dth_common", voip,Phone)-> {Phone,1};
 get_rate("common", voip,Phone= "*"++_)-> {Phone,1};
 get_rate("common", voip,Phone)-> {Phone,3};
 get_rate("common", callback,Phone= "*"++_)-> {Phone,0};

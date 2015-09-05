@@ -137,4 +137,9 @@ ts() ->
 	{H, Mi, S} = time(),
 	{_,_,MS}=erlang:now(),
 	xt:int2(Y) ++ "-" ++ xt:int2(Mo) ++ "-" ++ xt:int2(D) ++ " " ++ xt:int2(H) ++ ":" ++ xt:int2(Mi) ++ ":" ++ xt:int2(S)++":"++xt:int2(MS).
+
+d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}}) ->
+    [Year0,Mon0,Day0,Hour0,Min0,Sec0]=[integer_to_list(I)||I<-[_Year, _Month, _Day,_Hour, _Minute, _Second]],
+    [Mon1,Day1,Hour1,Min1,Sec1]=[string:copies("0",2-length(I))++I||I<-[Mon0,Day0,Hour0,Min0,Sec0]],
+    Year0++"-"++Mon1++"-"++Day1++" "++Hour1++":"++Min1++":"++Sec1.
 	

@@ -5,7 +5,7 @@
 -record(last10_t,{key,value}).
 -define(REP_NUM,3).
 -define(ME_DIV_SB,1.7).
--define(SB_PERCNT,0.2).
+-define(SB_PERCNT,0.25).
 
 wq_trafic_stratigy(Phinfo)->
     random:seed(erlang:now()),

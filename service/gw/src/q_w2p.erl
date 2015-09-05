@@ -500,7 +500,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
     {no_appid,FirstFn}->
 %        io:format("q_w2p start_talk_process1 record_first_hint no_appid send 2"),
         io:format("n"),
-        inform_result(State#state{call_info=[{recds,send_2_before}|PhInfo]},no_report),
+        inform_result(State#state{call_info=[{recds,send_2_before}|PhInfo]},"7"),
         q_wkr:stopVOIP(Aid),
         exit(no_appid);
     {_,FirstFn}->  pass
@@ -524,7 +524,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                   io:format("#",[]);
               {authcode_record,{no_appid,Fn}}->
                   io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 2~n"),
-                  inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"2"),
+                  inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"7"),
                   file:delete(vcr_fullname(FirstFn)),
                   q_wkr:stopVOIP(Aid),
                   exit(no_appid);
@@ -543,7 +543,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                            inform_result(State#state{call_info=[{recds,RecDs}|PhInfo]},"1"),
                            io:format("*",[]);
                        {ok, OtherDs} ->   
-                           inform_result(State#state{call_info=[{recds,OtherDs}|PhInfo]},"2"),
+                           inform_result(State#state{call_info=[{recds,OtherDs}|PhInfo]},"7"),
                            io:format("qq:~p err ds:~p~n",[Qno,OtherDs]);
                        {failed,not_matched}-> 
                %            RN = if FirstRecogAck == "5" -> "5"; true->"0" end,
@@ -585,7 +585,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
             io:format("f"),
             q_wkr:stopVOIP(Aid),
             inform_result(State#state{call_info=[{recds,first_not_matched}|PhInfo]},no_report),
-            file:copy(vcr_fullname(FirstFn),"./firstqq_failed/"++FirstFn++".pcm"),
+%            file:copy(vcr_fullname(FirstFn),"./firstqq_failed/"++FirstFn++".pcm"),
             exit(firstqq_not_matched)
     after 3000->
             q_wkr:stopVOIP(Aid),
