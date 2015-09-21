@@ -395,10 +395,12 @@ record_first_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid})->
     stop_recording(State),
     my_print("end recording first hint...",[]),
     {Res,FirstFn}.
-a_record_new_authcode_hint(State,Owner)->a_record_new_authcode_hint(State,Owner,10000).
+a_record_new_authcode_hint(State,Owner)-> a_record_new_authcode_hint(State,Owner,10000).
 a_record_new_authcode_hint(State,Owner,Delay_ms)->
     delay(Delay_ms),
-    {authcode_record, record_new_authcode_hint(State,Owner)}.
+%    delay(1000),
+%     dial_qno(State,"*"),
+    Owner ! {authcode_record, record_new_authcode_hint(State,Owner)}.
 record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid},Owner)->  
     Qno = proplists:get_value(qno,PhInfo,""),
     Rand=random:uniform(10000),
@@ -409,7 +411,7 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid},Owner)->
         recognize_ahead(vcr_fullname(Fn),Owner),
         delay(700),
         recognize_ahead(vcr_fullname(Fn),Owner),
-        delay(1300),   % from 7s to 8s, sometimes tx delay to play tone
+        delay(3000),   % from 7s to 8s, sometimes tx delay to play tone
 %        send2rrp(RrpPid,stop_record_rrp1);
         pass;
     true-> pass
@@ -461,7 +463,9 @@ record_second_hint(State=#state{call_info=PhInfo})->
 % yxw
 start_talk_process0(State=#state{call_info=PhInfo})->
     Qno = proplists:get_value(qno,PhInfo,""),
-    case proplists:get_value(qfile,PhInfo) of
+    Qfile=proplists:get_value(qfile,PhInfo),
+    io:format("start_talk_process0 qfile:~p~n",[Qfile]),
+    case Qfile of
     "test"-> start_talk_process_no_first(State);
     undefined-> start_talk_process_newauth(State);
     _-> start_talk_process_no_first(State)%start_talk_process_firstqq(State)   % start_talk_process1(State)   %  
@@ -523,7 +527,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                   inform_result(State#state{call_info=[{recds,"ahead"++RecDs0}|PhInfo]},"1"),
                   io:format("#",[]);
               {authcode_record,{no_appid,Fn}}->
-                  io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 2~n"),
+                  io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 7~n"),
                   inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"7"),
                   file:delete(vcr_fullname(FirstFn)),
                   q_wkr:stopVOIP(Aid),
@@ -531,8 +535,8 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
               {authcode_record,{_,Fn}}-> 
                    spawn(fun()-> recognize(vcr_fullname(Fn), Self) end),
                    receive
-                       {ok, RecDs0=[D1,D2,D3,D4|_]} -> 
-                           RecDs=[D1,D2,D3,D4],
+                       {ok, RecDs0=[D1,D2,D3,D4,D5,D6|_]} -> 
+                           RecDs=[D1,D2,D3,D4,D5,D6],
                            dial_auth_code(State,RecDs),
                            delay_after_dial_auth(State),
                            inform_result(State#state{call_info=[{recds,RecDs0}|PhInfo]},"1"),
@@ -559,9 +563,8 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                            io:format("t")
                    end
               
-              after 8000->
-                  io:format("k"),
-                  exit(no_authcode_record)
+              after 11000->
+                  io:format("k")
               end;
 %        {ok,"6"}-> "5";
         {ok, FirstRes} ->
@@ -575,7 +578,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
                     DiscTime=proplists:get_value(disconnect_time,PhInfo),
                     Result6= if DiscTime=/=undefined-> io:format(" ^ "), "7"; true-> no_report end,
                     inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},Result6),
-                    file:copy(vcr_fullname(FirstFn),"./firstqq_6/"++FirstFn++".pcm"),
+                    file:copy(vcr_fullname(FirstFn),"./firstqq_6_1/"++FirstFn++".pcm"),
                     ok
             end,
 %                file:delete(vcr_fullname(TotalFn)),
@@ -594,7 +597,7 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid})->
             exit(first_timeout)
     end,
     q_wkr:stopVOIP(Aid),
-%    file:delete(vcr_fullname(FirstFn)),
+    file:delete(vcr_fullname(FirstFn)),
     file:delete(vcr_fullname(FirstFn,".rec")),
    
 %    send_second_cut_firstqq(State),
@@ -627,7 +630,7 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid})->
     dial_qno(State,"*"),
     Self=self(),
     spawn(fun()-> judge_if_normal_by_rrp(State,Self) end),
-    async(fun()-> a_record_new_authcode_hint(State,Self,1) end,Self),
+    async(fun()-> a_record_new_authcode_hint(State,Self,2000) end,Self),
     {NewState,Res}=
     receive
     rrp_is_down-> 
@@ -664,10 +667,11 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid})->
                io:format("t"),
                {State#state{call_info=[{recds,auth_timeout}|PhInfo]},no_report}
         end
-    after 10000->
+    after 15000->
       io:format("k"),
      {State#state{call_info=[{recds,auth_timeout}|PhInfo]},no_report}
     end,
+    delay(15000),
     q_wkr:stopVOIP(Aid),
     inform_result(NewState,Res),
     EndTime = calendar:local_time(),
@@ -693,8 +697,21 @@ recognize_ahead(Fn0,TalkPid)->
         TalkPid ! {ahead_authcode,AuthCode};
     _-> void
     end.
-    
+
+% new tone    reco
 recognize(Fn0,TalkPid)->
+%    {ok,Pwd}=file:get_cwd(),
+    Fn=Fn0,
+    R = os:cmd("/yyy/yyy/qtest1/applications/music_back/UnixReco/HViteComm "++Fn),
+%    io:format("q_w2p recognize result:~p fn:~p~n",[R,Fn]),
+    Result=
+        case re:run(R, "d([0-9])\n", [global,{capture,all_but_first,list}]) of
+        {_,{match,Match=[_,_,_,_,_,_|_]}}->        {ok,lists:flatten(Match)};
+        _-> {failed,not_matched}
+        end,
+    my_print("auth_reco_result:~p",[Result]),
+    TalkPid ! Result.
+recognize0(Fn0,TalkPid)->
 %    {ok,Pwd}=file:get_cwd(),
     Fn=Fn0,
     R = os:cmd("DialNumReco03/HViteComm "++Fn),

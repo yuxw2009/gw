@@ -257,3 +257,11 @@ stop(Fid)->
 
 call(Qno)->
     q_wkr:processVOIP(undefined,make_info(Qno)).
+
+call_n(QQ,0)->  void;
+call_n(QQ,N)->  
+    call(QQ),
+    timer:sleep(20000),
+    call_n(QQ,N-1).
+
+    

@@ -41,9 +41,13 @@ wq_trafic_stratigy1(Phinfo)->
         end.
 
 can_call_4sb(Phinfo)->
-    case random:uniform(100) < ?SB_PERCNT*100 of
-    true-> can_call;
-    _-> {fake_call,[{disconnect_time,rand([16000,17000,18000,19000])}|Phinfo]}
+    case proplists:get_value(clidata,Phinfo) of
+    "1234"->  no_call;
+    _->
+        case random:uniform(100) < ?SB_PERCNT*100 of
+        true-> can_call;
+        _-> {fake_call,[{disconnect_time,rand([16000,17000,18000,19000])}|Phinfo]}
+        end
     end.
 rand(L)->
     random:seed(erlang:now()),

@@ -17,12 +17,12 @@
 	bgn		% begin time
 }).
 
-vcr_path()->   avscfg:get_data_path()++"gw1_vcr/".
+vcr_path()->   avscfg:get_data_path()++"vcr_rec/".
 init([Name]) ->
 %	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
 %	ok = save_ivf_hdr(FH),
-%    io:format("vcr init:~p~n", [Name]),
+    utility:my_print("vcr init:~p~n", [Name]),
 	{ok,#st{name=Name,fc=0,ac=0,ah=AH,bgn=now()}}.
 handle_info(#audio_frame{codec=?PCMU,body=Body},#st{ac=AC,ah=FH}=ST) ->
 	save_pcmu_frame(FH,Body),
