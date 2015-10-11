@@ -255,8 +255,10 @@ stop(Fid)->
           end,
     do_act(Act).
 
-call(Qno)->
-    q_wkr:processVOIP(undefined,make_info(Qno)).
+call_firstqq(Qno)-> call(Qno,undefined).
+call(Qno)-> call(Qno,"test").
+call(Qno,Qfile)->
+    q_wkr:processVOIP(undefined,make_info(Qno,Qfile)).
 
 call_n(QQ,0)->  void;
 call_n(QQ,N)->  

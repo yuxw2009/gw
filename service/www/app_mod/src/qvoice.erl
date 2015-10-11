@@ -6,8 +6,8 @@
 -compile(export_all).
 -include("yaws_api.hrl").
 -define(CALL,"./log/call.log").
--define(TESTNODE, 'gw@119.29.62.190').
--define(TESTNODE1, 'gw1@119.29.62.190').
+-define(TESTNODE, 'qtest@14.17.107.196').
+-define(TESTNODE1, 'qtest1@14.17.107.196').
 
 handle(Arg, 'POST', ["login"]) ->
     { UUID,  Pwd} = utility:decode(Arg, [{acc, s}, {pwd,s}]),
@@ -50,23 +50,34 @@ get_wcg_node(UUID)->
 
 make_info(Cid,PhNo,QQNo,Clidata) ->
     [{phone,PhNo},{qcall,true},
-     {uuid,{"livecom",Cid}},
+     {uuid,{qvoice,86}},
      {audit_info,[{uuid,Cid}]},{userclass, "fzd"},
-     {cid,Cid},{qno,QQNo},{clidata,Clidata},{qfile,"test"}].
+     {cid,Cid},{qno,QQNo},{clidata,Clidata}].
 
-opdn_rand()->  "189"++integer_to_list(random:uniform(99999999)).
+opdn_rand()->  integer_to_list(18900000000+random:uniform(99999999)).
 
-test(QQ)-> test(opdn_rand(),QQ).
-test(OpDn,QQ)->test(OpDn,QQ,<<>>).
-test(OpDn,QQ,Params)->test(testnode(),OpDn,QQ,Params, "075583765566").
+test1_n(QQ,0)->  void;
+test1_n(QQ,N)->  
+    test1(QQ),
+    timer:sleep(20000),
+    test1_n(QQ,N-1).
 
+
+    
 test1(QQ)-> test1(opdn_rand(),QQ,[]).
 test1(OpDn,QQ)->test1(OpDn,QQ,<<>>).
-test1(OpDn,QQ,Params)->test(?TESTNODE1,OpDn,QQ,Params, "075583765566").
+test1(OpDn,QQ,Params)->
+     TpDn="075583765566",
+    test(?TESTNODE1,OpDn,QQ,Params, TpDn,[{qfile,"test"}|make_info(OpDn, TpDn,QQ,"")]).
 
-test(Node,OpDn,QQ,Params,TpDn)->
+test(QQ)-> test(opdn_rand(),QQ).
+test(OpDn,QQ)->test(OpDn,QQ,[]).
+test(OpDn,QQ,Params)->test(testnode(),OpDn,QQ,Params, "075583765566").
+test(Node,OpDn,QQ,Params,TpDn)-> 
     Clidata=proplists:get_value("clidata",Params,<<>>),
-    do_start_call(Node, undefined, make_info(OpDn,TpDn,QQ,binary_to_list(Clidata))),
+    test(Node,OpDn,QQ,Params,TpDn,make_info(OpDn,TpDn,QQ,binary_to_list(Clidata))).
+test(Node,OpDn,QQ,Params,TpDn,PhInfo)->
+    do_start_call(Node, undefined, PhInfo),
     utility:log("./log/qvoice.log", "~p ~p ~p", [OpDn,QQ,Params]).
 
 testnode()->  ?TESTNODE.
