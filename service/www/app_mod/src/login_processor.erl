@@ -33,6 +33,7 @@ login(Params,_) when is_list(Params)->
                               [Account3,Company_]-> {list_to_binary(Company_),Account3}
                               end
                         end,
+        io:format("login_processor login:params:~p~n",[Params]),
         company_login(Company,Account,Params,{RawAccount,PassMD5,DevId})
     end.
 
@@ -51,7 +52,9 @@ check_crc(Params)->
     Crc-> true;
     _-> false
     end.
-third_login(Acc="qq_"++_OpenId,Params)->
+third_login(Acc="qq_"++_OpenId,Params)->third_login1(Acc,Params);
+third_login(Acc="wx_"++_OpenId,Params)->third_login1(Acc,Params).
+third_login1(Acc,Params)->
     io:format("third_login~n"),
     case check_crc(Params) of
     true->
@@ -130,7 +133,7 @@ check_auth(UUID,_)->
    #login_itm{phone=Phone,status=?ACTIVED_STATUS}->
        case lw_register:check_balance(Phone) of
        {true,Bal}-> [{status,ok},{uuid,UUID},{balance,Bal}];
-       _-> [{status,false},{reason,balance_not_enough}]
+       _-> [{status,failed},{reason,balance_not_enough}]
        end;
    #login_itm{}->
        [{status,failed},{reason,not_actived}]
@@ -188,11 +191,11 @@ register_user_login(Params,[Phone1|_OtherPhones])->
     {Account,_PassMD5,DevId,GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
     P=restart_poll(DevId),
     {Status,Did,Pls}= case lw_agent_oss:get_item(Phone1) of
-                                #agent_oss_item{status=S,did=D,pls=P}-> {S,push_trans_caller(D),P};
+                                #agent_oss_item{status=S_,did=D_,pls=P_}-> {S_,push_trans_caller(D_),P_};
                                 _-> {actived,undefined,[]}
                             end,
     Clidata=proplists:get_value("clidata",Params),
-    io:format("register_user_login clidata ~p~n",[Clidata]),
+    io:format("register_user_login Params ~p~n",[Params]),
     {OsType}= if Clidata==undefined-> {"ios"}; true-> utility:decode_json(Clidata,[{os_type,s}]) end,
     NL=#login_itm{phone=push_trans_caller(Phone1),acc=Account,devid=DevId,ip=Ip,group_id=GroupId,status=Status,
            pls=[{os_type,OsType},{did,Did},{push_pid,P}|Pls]},
@@ -317,10 +320,22 @@ login_otherwhere_notes(UUID)->
     "您的账号"++UUID++"在其他设备登录".
     
 gen_uuid(Acc) when is_binary(Acc)-> gen_uuid(binary_to_list(Acc));
-gen_uuid(Acc="qq"++_)-> gen_uuid(Acc,17020010000);
-gen_uuid(Acc="wx"++_)->gen_uuid(Acc,17030010000);
-gen_uuid(Acc)-> gen_uuid(Acc,17080010000).
+gen_uuid(Acc="qq"++_)-> gen_uuid(Acc,31250000);
+gen_uuid(Acc="wx"++_)->gen_uuid(Acc,31260000);
+gen_uuid(Acc)-> gen_uuid(Acc,31270000).
 gen_uuid(_Acc,Base)->    list_to_binary(integer_to_list(Base+mnesia:dirty_update_counter(id_table, uuid, 1))).
 
+add_traffic(Traffic=#traffic{uuid=UUID})->
+    case get_tuple_by_uuid_did(UUID) of
+    Item=#login_itm{pls=Pls}->  
+        Traffics=proplists:get_value(traffic,Pls,[]),
+        Id= case Traffics of  [#traffic{id=Id_}|_]->Id_+1; _-> 1 end,
+        Npls=lists:keystore(traffics,1,Pls,{traffics,[Traffic#traffic{id=Id+1}|Traffics]}),
+        ?DB_WRITE(Item#login_itm{pls=Npls}),
+        {ok,Id};
+    _->
+        failed
+    end.
+    
     
     

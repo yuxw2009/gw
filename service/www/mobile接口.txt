@@ -247,12 +247,20 @@ ack: {status:ok, recharges:[{year:y,month:m,date:d,hour:h,minute:min,second:s,mo
 1 查询套餐使用情况：
 post lwork/mobile/package_usage
 req: {uuid: u}
-ack: {status:ok, lefts:c, gifts:gc,month_consumed:mc}
+ack: {status:ok, lefts:c, gifts:gc,month_consumed:mc,expir_date:e}
 
 4 获取支付订单
 post lwork/mobile/get_types_payid
-req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type,name:name,acc:acc}
+req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type,name:name,acc:acc,third_pay_org:org}
+org: "alipay" or "wx"
 ack: {status:ok, payid:payid,uuid:uuid}
 
 支付宝回调url:
 http://119.29.62.190:8080/lwork/mobile1/paytest/package_pay
+
+回调url:
+支付宝：/lwork/mobile1/paytest/package_pay
+微信： /lwork/mobile1/paytest/package_pay/ wx
+
+[{id,Id},{caller,Caller},{callee,Callee},{lasttime,LastTime},{times,length(All)},
+ {details,[[{starttime,TimeStr},{duration,Dura},{direction,Direction}]]}]

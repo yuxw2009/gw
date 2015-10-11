@@ -105,8 +105,12 @@ authenticate(Sdn,AuthCode)->
     _->
         failed
     end.
-    
+
 get_item(Phone)-> 
+    io:format("get_item :~p~n",[Phone]),
+    get_item1(Phone).
+get_item1(Phone) when is_binary(Phone)-> get_item1(binary_to_list(Phone));
+get_item1(Phone)-> 
     case ?DB_READ(agent_oss_item,Phone) of
         {atomic,[I]}-> I;
         _-> undefined

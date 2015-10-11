@@ -179,6 +179,7 @@ handle_fzd_startcall(Arg)->
     end.
 
 check_token(UUID, [Phone, GroupId, AuthCode]) when is_binary(GroupId)-> check_token(UUID, [Phone, binary_to_list(GroupId), AuthCode]);
+check_token(UUID, [Phone, GroupId, _])  when GroupId=="dth_common" orelse GroupId=="common"-> {pass,Phone};
 check_token(UUID, [Phone, "dth", _]) -> {pass,Phone};
 check_token(UUID, [Phone, "livecom", _]) -> {pass,Phone};
 check_token(UUID, [Phone, "xh", "xhlivecom"]) -> {pass,Phone};

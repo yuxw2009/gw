@@ -3,12 +3,34 @@
 -include("db_op.hrl").
 -include("lwdb.hrl").
 -include("yaws_api.hrl").
+-include("xmerl-1.3.6/include/xmerl.hrl").
 
-
+get_pairs(XmlStr)->
+    {#xmlElement{content=Contents},_}=xmerl_scan:string(XmlStr),
+    [{Name,Value}||#xmlElement{name=Name,content=[#xmlText{value=Value}]}<-Contents].
 handle(Arg,'GET', [])->
 %    {ok, Json={obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     io:format("GET paytest:req:~n",[]),
     {html, "success"};
+handle(Arg,'POST', ["package_pay","wx"])->
+    io:format("~p~n",[Arg#arg.clidata]),
+    Pairs=get_pairs(binary_to_list(Arg#arg.clidata)),
+    ReturnCode=proplists:get_value(return_code,Pairs),
+    Sign0=proplists:get_value(sign,Pairs),
+    PayId=proplists:get_value(out_trade_no,Pairs),
+    case {ReturnCode,sign(Pairs),?DB_READ(pay_types_record,PayId)} of
+    {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{status=paid}]}}->
+        io:format("pay:wx notify repeated~n"),
+        void;
+    {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{uuid=UUID,pkg_info=PkgInfo}]}}->
+        lw_register:add_pkg(UUID,PkgInfo),
+        lw_register:add_payids(UUID, [PayId]),
+        ?DB_WRITE(Item#pay_types_record{pls=Pairs,status=paid,paid_time=erlang:localtime()});
+    _Other->    
+         io:format("pay wx:other:~p~n",[_Other])
+    end,
+    Ret="<xml>   <return_code><![CDATA[SUCCESS]]></return_code>   <return_msg><![CDATA[OK]]></return_msg> </xml>",
+    {html,Ret};
 handle(Arg,'POST', ["package_pay"])->
 %    io:format("~p~n",[Arg]),
     Params=yaws_api:parse_post(Arg),
@@ -74,8 +96,7 @@ gen_types_payid(Json)->
     case  lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[_LR]} when Money==trunc(Price) ->
         Payid=payid(),
-        {Period,Circles,Limits}={proplists:get_value(period,Package),proplists:get_value(circles,Package),proplists:get_value(limit,Package)},
-        PkgInfo=#package_info{period=Period,cur_circle=1,from_date=date(),circles=Circles,gifts=0,limits=Limits,cur_consumed=0,payid=Payid,raw_pkginfo=Package},
+        PkgInfo=gen_pkg_info(GroupId,PayTypes,Payid),
         Payment=#pay_types_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
         ?DB_WRITE(Payment),
         [{status,ok},{payid,Payid},{uuid,UUID}];
@@ -84,7 +105,22 @@ gen_types_payid(Json)->
     _->
         [{status,failed},{reason,error_params}]
     end.
-    
+
+gift_for_reg(UUID)->
+    case lw_register:get_group_id(UUID) of
+    <<"dth_common">> ->
+        PkgInfo=gen_pkg_info("dth_common",dth_basic1,"gift"),
+        lw_register:add_pkg(UUID,PkgInfo);
+    _-> void
+    end.
+
+gen_pkg_info(GroupId,PayType)->  gen_pkg_info(GroupId,PayType,payid()).
+gen_pkg_info(GroupId,PayType,Payid) when is_list(GroupId)-> gen_pkg_info(list_to_binary(GroupId),PayType,Payid);
+gen_pkg_info(GroupId,PayType,Payid)->
+    Package=get_package(GroupId,PayType),
+    {Period,Circles,Limits}={proplists:get_value(period,Package),proplists:get_value(circles,Package,0),proplists:get_value(limit,Package,0)},
+    #package_info{period=Period,cur_circle=1,from_date=date(),circles=Circles,gifts=0,limits=Limits,cur_consumed=0,payid=Payid,raw_pkginfo=Package}.
+
 get_package(_GroupId,PayType)->
     {ok,Ps}=lw_mobile:packages_info(),
     TS=[list_to_tuple(I)||I<-Ps],
@@ -92,4 +128,47 @@ get_package(_GroupId,PayType)->
     tuple_to_list(TItem).
             
 payid()->
-    integer_to_list(mnesia:dirty_update_counter(id_table, payid, 1)).
+    random:seed(erlang:now()),
+    Base=random:uniform(10000),
+    integer_to_list(Base*1000000+mnesia:dirty_update_counter(id_table, payid, 1)).
+
+-define(WXMCH_ID, "1267076901").    
+-define(WXAPI_KEY,"d23c79a91ef124a600762e82ce91112d").
+-define(WXAPPID, "wxd9404da72b24431f").
+-define(WXSECRET, "d23c79a91ef124a600762e82ce91101c").
+test_pay()->
+    wx_pay_reqs("DeviceId","Abstract","Detail","45354545888","1","10.32.3.52","ocYhrwcNCtXq38EkcMHmUz4mpjaU").
+wx_pay_reqs(DeviceId,Abstract,Detail,PayId,Cents,UserIp,OpenId)->
+    DevInfo0=if length(DeviceId)>32-> {H,_}=lists:split(32,DeviceId), H; true-> DeviceId end,
+    DevInfo=if DevInfo0==[]-> "empty"; true-> DevInfo0 end,
+    Elapse=calendar:datetime_to_gregorian_seconds(calendar:local_time()),
+    NonceStr=integer_to_list(Elapse),
+%    StartTime=utility:d2s(calendar:local_time(),"","",""),
+%    Pls0=[{appid,?WXAPPID},{moch_id,?WXMCH_ID},{device_info,DevInfo},{nonce_str,NonceStr},{body,Abstract},{detail,Detail},{attach,"not_used"},
+%      {out_trade_no,PayId},{total_fee,Cents},{spbill_create_ip,UserIp},{notify_url,"https://lwork.hk/lwork/mobile/paytest"},{trade_type,"APP"},
+%      {openid,OpenId}],
+    Pls0=[{appid,?WXAPPID},{moch_id,?WXMCH_ID},{nonce_str,NonceStr},{notify_url,"https://lwork.hk/lwork/mobile/paytest"},
+      {out_trade_no,PayId},{spbill_create_ip,UserIp},{total_fee,Cents},{trade_type,"APP"},
+      {openid,OpenId}],
+    Sign=sign(Pls0),
+    Pls1=Pls0++[{sign,Sign}],
+    Pls2=[{atom_to_list(K),V}||{K,V}<-Pls1],
+    Pls3=["<"++K++">"++V++"</"++K++">"||{K,V}<-Pls2],
+    "<xml>"++string:join(Pls3,"")++"</xml>".
+get_wx_pay_reqs(DeviceId,Abstract,Detail,PayId,Cents,UserIp,OpenId)->
+    XmlStr=wx_pay_reqs(DeviceId,Abstract,Detail,PayId,Cents,UserIp,OpenId),
+    get_wx_pay_reqs(XmlStr).
+get_wx_pay_reqs(XmlStr)->
+    URL="https://api.mch.weixin.qq.com/pay/unifiedorder",
+    {ok,{_,_,Ack}}=utility:send_httpc(post,{URL,XmlStr},"application/json"),
+    {#xmlElement{content=Content},_}=xmerl_scan:string(Ack),
+    Content.
+    
+sign(Pls0)->    
+    Pls1=[I||I={K,V}<-Pls0,V=/="", K=/=sign],
+    Pls=lists:sort(Pls1),
+    KVs=[atom_to_list(K)++"="++V||{K,V}<-Pls,V=/=""],
+    KVStr=string:join(KVs,"&"),
+    StringSignTemp=KVStr++"&key="++?WXAPI_KEY,
+    string:to_upper(hex:to(crypto:hash(md5,StringSignTemp))).
+    

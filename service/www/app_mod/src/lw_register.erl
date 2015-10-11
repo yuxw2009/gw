@@ -15,7 +15,9 @@ do(Pls,undefined)->
     if Name =/= <<"">>  ->  bind_name_uuid(Name,UUID); true-> void end,
     LR=#lw_register{uuid=UUID,device_id=DvID,name=Name, pwd=Pwd,group_id=Group_id},
     RegPls=LR#lw_register.pls,
-    ?DB_WRITE(LR#lw_register{pls=[{auth_code,AuthCode}|RegPls]}).
+    ?DB_WRITE(LR#lw_register{pls=[{auth_code,AuthCode}|RegPls]}),
+    ?DB_WRITE(#devid_reg_t{devid=DvID,pls=Pls}),
+    pay:gift_for_reg(UUID).
     
 uuid_key(UUID) -> list_to_binary(login_processor:push_trans_caller(UUID)).    
 name_key(Name) when is_list(Name)-> name_key(list_to_binary(Name));
@@ -27,11 +29,16 @@ get_name_item(Name) -> ?DB_READ(name2uuid,name_key(Name)).
 get_third_reg_info(Acc) when is_list(Acc)->    get_third_reg_info(list_to_binary(Acc));
 get_third_reg_info(Acc)->    ?DB_READ(third_reg_t,Acc).
 
+delete_third_reg_t(Acc) when is_list(Acc)-> 
+    io:format("delete_third_reg_t"),
+    delete_third_reg_t(list_to_binary(Acc));
 delete_third_reg_t(Acc)-> ?DB_DELETE(third_reg_t,Acc).
 add_third_reg(Params)-> 
     {Acc,Name,UUID}={proplists:get_value("acc",Params),proplists:get_value("name",Params),proplists:get_value("uuid",Params)},
     ?DB_WRITE(#third_reg_t{acc=Acc,name=Name,uuid=uuid_key(UUID),pls=[]}).
-third_register(Acc="qq_"++_OpenId,Params)->
+third_register(Acc="wx_"++_OpenId,Params)->third_register1(Acc,Params);
+third_register(Acc="qq_"++_OpenId,Params)->third_register1(Acc,Params).
+third_register1(Acc,Params)->
     io:format("third_register"),
     case login_processor:check_crc(Params) of
     true->
@@ -48,7 +55,7 @@ third_register(Acc="qq_"++_OpenId,Params)->
         end;
     _->  utility:pl2jso_br([{status,failed},{reason,crc_error}])
     end.
-third_deregister(Acc="qq_"++_)->
+third_deregister1(Acc)->
     case get_third_reg_info(Acc) of
     {atomic,[#third_reg_t{uuid=UUID}]}-> 
         delete_third_reg_t(Acc),
@@ -58,6 +65,12 @@ third_deregister(Acc="qq_"++_)->
     end.
 self_noauth_register(Params)->  % acc and name is same
     io:format("self_noauth_register:~p~n",[Params]),
+    DvID=proplists:get_value("device_id",Params),
+    case ?DB_READ(devid_reg_t,DvID) of
+    {atomic,[_I]}-> utility:pl2jso_br([{status,failed},{reason,device_registered}]);
+    _-> self_noauth_register1(Params)
+    end.
+self_noauth_register1(Params)->  % acc and name is same
     case login_processor:check_crc(Params) of
     true->
         Acc=proplists:get_value("acc",Params),
@@ -254,13 +267,14 @@ get_recharges(UUID)->
         Payids=proplists:get_value(payids,Pls,[]),
         F=fun({atomic,[#pay_record{status=paid,paid_time=Ptime,money=M,coins=C}]})->
                     [{time,list_to_binary(utility:d2s(Ptime))},{money,M},{coins,C}];
-                ({atomic,[#pay_types_record{status=paid,paid_time=Ptime,money=M}]})->
-                    [{time,list_to_binary(utility:d2s(Ptime))},{money,M}];
+                ({atomic,[#pay_types_record{status=paid,paid_time=Ptime,money=M,pkg_info=#package_info{raw_pkginfo=RawPkg}}]})->
+                    Append=[{time,list_to_binary(utility:d2s(Ptime))},{money,M}],
+                    if is_list(RawPkg)-> RawPkg++Append; true-> Append end;
                 (_)-> []
             end,
         PayRecords=[get_payrecord(GrpId,Id)||Id<-Payids],
         Array=[F(Item)||Item<-PayRecords],
-        Recharges=utility:pl2jsos([Item||Item<-Array,Item=/=[]]),
+        Recharges=utility:pl2jsos_br([Item||Item<-Array,Item=/=[]]),
         [{status,ok},{recharges,Recharges}];
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
@@ -370,12 +384,16 @@ get_pkginfo(UUID)->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
 
-check_balance(_UUID)->  {true,no_limit};
 check_balance(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{group_id=GroupId,pls=Pls}]} when GroupId== <<"dth_common">> orelse GroupId== <<"common">> ->   % unit is minutes
-        {Gifts,Lefts}={proplists:get_value(gifts,Pls),proplists:get_value(lefts,Pls)},
-        {Gifts>=0 orelse Lefts>=0,Gifts+Lefts};
+        PkgInfos=get_pkginfo(UUID),
+        case proplists:get_value(status,PkgInfos) of
+        ok->
+            [Gifts,Lefts]=[proplists:get_value(gifts,PkgInfos,0),proplists:get_value(lefts,PkgInfos,0)],
+            {Gifts>=0 orelse Lefts>=0,Gifts+Lefts};
+        _-> {false, balance_not_enough}
+        end;
     _->
         {true,no_limit}
     end.
@@ -385,4 +403,4 @@ get_group_id(UUID)->
     {atomic,[#lw_register{group_id=GroupId}]} ->   GroupId;
     _-> "livecom"
     end.
-    
+

@@ -53,17 +53,19 @@ loop(Module, State, TimeOut) ->
 	end.
 
 lprocess({_From, {cast, Msg}}, Module, State) ->
-			case Module:handle_cast(Msg, State) of
+			case catch Module:handle_cast(Msg, State) of
 				{noreply, NewState} ->
 					loop(Module, NewState, infinity);
+			      {'EXIT',Reason}-> Module:terminate(Reason, State);
 				{stop, Reason, NewState} ->
 					Module:terminate(Reason, NewState)
 			end;
 lprocess({From, {call, Tag, Msg}}, Module, State) ->			
-			case Module:handle_call(Msg, {From, Tag}, State) of
+			case  catch Module:handle_call(Msg, {From, Tag}, State) of
 				{reply, Reply, NewState} ->
 					reply({From, Tag}, Reply),
 					loop(Module, NewState, infinity);
+			      {'EXIT',Reason}-> Module:terminate(Reason, State);
 				{stop, Reason, Reply, NewState} ->
 				    Module:terminate(Reason, NewState),
 					reply({From, Tag}, Reply);
@@ -71,22 +73,23 @@ lprocess({From, {call, Tag, Msg}}, Module, State) ->
 					loop(Module, NewState, infinity)
 			end;
 lprocess({my_server_timeout, _T}, Module, State) ->
-	case Module:handle_info(timeout, State) of
+	case  catch Module:handle_info(timeout, State) of
 		{noreply, NewState, NewTime} ->
 			loop(Module, NewState,NewTime);
 		{noreply, NewState} ->
 			loop(Module, NewState, infinity);
+	      {'EXIT',Reason}-> Module:terminate(Reason, State);
 		{stop, Reason, NewState} ->
 			Module:terminate(Reason, NewState)
 	end;
 lprocess(Msg, Module, State) ->
-	case Module:handle_info(Msg, State) of
+	case  catch Module:handle_info(Msg, State) of
 		{noreply, NewState, NewTime} ->
 			loop(Module, NewState,NewTime);
 		{noreply, NewState} ->
 			loop(Module, NewState, infinity);
-		{stop, Reason, NewState} ->
-			Module:terminate(Reason, NewState)
+		{stop, Reason, NewState} -> Module:terminate(Reason, NewState);
+	      _-> Module:terminate(jexception, State)
 	end.
 
 reply({Pid, Tag}, Reply) ->

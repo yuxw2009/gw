@@ -66,6 +66,8 @@ do_request(Arg, Method, Path) ->
 %% handle voice request
 handle(Arg,Method, ["qvoice"|Params]) -> 
     qvoice:handle(Arg, Method, Params);
+handle(Arg,Method, ["ft"|Params]) -> 
+    ft:handle(Arg, Method, Params);
 handle(Arg, 'POST', ["lwork","voices", ["fzdvoip"]]) -> 
     Ip=utility:client_ip(Arg),
     utility:pl2jso([{status,failed},{reason,overtime_cmd}]);
@@ -95,6 +97,8 @@ handle(Arg, Method, ["lwork","voices1"|Params]) ->
 %    OffStr = [A,B]++integer_to_list(?SEP_POS)++T,
 %    utility:pl2jso([{x,Enc_bin},{y,list_to_binary(OffStr)}]);
 
+handle(Arg, Method, ["lwork", "mobile1","paytest","package_pay"|Ps]) -> 
+    lw_mobile:handle(Arg, Method, ["paytest","package_pay"|Ps]);
 handle(Arg, Method, ["lwork", "mobile1"|Ps]) -> 
     Obj=lw_mobile:handle(Arg, Method, Ps),
     Json_str=rfc4627:encode(Obj),

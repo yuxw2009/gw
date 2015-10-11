@@ -54,6 +54,7 @@ get_value(JsonObj, Key) ->
     not_found-> "undefined"
     end.
 
+value2list(V) when is_float(V) -> lists:flatten(io_lib:format("~p",[V]));
 value2list(V) when is_integer(V) -> integer_to_list(V);
 value2list(V) when is_binary(V) -> binary_to_list(V).
 
@@ -312,10 +313,11 @@ log(Filename, Str, CmdList) ->
 log(Str, CmdList) ->log("log/debug.log",Str,CmdList).
 	
      
-d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}}) ->
+d2s(Date) ->d2s(Date,"-",":"," ").
+d2s({Date = {_Year, _Month, _Day}, Time = {_Hour, _Minute, _Second}},DayCut,TimeCut,DayTimeCut) ->
     [Year0,Mon0,Day0,Hour0,Min0,Sec0]=[integer_to_list(I)||I<-[_Year, _Month, _Day,_Hour, _Minute, _Second]],
     [Mon1,Day1,Hour1,Min1,Sec1]=[string:copies("0",2-length(I))++I||I<-[Mon0,Day0,Hour0,Min0,Sec0]],
-    Year0++"-"++Mon1++"-"++Day1++" "++Hour1++":"++Min1++":"++Sec1.
+    Year0++DayCut++Mon1++DayCut++Day1++DayTimeCut++Hour1++TimeCut++Min1++TimeCut++Sec1.
 
 delay(T)->
     receive

@@ -207,11 +207,13 @@ handle(Arg, 'POST', ["voip", "dtmf"]) ->
 handle(Arg, 'POST', ["voip", "icalls"]) ->
     _IP = utility:client_ip(Arg),
     {UUID_SNO,Callee}= utility:decode(Arg, [{uuid, s},{phone, s}]),
+    
     Node=lw_mobile:get_node_by_ip0(Callee,UUID_SNO,utility:client_ip(Arg)),
-    utility:log(?CALL, "ios:~s=>~s ~s ~s clidata:~p",[UUID_SNO,Callee,utility:make_ip_str(_IP),Node,utility:get_by_stringkey("clidata",Arg)]),
+%    utility:log(?CALL, "ios:~s=>~s ~s ~s clidata:~p",[UUID_SNO,Callee,utility:make_ip_str(_IP),Node,utility:get_by_stringkey("clidata",Arg)]),
     case login_processor:autheticated(UUID_SNO,Callee) of
     [{status,ok},{uuid,UUID}|_]-> 
         GroupId=get_group_id(UUID,Arg),
+        login_processor:add_traffic(#traffic{uuid=UUID,caller=UUID,callee=Callee}),
         voice_handler:handle_startcall(Node,GroupId,Arg);
     [{status,failed},{reason,Reason}]->
         utility:pl2jso(get_failed_note(Reason))
@@ -424,7 +426,7 @@ sip_tp_call_handle(Arg,'POST', ["p2p_ios_ringing"],_Opdata={obj,_Pls})->
     utility:pl2jso(R);
     
 sip_tp_call_handle(Arg,'POST', ["p2p_ios_ringing1"],_Opdata={obj,_Pls})->    
-    io:format("p2p_ios_ringing sid_str:~p~n", [p2p_ios_ringing]),
+    io:format("p2p_ios_ringing1 sid_str:~p~n", [p2p_ios_ringing]),
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
     io:format("p2p_ios_ringing sid_str:~p~n", [Sid_str]),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
@@ -455,7 +457,7 @@ sip_tp_call_handle(Arg,'POST', ["p2p_ios_answer"],Opdata={obj,Pls})->
     Res;
 sip_tp_call_handle(Arg,'POST', ["p2p_ios_answer1"],Opdata={obj,Pls})->    
     {SDP,{SessionID}}= utility:decode(Arg, [{sdp,b},{opdata, o, [{session_id,s}]}]),
-    io:format("sip p2p_ios_answer sid_str:~p~n", [SessionID]),
+    io:format("sip p2p_ios_answer1 sid_str:~p~n", [SessionID]),
     Res=
     case voice_handler:dec_sid(SessionID) of
         {invalid_node,0}->   
@@ -521,7 +523,8 @@ p2p_push(CallerNode,Phone,Content)->
         push(Phone,Content)
     end.
 
-get_maxtalkt(UUID,_Arg)->
+get_maxtalkt(_UUID,"*"++_,_Arg)-> no_limit;
+get_maxtalkt(UUID,_,_Arg)->
    case lw_register:check_balance(UUID) of
    {true,Lefts} when is_number(Lefts) -> Lefts*60;
    {false,_} -> 0;
@@ -538,7 +541,7 @@ build_call_options(UUID, Arg)->
     Ip=utility:client_ip(Arg),
     { _CallerPhone, Phone, {IPs=[SessionIP|_], Port, Codec}, Class} = utility:decode(Arg, [{caller_phone, s}, {callee_phone, s},
 	                                   {sdp, o, [{ip, as}, {port, i}, {codec, s}]}, {userclass, s}]),
-    {MaxtalkT0,GroupId} = {get_maxtalkt(UUID,Arg),get_group_id(UUID,Arg)},
+    {MaxtalkT0,GroupId} = {get_maxtalkt(UUID,Phone,Arg),get_group_id(UUID,Arg)},
     Node=node(),
     Fun= if GroupId=="dth_common"-> consume_minutes; true-> consume_coins end,
     io:format("starcall callback:~p~n",[Fun]),
@@ -566,6 +569,7 @@ start_call0(UUID, Arg) ->
 start_call(UUID,Arg)-> start_call(UUID,Arg, fun(_,_)->   void end).
 start_call(UUID, Arg, XgAct) ->
 	{  Phone, {IPs=[SessionIP|_], Port}} = utility:decode(Arg, [{callee_phone, s}, {sdp, o, [{ip, as}, {port, i}]}]),
+	login_processor:add_traffic(#traffic{uuid=UUID,caller=UUID,callee=Phone}),
       Node =get_node_by_ip0(Phone,UUID,utility:client_ip(Arg)),
 	io:format("-"),
 	Ip=utility:client_ip(Arg),
@@ -621,6 +625,7 @@ get_wcg_node(_UUID,Ip)->
         _->    wwwcfg:get(test_node)
     end.
 
+get_node_by_ip0("00"++_,UUID=_yxwfztest,_) when UUID=="18017813673" -> 'gw@119.29.62.190';
 get_node_by_ip0(_Callee="0086"++_,UUID,Ip)-> 
     R=get_node_by_ip(UUID,Ip),
     io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
@@ -643,7 +648,6 @@ get_internal_node_by_ip(UUID,Ip)->
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
 %get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
 %    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
-get_node_by_ip(UUID=_yxwfztest,_) when UUID=="18017813673" -> 'gw_git@202.122.107.66';
 get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31230032" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 %get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
@@ -658,7 +662,7 @@ get_node_by_ip(UUID,Ip)->
     
 start_callback(UUID={_,UserId}, LocalPhone, Phone, SessionIP) ->    % remove fzd
     case login_processor:autheticated(UserId,Phone) of
-    [{status,ok},{uuid,_}]-> 
+    [{status,ok},{uuid,_}|_]-> 
         WcgNode=get_node_by_ip(LocalPhone,SessionIP),
         {_,SIPNODE} = rpc:call(WcgNode,avscfg,get,[sip_app_node]),
         do_callback1(SIPNODE,UUID,LocalPhone,Phone,no_limit);
@@ -691,6 +695,7 @@ do_callback(_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
     end.
 
 sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid)->
+    login_processor:add_traffic(#traffic{uuid=Callee,caller=Caller,callee=Callee,direction=incoming}),
     sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,login_processor:get_phone_type(Callee)).
 sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,"ios")->
     io:format("Callee:~p~n",[{Callee,login_processor:get_ip_tuple(Callee)}]),

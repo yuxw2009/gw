@@ -22,7 +22,7 @@
 init([]) ->
 	register(my_timer,self()),
 	timer:send_interval(?INTERVAL,time_out),
-	{ok,#st{start_time=now(),ticks=0,users=[]}}.
+	{ok,#st{start_time=os:timestamp(),ticks=0,users=[]}}.
 
 handle_call({register_interval,Pid,Tks,Msg},_From,#st{users=Us}=ST) ->
 	Ref = make_ref(),
@@ -41,7 +41,7 @@ handle_info(_Msg,ST) ->
 	{noreply,ST}.
 
 handle_cast(stop,#st{start_time=Stt}) ->
-	llog("my_timer stopped after ~ps",[timer:now_diff(now(),Stt) div 1000000]),
+	llog("my_timer stopped after ~ps",[timer:now_diff(os:timestamp(),Stt) div 1000000]),
 	{stop,normal,[]}.
 
 terminate(_,_) ->
@@ -92,8 +92,12 @@ cancel(TRef) ->
 	my_server:call(my_timer,{cancel_timer,TRef}).
 
 start() ->
-	{ok,Pid} = my_server:start(?MODULE,[],[]),
-	Pid.
+    case whereis(my_timer) of
+    undefined-> 
+        {ok,Pid} = my_server:start(?MODULE,[],[]),
+        Pid;
+    P-> P
+    end.
 
 stop() ->
 	my_server:cast(my_timer,stop).
