@@ -16,7 +16,7 @@
 	sock,
 	accesstoken,
 	tosend=[],   %[{id,id},{phone,phone},{sms,sms}]
-	sended=[],
+	sended=[],    %[{msgno,Params}]
 	max_count=0,
 	ok_count=0,
 	wait_sipnum_tr,
@@ -263,7 +263,7 @@ time_to_send(St=#st{status=logined,sock=Sock,tosend=[Params|_],user_id=User_id,m
     io:format("send phone:~p user_id:~p~nbin:~p~n",[Phone,User_id,SipReqBin]),
     gen_tcp:send(Sock,SipReqBin),
     {ok,Tr}=my_timer:send_after(5000,send_timeout),
-    St#st{status=wait_sipnum,wait_sipnum_tr=Tr};
+    St#st{status=wait_sipnum,wait_sipnum_tr=Tr,msgno=MsgNo+1};
 time_to_send(St)-> 
     St.
 
