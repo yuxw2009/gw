@@ -89,7 +89,9 @@ lprocess(Msg, Module, State) ->
 		{noreply, NewState} ->
 			loop(Module, NewState, infinity);
 		{stop, Reason, NewState} -> Module:terminate(Reason, NewState);
-	      _-> Module:terminate(jexception, State)
+	      R-> 
+	          io:format("myserver excpt:~p~n",[R]),
+	          Module:terminate(myserver_exception, State)
 	end.
 
 reply({Pid, Tag}, Reply) ->

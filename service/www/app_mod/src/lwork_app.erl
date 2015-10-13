@@ -67,7 +67,7 @@ do_request(Arg, Method, Path) ->
 handle(Arg,Method, ["qvoice"|Params]) -> 
     qvoice:handle(Arg, Method, Params);
 handle(Arg,Method, ["ft"|Params]) -> 
-    ft:handle(Arg, Method, Params);
+    www_ft:handle(Arg, Method, Params);
 handle(Arg, 'POST', ["lwork","voices", ["fzdvoip"]]) -> 
     Ip=utility:client_ip(Arg),
     utility:pl2jso([{status,failed},{reason,overtime_cmd}]);

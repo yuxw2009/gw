@@ -537,16 +537,17 @@ get_maxtalkt(UUID,_,_Arg)->
 %    end.
 get_group_id(UUID,_Arg)->     %from login_info
     login_processor:get_group_id(UUID).
+charge_callback_fun(GroupId,UUID)->
+    Fun= if GroupId=="dth_common"-> consume_minutes; true-> consume_coins end,
+    {node(),lw_register,Fun,UUID}.
 build_call_options(UUID, Arg)->
     Ip=utility:client_ip(Arg),
     { _CallerPhone, Phone, {IPs=[SessionIP|_], Port, Codec}, Class} = utility:decode(Arg, [{caller_phone, s}, {callee_phone, s},
 	                                   {sdp, o, [{ip, as}, {port, i}, {codec, s}]}, {userclass, s}]),
     {MaxtalkT0,GroupId} = {get_maxtalkt(UUID,Phone,Arg),get_group_id(UUID,Arg)},
     Node=node(),
-    Fun= if GroupId=="dth_common"-> consume_minutes; true-> consume_coins end,
-    io:format("starcall callback:~p~n",[Fun]),
     Options0=[{uuid, {GroupId, UUID}}, {audit_info, [{uuid,UUID},{ip,utility:make_ip_str(Ip)}]},{cid,UUID},{userclass, Class},{codec,Codec},
-                     {callback,{node(),lw_register,Fun,UUID}}],
+                     {callback,charge_callback_fun(GroupId,UUID)}],
     case voice_handler:check_token(UUID, string:tokens(Phone,"@")) of
         {pass, Phone2,Others=[FeeLength]} ->
     %		         io:format("Phone:~p Others:~p~n",[Phone,Others]),
@@ -648,7 +649,7 @@ get_internal_node_by_ip(UUID,Ip)->
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
 %get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
 %    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
-get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31230032" -> get_internal_node_by_ip(UUID,{168,167,165,245});
+get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31231028" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 %get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
 %get_node_by_ip(UUID="00862180246"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);

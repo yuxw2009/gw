@@ -63,11 +63,15 @@ third_deregister1(Acc)->
     _->
         void
     end.
+self_noauth_register(Params)-> self_noauth_register1(Params); % temporary don't limit user login for account num consideration
 self_noauth_register(Params)->  % acc and name is same
     io:format("self_noauth_register:~p~n",[Params]),
     DvID=proplists:get_value("device_id",Params),
     case ?DB_READ(devid_reg_t,DvID) of
-    {atomic,[_I]}-> utility:pl2jso_br([{status,failed},{reason,device_registered}]);
+    {atomic,[_I=#devid_reg_t{pls=Pls}]}-> 
+        Name=proplists:get_value("name",Pls),
+        UUID=proplists:get_value("uuid",Pls),
+        utility:pl2jso_br([{status,failed},{reason,device_registered},{name,Name},{uuid,UUID}]);
     _-> self_noauth_register1(Params)
     end.
 self_noauth_register1(Params)->  % acc and name is same

@@ -222,7 +222,8 @@ start_call1(SDP,Options) ->
 
 start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
 %    BA=xhr_poll:start([]),
-    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},{max_time, MaxtalkT}],
+    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
+                                   {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)}],
     case start_call1(WcgNode,SDP, Options) of
           {successful,Node,Session_id, Callee_sdp}->
               {enc_sid(Node, Session_id), Callee_sdp};
@@ -232,7 +233,8 @@ start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
     
 start_voip(ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
 %    BA=xhr_poll:start([]),
-    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},{max_time, MaxtalkT}],
+    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
+                                  {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)}],
     case start_call1(SDP, Options) of
           {successful,Node,Session_id, Callee_sdp}->
               {enc_sid(Node, Session_id), Callee_sdp};
