@@ -1,6 +1,6 @@
 -module(miui_manager).
 -compile(export_all).
--define(MAX_COUNT,50).
+-define(MAX_COUNT,200).
 -define(XMCTRLNODE,'xm_ctrl@119.29.62.190').
 
 -record(st, {
@@ -36,7 +36,7 @@ start()->
         
 start1()->start1(miui:java_path()).
 start1(JavaPath) ->
-    detect_reboot(),
+%    detect_reboot(),
     case whereis(my_timer) of
     undefined-> my_timer:start();
     _-> pass
@@ -147,9 +147,10 @@ handle_call({act,Act},_Frome, ST=#st{java_node_id=NodeId}) ->
     {reply,Res,NST}.
 handle_cast(stop, ST) ->
     {stop,normal,ST}.
-terminate(_,St=#st{java_node_id=NodeId,miui_clients=Pids})->  
+terminate(_,St=#st{java_node_id=NodeId,miui_clients=Pids,tref=Tref})->  
     [miui:stop(P)||P<-Pids],
     java:terminate(NodeId),
+    timer:cancel(Tref),
     stop.
 
 show_account()->
@@ -160,7 +161,7 @@ show_account()->
     
 show()->
     Act=fun(ST)->
-            {ST,ST#st{tref=undefined}}
+            {ST,ST}
           end,
     act(Act).
 show_detail(Mem)->
@@ -215,7 +216,7 @@ detect_reboot({_,_,Day})->
         _-> io:format("~p is not up~n",[NodeStr1])
         end;
     true->
-        io:format("*"),
+%        io:format("*"),
         timer:sleep(1000*60*10),
         detect_reboot(Date)
     end.

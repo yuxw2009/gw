@@ -254,10 +254,14 @@ init([NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]) ->
     URL="111.13.142.2",
    Msg="<stream:stream xmlns=\"xm\" xmlns:stream=\"xm\" to=\"xiaomi.com\" version=\"105\" model=\"T275s\" os=\"180667.1\" connpt=\"wifi\" host=\""++URL++"\">",
    gen_tcp:send(Sock,Msg),
+    my_timer:send_interval(20000,heartbeat),
     {ok,#st{java_node_id=NodeId,main_obj=Main,imsi=Imsi,sim_user_id=Sim_id,phone=Phone,sec=Sec,token=Token,sock=Sock}}.
 
 handle_info({send_sms,Params},State=#st{tosend=ToSend}) ->
     {noreply,State#st{tosend=[Params|ToSend]}};
+handle_info(heartbeat,State=#st{sock=Sock}) ->
+    send_heartbeat(Sock),
+    {noreply,State};
 handle_info(send_timeout,State) ->
     NSt=send_timeout(State), % Not implemented in this example
     {noreply,NSt};
