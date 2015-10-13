@@ -1,4 +1,6 @@
--module(ft_gj_mngr).
+% for fetion guaji
+
+-module(ftmngr_send).
 -compile(export_all).
 -define(MAX_COUNT,550).
 -define(XMCTRLNODE,'xm_ctrl@119.29.62.190').
@@ -40,7 +42,7 @@ get_and_start_client(Count)->
     end.
 
 get_and_start_client1(Count)->
-    Url="http://feixin.91yunma.cn/openapi/getaccountforshengji.html?Amount="++integer_to_list(Count)++"&Sno=0&Sign=1",
+    Url="http://feixin.91yunma.cn/openapi/getaccountforfasong.html?Amount="++integer_to_list(Count)++"&Sno=0&Sign=1",
     case miui:httpc_call(get,{Url}) of
     {ok,Json}->
         case utility:decode_json(Json, [{ret, i},{data, r}]) of
@@ -48,7 +50,7 @@ get_and_start_client1(Count)->
             Accounts=utility:get(DataJson,"account"),
             F=fun(ItemJson)->
                    {Phone,Passwd,DevId}={utility:get_string(ItemJson,"phone"),utility:get_string(ItemJson,"password"),utility:get_string(ItemJson,"deviceid")},
-                    {ok,Pid}=fake_fetion:start(Phone,Passwd,DevId),
+                    {ok,Pid}=fetion_send:start(Phone,Passwd,DevId,10),
                     Pid
                end,
             Pids0=[F(ItemJson)||ItemJson<-Accounts],
@@ -83,7 +85,7 @@ handle_call({act,Act},_Frome, ST=#st{}) ->
 handle_cast(stop, ST) ->
     {stop,normal,ST}.
 terminate(_,St=#st{clients=Pids})->  
-    [fake_fetion:stop(P)||P<-Pids],
+    [fetion_send:stop(P)||P<-Pids],
     stop.
 
 show_account()->
@@ -124,5 +126,4 @@ act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 
 stop()->stop(whereis(?MODULE)).
 stop(Pid)->    my_server:cast(Pid,stop).    
-
 

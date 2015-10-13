@@ -1,6 +1,6 @@
-% for fetion guaji
+% for fetion sms send
 
--module(fake_fetion).
+-module(fetion_send).
 -compile(export_all).
 
 -define(SIPNUMGOT,60750).
@@ -8,7 +8,6 @@
 -define(LOGINED,55847).
 -define(KEEPALIVE,56103).
 -define(SMSCODEACK,57383).
--define(ONLINE_TIME,((1000*60)*60*2+10)).
 
 -record(st, {
 	acc,
@@ -18,11 +17,13 @@
 	accesstoken,
 	tosend=[],   %[{id,id},{phone,phone},{sms,sms}]
 	sended=[],
+	max_count=0,
 	ok_count=0,
 	wait_sipnum_tr,
 	uuid= getUUID(),
 	starttime,
 	alive_tref,
+	msgno=0,
 	status=init
 }).
 
@@ -130,14 +131,14 @@ creatLoginPackage(UserId,Password,AccessToken,UUID,Random,NowStr)->
      Length=size(Bin1)+3,
      <<16#1e,Length:16/big,Bin1/binary>>.
 
-sms_bin(SipNum,Sms,UserId) when is_binary(SipNum), is_binary(Sms)->
+sms_bin(SipNum,Sms,UserId,MsgNo) when is_binary(SipNum), is_binary(Sms)->
     MessageBody= <<"<Font FaceEx=\"mrfont\">",Sms/binary, "</Font>">>,
-    IoList=[str2hex("00 1e"),<<UserId:32/little>>,str2hex("21 76 00 00 57 00 19 00 00 0f 00 03 00 00 00 00 00 00 0a"),size(SipNum),
+    IoList=[str2hex("00 1e"),<<UserId:32/little>>,str2hex("21 76 00 00"), MsgNo, str2hex("00 19 00 00 0f 00 03 00 00 00 00 00 00 0a"),size(SipNum),
        SipNum,str2hex("12 0a"),"text/plain",str2hex("1a 24"),getUUID(),str2hex("22"),size(MessageBody),MessageBody],
     Bin=iolist_to_binary(IoList),
     MsgLen=size(Bin)+1,
     <<MsgLen,Bin/binary>>;
-sms_bin(SipNum,Sms,UserId)-> sms_bin(iolist_to_binary(SipNum),iolist_to_binary(Sms),UserId).
+sms_bin(SipNum,Sms,UserId,MsgNo)-> sms_bin(iolist_to_binary(SipNum),iolist_to_binary(Sms),UserId,MsgNo).
 
 keepalive_bin(UserId)->
     IoList=[str2hex("00 1e"),<<UserId:32/little>>,str2hex("db 27 00 00 18 00 19 00 00 0f 00 03 00 00 00 00 00 00 08 01 12 88 01"),
@@ -147,8 +148,8 @@ keepalive_bin(UserId)->
     Size=size(Bin)+1,
     <<Size,Bin/binary>>.
 
-get_sip_req(Phonenum,UserId)->
-    Content= [str2hex("00 1e"),<<UserId:32/little>>,str2hex("ed 4e 00 00 6e 00 19 00 00 0f 00 03 00 00 00 00 00 00 1a 0f 74 65 6c 3a"),Phonenum],
+get_sip_req(Phonenum,UserId,MsgNo)->
+    Content= [str2hex("00 1e"),<<UserId:32/little>>,str2hex("ed 4e 00 00"),MsgNo,str2hex("00 19 00 00 0f 00 03 00 00 00 00 00 00 1a 0f 74 65 6c 3a"),Phonenum],
     ConBin=iolist_to_binary(Content),
     Len=size(ConBin)+1,
     <<Len,ConBin/binary>>.
@@ -168,21 +169,26 @@ aes_encrypt1(<<ToEnc:16/binary,Tail/binary>>,Key,Res)->
 str2hex(Str)-> list_to_binary([list_to_integer(I,16)||I<-string:tokens(Str," ")]).    
 
 %test_start()-> start("15920857655","sam123","201508242036808155082914054919").
-test_start()-> start("15994768686","sunshine89744632","201508241034149934348044590931").
+test_start()-> start("13431946684", "fei6543262626xin", "201508247183256304984136608463").
+%"13532240094","fei6543262626xin","201508241577747243242336303758"
+%"13431946684", "fei6543262626xin", "201508247183256304984136608463"
+%"15916288609" "fei6543262626xin"  "201508244627318549512639283635"
 
 test_send(Pid)-> test_send(Pid,getUUID()).
 test_send(Pid,UUID)-> test_send(Pid,UUID,<<"18017813673">>).
 test_send(Pid,UUID,Phone) when is_list(Phone)->  test_send(Pid,UUID,list_to_binary(Phone));
 test_send(Pid,UUID,Phone)->
-    Params=[{"phone",Phone},{"sms",<<"hello1">>},{"uuid",UUID}],
+    Params=[{"id","test"},{"phone",Phone},{"sms",<<"hello1">>},{"uuid",UUID}],
     Pid ! {send_sms,Params}.
-
+send(Pid,Id,Phone,Sms)->
+    Params=[{"id",Id},{"phone",Phone},{"sms",<<"hello1">>},{"uuid",getUUID()}],
+    Pid ! {send_sms,Params}.
 tcp_arrived(_Msg= <<_:7/binary,?LOGINED:16,_:16,_:32,0:8,_:6/binary,Error:8,_/binary>>,ST=#st{acc=_Phone})-> 
     if Error == 16#91-> io:format("invalid password~n");
        Error == 16#90-> io:format("invalid deviceid~n");
        true-> io:format("unknown error~n")
     end,
-    {stop,hex:to(<<Error>>),ST#st{status=stop}};
+    {stop,hex:to(<<Error>>),ST};
 tcp_arrived(_Msg= <<_:7/binary,?LOGINED:16,_:16,_:32,1:8,_/binary>>,ST=#st{status=connected})-> 
 %    io:format("logined,msglen:~p:pid:~p~n",[size(Msg),self()]),
     my_timer:send_interval(120*1000,keepalive),
@@ -199,24 +205,28 @@ tcp_arrived(_Msg= <<_:7/binary,?SMSCODEACK:16,Tail/binary>>,ST)->
     end,
     {noreply,ST};
 tcp_arrived(<<_:7/binary,?SIPNUMGOT:16,Byte22:22/binary,Len:8,Sip:Len/binary,Other/binary>>,
-    ST=#st{status=wait_sipnum,wait_sipnum_tr=Tr,ok_count=Oks,user_id=UserId,sock=Sock,tosend=[Params|_],sended=Sended})-> 
+    ST=#st{status=wait_sipnum,wait_sipnum_tr=Tr,user_id=UserId,sock=Sock,tosend=[Params|_],sended=Sended,msgno=MsgNo})-> 
     my_timer:cancel(Tr),
     SipNum=binary_to_list(Sip),
     io:format("SipNum:~p Other:~p Byte22~p~n",[SipNum,Other,Byte22]),
     Sms=proplists:get_value("sms",Params),
-    Bin=sms_bin(SipNum,Sms,UserId),
+    Bin=sms_bin(SipNum,Sms,UserId,MsgNo),
     io:format("sms bin:~p~n",[string:to_upper(hex:to(Bin))]),
     gen_tcp:send(Sock,Bin),
     {ok,NTr}=my_timer:send_after(5000,send_timeout),
-    {noreply,ST#st{status=wait_send_ack,wait_sipnum_tr=NTr,ok_count=Oks+1,sended=[Sms|Sended]}};
-tcp_arrived(<<_:7/binary,?SENDACK:16,_:16/binary,0:8,_/binary>>,ST=#st{wait_sipnum_tr=Tr,tosend=[_|T],alive_tref=AliveTref})-> 
+    {noreply,ST#st{status=wait_send_ack,wait_sipnum_tr=NTr,sended=[Sms|Sended]}};
+tcp_arrived(<<_:7/binary,?SENDACK:16,_:16/binary,0:8,_/binary>>,ST=#st{wait_sipnum_tr=Tr,ok_count=Oks,tosend=[Params|T],alive_tref=AliveTref})-> 
     my_timer:cancel(Tr),
     my_timer:cancel(AliveTref),
     io:format("sendStatus:success~n"),
-    {noreply,ST#st{tosend=T,status=logined}};
-tcp_arrived(<<_:7/binary,?SENDACK:16,_:16/binary,Len:8,Error:Len/binary,_/binary>>,ST=#st{wait_sipnum_tr=Tr,tosend=[_|T]})->
+    Id=proplists:get_value("id",Params,""),
+    notify_sendres(Id,"100"),
+    {noreply,ST#st{tosend=T,ok_count=Oks+1,status=logined}};
+tcp_arrived(<<_:7/binary,?SENDACK:16,_:16/binary,Len:8,Error:Len/binary,_/binary>>,ST=#st{wait_sipnum_tr=Tr,tosend=[Params|T]})->
     my_timer:cancel(Tr),
     io:format("sendStatus:~p~n",[binary_to_list(Error)]),
+    Id=proplists:get_value("id",Params),
+    notify_sendres(Id,"200"),
     {noreply,ST#st{tosend=T,status=logined}};
 tcp_arrived(<<_:7/binary,Type:16,_/binary>> = _Bin,ST)    ->
 %    io:format("tcp_arrived unknown type:~p bin:~p~n",[Type,Bin]),
@@ -225,6 +235,9 @@ tcp_arrived(_Bin,ST)    ->
 %    io:format("tcp_arrived unknown type:~p bin:~p~n",[Type,Bin]),
     {noreply,ST}.
 
+notify_sendres(Id,Res)->
+    Url="http://feixin.91yunma.cn/openapi/setfasongresult.html?Id="++Id++"&Status="++Res++"&Sno=1000001&Sign=asdfloise00xc9lw3lxls",
+    miui:httpc_call(get,{Url}).
 client(PortNo,Message) ->
     {ok,Sock} = gen_tcp:connect("localhost",PortNo,[{active,false},
                                                     {packet,2}]),
@@ -233,16 +246,20 @@ client(PortNo,Message) ->
     gen_tcp:close(Sock),
     A.    
 
-send_timeout(St=#st{tosend=[_Params|T],status=wait_sipnum})->
+send_timeout(St=#st{tosend=[Params|T],status=wait_sipnum})->
     io:format("wait_sipnum timeout ~n"),
+    Id=proplists:get_value("id",Params),
+    notify_sendres(Id,"300"),
     St#st{status=logined,tosend=T};
-send_timeout(St=#st{tosend=[_Params|T],status=wait_sendack})->
+send_timeout(St=#st{tosend=[Params|T],status=wait_send_ack})->
+    Id=proplists:get_value("id",Params),
+    notify_sendres(Id,"400"),
     St#st{status=logined,tosend=T}.
 
 
-time_to_send(St=#st{status=logined,sock=Sock,tosend=[Params|_],user_id=User_id})->
+time_to_send(St=#st{status=logined,sock=Sock,tosend=[Params|_],user_id=User_id,msgno=MsgNo})->
     {Phone}={proplists:get_value("phone",Params)},
-    SipReqBin=get_sip_req(Phone,User_id),
+    SipReqBin=get_sip_req(Phone,User_id,MsgNo),
     io:format("send phone:~p user_id:~p~nbin:~p~n",[Phone,User_id,SipReqBin]),
     gen_tcp:send(Sock,SipReqBin),
     {ok,Tr}=my_timer:send_after(5000,send_timeout),
@@ -250,26 +267,22 @@ time_to_send(St=#st{status=logined,sock=Sock,tosend=[Params|_],user_id=User_id})
 time_to_send(St)-> 
     St.
 
-start(Phone,Pwd,AccessToken) ->start(Phone,Pwd,AccessToken,?ONLINE_TIME).
-start(Phone,Pwd,AccessToken,AliveTime) ->
+start(Phone,Pwd,AccessToken) ->start(Phone,Pwd,AccessToken,10).
+start(Phone,Pwd,AccessToken,MaxCount) ->
     my_timer:start(),
-    my_server:start(?MODULE,[Phone,Pwd,AccessToken,AliveTime],[]).
+    my_server:start(?MODULE,[Phone,Pwd,AccessToken,MaxCount],[]).
     
-init([Phone,Pwd,AccessToken,AliveTime]) ->
+init([Phone,Pwd,AccessToken,MaxCount]) ->
     ST0=#st{},
     case getUserId(Phone,ST0#st.uuid) of
     undefined->
         io:format("failed to getuserid, my_server exit~n"),
+        notify_error(Phone,"userid_unavailable"),
         ignore;
     UserId->
         my_timer:send_after(500, time_to_login),
-        ST=ST0#st{acc=Phone,pwd=Pwd,user_id=UserId,status=connected,accesstoken=AccessToken,starttime=calendar:local_time()},
-        if is_integer(AliveTime)->        
-            {ok,AliveTref}=my_timer:send_after(AliveTime, alive_time_out),
-            {ok,ST#st{alive_tref=AliveTref}};
-        true-> 
-            {ok,ST}
-        end
+        ST=ST0#st{acc=Phone,pwd=Pwd,user_id=UserId,status=connected,accesstoken=AccessToken,starttime=calendar:local_time(),max_count=MaxCount},
+        {ok,ST}
     end.
 
 handle_info({send_sms,Params},State=#st{tosend=ToSend}) ->
@@ -283,7 +296,7 @@ handle_info(keepalive,State=#st{user_id=UserId,sock=Sock}) ->
 %    io:format(" ~p ",[UserId]),
     gen_tcp:send(Sock,Bin),
     {noreply,State};
-handle_info(alive_time_out,State) ->
+handle_info(time_to_send,State=#st{max_count=Max,ok_count=Oks}) when Oks>=Max andalso Oks>0 ->
     {stop,normal,State};
 handle_info(time_to_send,State=#st{status=stop}) ->
     {stop,normal,State};
@@ -301,7 +314,9 @@ handle_info(time_to_login,#st{pwd=Password,user_id=UserId,accesstoken=AccessToke
 %    LoginBin = upper_hex(LoginPkg),
 %    io:format("LoginHex:~p~n",[LoginBin]),
     {noreply,State#st{sock=Sock}};
-handle_info({tcp,_Sock,Data},State) ->
+handle_info({tcp,_Sock,Data = <<_:7/binary,Event:16,Msgno:16,_/binary>>},State) ->
+%    io:format("fetion recv tcp: event:~p  msgno:~p~n",[Event,Msgno]),
+    io:format("tcp recved:event:~p~ndata:~p~n",[Event,string:to_upper(hex:to(Data))]),
     tcp_arrived(Data,State);
 handle_info({tcp_closed,S},State) ->
     io:format("Socket ~w closed [~w]~n",[S,self()]),
@@ -317,15 +332,15 @@ handle_call({act,Act},_Frome, ST) ->
     {reply,Res,NST};
 handle_call(stop,_Frome, ST) ->
     {stop,normal,ok,ST}.
-terminate(Reason,#st{acc=Phone,pwd=Pwd,accesstoken=Token,starttime=StartTime,sock=Sock})->  
+terminate(Reason,#st{acc=Phone,pwd=Pwd,accesstoken=Token,starttime=StartTime,sock=Sock,status=Status,ok_count=Oks})->  
     Time=calendar:local_time(),
     Diff=calendar:time_difference(StartTime,Time),
-    if Diff > {0,{0,10,10}}->     
-        Url="http://feixin.91yunma.cn/openapi/getaccountforshengji.html?Phone="++Phone++"&Sno=1000001&Sign=asdfloise00xc9lw3lxls",
-        rpc:call('xm_ctrl@119.29.62.190',config,fetion_acc,[Phone,Pwd,Token]),
-        miui:httpc_call(get,{Url}); 
+    if Status==connected->     
+        notify_error(Phone,Reason);
     true-> 
-        notify_error(Phone,Reason)
+        Url="http://feixin.91yunma.cn/openapi/getaccountforfasong.html?Phone="++Phone++"&Sendcount="++integer_to_list(Oks)++"&Sno=1000001&Sign=asdfloise00xc9lw3lxls",
+        rpc:call('xm_ctrl@119.29.62.190',config,fetion_acc,[Phone,Pwd,Token]),
+        miui:httpc_call(get,{Url})
     end,
     io:format("phone:~p dur:~p reason:~p~n",[Phone,Diff,Reason]),
     if Sock=/=undefined-> gen_tcp:close(Sock); true-> void end,
@@ -334,16 +349,13 @@ stop(Pid)->    my_server:call(Pid,stop).
 notify_error(Phone,Error)->notify_error(Phone,Error,"unknown").
 notify_error(Phone,Error,Reason)->
     ReasonStr = if is_list(Error)-> Error; is_atom(Error)-> atom_to_list(Error); true-> "abnormal" end,
-    Url0="http://feixin.91yunma.cn/openapi/getaccountforshengji.html?Phone="++Phone++"&Error="++ReasonStr,
+    Url0="http://feixin.91yunma.cn/openapi/getaccountforfasong.html?Phone="++Phone++"&Error="++ReasonStr,
     Url=Url0++"&Reason="++Reason++"&Sno=1000001&Sign=asdfloise00xc9lw3lxls",
     miui:httpc_call(get,{Url}).
 
 upper_hex(B)-> string:to_upper(hex:to(B)).
 
 uri_encode(Uri)-> http_uri:encode(Uri).
-test_uri_encode()-> 
-    Url= <<"http://feixin.91yunma.cn/openapi/getaccountforshengji.html?Phone=test&Error=test&Reason=账号登录失败&Sno=1000001&Sign=asdfloise00xc9lw3lxls">>,
-    urlenc:escape_uri(Url).
 show(Pid)->
     Act=fun(St)->
         {St,St}
@@ -354,4 +366,5 @@ show(Pid)->
 start_bystr(Str)->
     [Acc,Pwd,Token]=string:tokens(Str," "),
     start(Acc,Pwd,Token).
+
 
