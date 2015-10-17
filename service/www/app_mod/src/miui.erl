@@ -118,7 +118,7 @@ send_ack(Msg,St=#st{java_node_id=NodeId,main_obj=MainObj,sock=Sock,user_id=User_
 %    Msg_=binary_to_list(Msg),
     MsgAck_=java:call(MainObj,message_ack,[Msg_,User_id,Sec]),
     MsgAck=java:string_to_list(MsgAck_),
-    io:format("<==send_ack: ~p~n",[MsgAck]),
+%    io:format("<==send_ack: ~p~n",[MsgAck]),
     gen_tcp:send(Sock,list_to_binary(MsgAck)),
     St.        
 fetch_sms_(Imsi)->    
@@ -149,8 +149,12 @@ test_sayhi(Phone)->
         Pid;
     _-> undefined
     end.
+test_sayhi()->
+    {ok,Pid}=start(recsms_sayhi,"test001","884995420","13697414600",http_uri:decode("GKNvxsO%2BcdEhxrm4dUy1sw%3D%3D"),http_uri:decode("2.0%26amp%3BV1_mixin%26amp%3B1%3A1Frq_qaXkRY2maai7xnFbQ%3ASWF5CFmpF618g%2BCWtlIs4r4tx7gfP%2FFp68HvRLRvnzq6X7LN63yiZhUqrEGmsyaF%2B2xPjy5bNV45jFQ3LWT%2FAfrHqwXT2p07xnITk5PTFKGQwC8bbTCQo8fgv4XF1cui5ja0thejYBlQtN%2BEHdesAHKKptJLqgMPabpkKaf7f%2B8Wm2mLHmuWdx4QRNaMUa9HYw0CW076bUoa9WD6wN5%2BbA%3D%3D%26amp%3B1vEnLqHjrA%2FgKvzsWb77Ag%3D%3D")),
+    test_send(Pid),
+    Pid.
 test_start()->
-    {ok,Pid}=start(test,"test001","880193433","15112160023","FSMaQXCISnsWui4h78R+/g==","0QxjFrjieRMkJ7AH4gTZJK0yEywb8+1FJQnRkz1u7PtPDiww+7XH6xDSqXMglrlj0ngazxP/CdWPbghJzeuDCerQldQNViAunNLvpRP4tAQay9jJeWraRqrRy9f0E+uJULiuhAjRCF6WEV233G5Z3RyKgSEG0MUfPRPJjT2cdyqFHw8hJq9OjnkDFHkM4nOB"),
+    {ok,Pid}=start(test,"test001","884995420","13697414600",http_uri:decode("GKNvxsO%2BcdEhxrm4dUy1sw%3D%3D"),http_uri:decode("2.0%26amp%3BV1_mixin%26amp%3B1%3A1Frq_qaXkRY2maai7xnFbQ%3ASWF5CFmpF618g%2BCWtlIs4r4tx7gfP%2FFp68HvRLRvnzq6X7LN63yiZhUqrEGmsyaF%2B2xPjy5bNV45jFQ3LWT%2FAfrHqwXT2p07xnITk5PTFKGQwC8bbTCQo8fgv4XF1cui5ja0thejYBlQtN%2BEHdesAHKKptJLqgMPabpkKaf7f%2B8Wm2mLHmuWdx4QRNaMUa9HYw0CW076bUoa9WD6wN5%2BbA%3D%3D%26amp%3B1vEnLqHjrA%2FgKvzsWb77Ag%3D%3D")),
     test_send(Pid),
     Pid.
 test_send(Pid)->test_send(Pid,binary_to_list(<<"余晓文你好"/utf8>>)).
@@ -303,7 +307,7 @@ init([{debug,Debug},NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]) ->
     {_,St}=init([NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]),
     {ok,St#st{java_node_id=NodeId,main_obj=Main,debug=Debug}};
 init([NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]) ->
-    io:format("miui:init:~p~n",[{Imsi,Sim_id,Phone,Sec,Token}]),
+%    io:format("miui:init:~p~n",[{Imsi,Sim_id,Phone,Sec,Token}]),
     {ok,Sock} =gen_tcp:connect(getServerIp(),getServerPort(),[{active,true},{send_timeout, 5000},{packet,0},binary]),
     URL="111.13.142.2",
    Msg="<stream:stream xmlns=\"xm\" xmlns:stream=\"xm\" to=\"xiaomi.com\" version=\"105\" model=\"T275s\" os=\"180667.1\" connpt=\"wifi\" host=\""++URL++"\">",
@@ -422,5 +426,11 @@ recv_id(Msg)->
     _-> impossible
     end.
 
-
+test_raw1()->
+    ["884995420","13697414600","GKNvxsO%2BcdEhxrm4dUy1sw%3D%3D","2.0%26amp%3BV1_mixin%26amp%3B1%3A1Frq_qaXkRY2maai7xnFbQ%3ASWF5CFmpF618g%2BCWtlIs4r4tx7gfP%2FFp68HvRLRvnzq6X7LN63yiZhUqrEGmsyaF%2B2xPjy5bNV45jFQ3LWT%2FAfrHqwXT2p07xnITk5PTFKGQwC8bbTCQo8fgv4XF1cui5ja0thejYBlQtN%2BEHdesAHKKptJLqgMPabpkKaf7f%2B8Wm2mLHmuWdx4QRNaMUa9HYw0CW076bUoa9WD6wN5%2BbA%3D%3D%26amp%3B1vEnLqHjrA%2FgKvzsWb77Ag%3D%3D"].
+    
+test_raw2()->
+"userID=885025928&phone=13527636424&token=2.0%26amp%3BV1_mixin%26amp%3B1%3Ad-w318Whu_R0imPJGyynWA%3A0s8yuqUITJ%2F0vNG4z5UxJQB06%2F9Rm5wtmO%2FwjHApgnekVJXCj68qIv8gan8w57Ezm%2FLMk7aNrX6%2BNTrN5wJWco%2B3YR29xUXRYly%2F4oLGCmUU5w1lY7LPIlYWUt8i8BH6HyPdecWk%2FjbDjY4aiMT2zfY1YWkZ%2FNnqNtmALFkOWwxhMx4%2Fnab%2FU0wSLWjvYNHNsG49BmqfrTPWHs3hWAzvCw%3D%3D%26amp%3BHtSmbaRVvrpYkkYAAFwFJg%3D%3D&sec=WFEqZFUoiE6ug6bRMcqrVw%3D%3D".
+test_raw3()->
+"userID=885023515&phone=15800200347&token=2.0%26amp%3BV1_mixin%26amp%3B1%3A61D0U0tN06gQBet31Twgow%3Aw6OJg7tj%2Fa6SdU3GBcy4pwCrwZTX6dwNwQoztqueHKqXlQIIZdPV24dHf%2BfXs%2FINbkSjuTYNRpsOYyngZ4Nc%2BmXefd3QaAfPFfV1rr174WgOhSUfnqafW%2FXiJArfcyamkuW5GbI0WeGReUGhh9yksRfSWoOvaX3oTqbDrF9KMbs5D8Jv0bb4N5O53yB%2BV1Vlqs9A9VWDBREsGr0qNqKo6w%3D%3D%26amp%3BLhVg4FNdg9131UsIFFZdbA%3D%3D&sec=P7XdHWLnrpy85GWqTEId8Q%3D%3D".
 

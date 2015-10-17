@@ -42,16 +42,19 @@ start1(JavaPath) ->
     _-> pass
     end,
     my_server:start({local,?MODULE}, ?MODULE,[JavaPath],[]).
-    
-init([JavaPath]) ->
+
+start_sayhi()->
+    my_server:start({local,?MODULE}, ?MODULE,[JavaPath,start_sayhi_client],[]).    
+init([JavaPath]) -> init([JavaPath,get_and_start_client]).
+init([JavaPath,FunName])->
     erlang:group_leader(whereis(user), self()),
-    io:format("cookie:~p~n",[erlang:get_cookie()]),
+%    io:format("cookie:~p~n",[erlang:get_cookie()]),
     {ok,NodeId} = java:start_node([{add_to_java_classpath,[JavaPath]},{enable_gc,true}]),
-    io:format("88888888888888888888~p~n",[NodeId]),
+%    io:format("88888888888888888888~p~n",[NodeId]),
     Main=java:new(NodeId,'com.miui.main.Main',[]),
-    io:format("9999999999999999999999~p~n",[Main]),
+%    io:format("9999999999999999999999~p~n",[Main]),
     St=#st{java_node_id=NodeId,main_obj=Main},
-    Pids=get_and_start_client(NodeId,Main,?MAX_COUNT),
+    Pids=?MODULE:FunName(NodeId,Main,?MAX_COUNT),
     {ok,Tref}=my_timer:send_interval(10000,get_account_time),
     {ok,St#st{miui_clients=Pids,tref=Tref,limits=?MAX_COUNT}}.
 
@@ -92,7 +95,7 @@ get_and_start_client1(NodeId,Main,Count)->
     _->
         []
     end.
-    
+start_sayhi_client(NodeId,Main,Count)-> todo.
 get_and_start_client2(NodeId,Main,Count)->
     Url="http://sms.91yunma.cn/openapi/getxmaccount2.html?Type=fasong&Amount="++integer_to_list(Count),
     case miui:httpc_call(get,{Url}) of
