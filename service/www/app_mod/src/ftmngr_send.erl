@@ -2,12 +2,13 @@
 
 -module(ftmngr_send).
 -compile(export_all).
--define(MAX_COUNT,550).
+-define(MAX_COUNT,1).
 -define(XMCTRLNODE,'xm_ctrl@119.29.62.190').
 
 -record(st, {
 	tref,
 	limits=0,
+	needsends=[],
 	clients
 }).
 
@@ -120,7 +121,29 @@ restore()->
             {ok,ST#st{tref=Tref}}
           end,
     act(Act).
+store_needsends(Params)->
+    Act=fun(ST=#st{needsends=NeedS})->
+             NNeeds=[Params|NeedS],
+            {NNeeds,ST#st{needsends=NNeeds}}
+          end,
+    act(Act).
 
+fetch_needsends(Count)->
+    Act=fun(ST=#st{needsends=Needs})->
+             {Fetches,Lefts}=if length(Needs)>Count-> lists:split(Count,Needs); true-> {Needs,[]} end,
+            {Fetches,ST#st{needsends=Lefts}}
+          end,
+    act(Act).
+
+add_sendtask(Phone,Pwd,AccessToken)->add_sendtask(Phone,Pwd,AccessToken,10).
+add_sendtask(Phone,Pwd,AccessToken,Count)->
+    Act=fun(ST=#st{clients=Clients})->
+        {ok,Pid}=fetion_send:start(Phone,Pwd,AccessToken,Count),
+            erlang:monitor(process,Pid),
+            {[Pid|Clients],ST#st{clients=[Pid|Clients]}}
+          end,
+    act(Act).
+    
 act(Act)->    act(whereis(?MODULE),Act).
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 
