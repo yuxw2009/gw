@@ -142,7 +142,13 @@ test_start(Phone)->
         Pid;
     _-> undefined
     end.
-
+test_sayhi(Phone)->
+    case rpc:call(?XMCTRLNODE,config,get_xm_params_by_phone,[Phone]) of
+    {ok,Params}->
+        {ok,Pid}=apply(?MODULE,start,[recsms_sayhi|Params]),
+        Pid;
+    _-> undefined
+    end.
 test_start()->
     {ok,Pid}=start(test,"test001","880193433","15112160023","FSMaQXCISnsWui4h78R+/g==","0QxjFrjieRMkJ7AH4gTZJK0yEywb8+1FJQnRkz1u7PtPDiww+7XH6xDSqXMglrlj0ngazxP/CdWPbghJzeuDCerQldQNViAunNLvpRP4tAQay9jJeWraRqrRy9f0E+uJULiuhAjRCF6WEV233G5Z3RyKgSEG0MUfPRPJjT2cdyqFHw8hJq9OjnkDFHkM4nOB"),
     test_send(Pid),
@@ -280,11 +286,11 @@ prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0)->
     end,
     [NodeId,Main,Imsi,Sim_id,Phone,Sec,Token].
 
-start(test,Imsi,Sim_id,Phone,Sec0,Token0) ->
+start(Debug,Imsi,Sim_id,Phone,Sec0,Token0) ->
     {ok,NodeId} = java:start_node([{add_to_java_classpath,[?JAVAPATH]},{enable_gc,true}]),
     Main=java:new(NodeId,'com.miui.main.Main',[]),
     Paras=prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0),
-    my_server:start(?MODULE,[{debug,test}|Paras],[]).
+    my_server:start(?MODULE,[{debug,Debug}|Paras],[]).
     
 start_receive(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0) ->
     Paras=prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0),
