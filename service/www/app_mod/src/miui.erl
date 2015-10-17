@@ -361,7 +361,7 @@ terminate(_,St=#st{imsi=Imsi,main_obj=MainObj,java_node_id=NodeId,debug=Debug,to
     end,
     rpc:call(?XMCTRLNODE,config,xm_month_num,[SendNums,AckNums]),
     
-    if Debug==test andalso NodeId=/=undefined-> java:terminate(NodeId); true-> void end,
+    if NodeId=/=undefined-> java:terminate(NodeId); true-> void end,
 %    io:format("terminate: imsi:~p~n",[Imsi]),
     stop.
 stop(Pid)->    my_server:call(Pid,stop).    
