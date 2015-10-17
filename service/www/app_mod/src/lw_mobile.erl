@@ -538,7 +538,7 @@ get_maxtalkt(UUID,_,_Arg)->
 get_group_id(UUID,_Arg)->     %from login_info
     login_processor:get_group_id(UUID).
 charge_callback_fun(GroupId,UUID)->
-    Fun= if GroupId=="dth_common"-> consume_minutes; true-> consume_coins end,
+    Fun= if GroupId=="dth_common" orelse  GroupId=="dth" -> consume_minutes; true-> consume_coins end,
     {node(),lw_register,Fun,UUID}.
 build_call_options(UUID, Arg)->
     Ip=utility:client_ip(Arg),

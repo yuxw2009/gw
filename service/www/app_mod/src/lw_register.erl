@@ -379,9 +379,9 @@ get_pkginfo(UUID)->
             {Year,Mon,Day}=From,
             LeftMonths= Mon+Circles,
             NYear=Year+(LeftMonths div 13),
-            NMon=LeftMonths rem 13,
+            NMon=(LeftMonths div 13)+(LeftMonths rem 13),
             Expire=integer_to_list(NYear)++"/"++integer_to_list(NMon)++"/"++integer_to_list(Day),
-            [{status,ok},{lefts,Limits-Consumed},{cur_consumed,Consumed},{gifts,Gifts},{expir_date,list_to_binary(Expire)}];
+            [{status,ok},{lefts,round(Limits-Consumed)},{cur_consumed,round(Consumed)},{gifts,Gifts},{expir_date,list_to_binary(Expire)}];
         []-> [{status,failed},{reason,no_packages}]
         end;
     _->

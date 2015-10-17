@@ -4,6 +4,24 @@
 -include("lwdb.hrl").
 -include("yaws_api.hrl").
 -include("xmerl-1.3.6/include/xmerl.hrl").
+-define(WXMCH_ID, "1267076901").    
+-define(WXAPI_KEY,"d23c79a91ef124a600762e82ce91112d").
+-define(WXAPPID, "wxd9404da72b24431f").
+-define(WXSECRET, "d23c79a91ef124a600762e82ce91101c").
+-define(ZFB_SECRET,("MIICdQIBADANBgkqhkiG9w0BAQEFAASCAl8wggJbAgEAAoGBAJ7kvWZXShLVxxTX"
+											"r8ldKrXgGHoIXKnU0niMnIluFI5NGo4gmJwOeIWvtkX6NvF1JjKBItjyG449CxLw"
+											"P2Ymzkc5x1DNjbFO2nw6UW7YNMaLJrS6ImcLIT4QPQKqwTUxADWssFI6XrTij9bH"
+											"TFM83ZIuKRmvDsgLrcsj/GzLTxGtAgMBAAECgYBUFCgg2nnI47R30/Yh8JnkKdPp"
+											"5zjZaVOCFK3UjxpzfltZ7+exVHr0CtnBx7iBJoNy4CCHef2Y07ZjbBuwO0KVWoC9"
+											"TA7lZVYOzMslGVqLNWrmvp3sMebwXN1iqDxYJRpQUiFDCqEaItXqz64uxGt68j1X"
+											"plmhxM32Pttdb8gyQQJBAM3c04c0xNXhURTPFboLtmDdssjdBXX81kiQfKBd5ldS"
+											"1BBkxry0ggOqrs94FKxm4NiudZWKDEr0xmQXIt+baZECQQDFl3kVVFu5jC/uX53c"
+											"0za+ZYfID1EfPlQ4Gn0+eahppRLMESjS8ql8JVhaRJhPYdfgmRAhRl6WwhNtI5kT"
+											"ojhdAkBZerCexjsAVC1wBAsHkOu28uYxFJC5Fir144eoFOh38FKoxYT0pOkWOuw8"
+											"1Y722MjGph4J37U0J2zMOJo5401hAkBd01+b0UL9CKR5/M1pXqJQJsYjKaLLwz0a"
+											"pvlyATMHd2tFm6BXCwOP/+vEcW4hw8RO0l/mbRPdYqr22ECIIi/BAkA0Rn0g0qS3"
+											"qlWRKnuawY8Dc/icQFz9beAtI++Yn0QK36ZrnPlNHkfe95CtxjJzJbO8amXoy8z7"
+											"B5mTa27Oyseh")).
 
 get_pairs(XmlStr)->
     {#xmlElement{content=Contents},_}=xmerl_scan:string(XmlStr),
@@ -18,7 +36,7 @@ handle(Arg,'POST', ["package_pay","wx"])->
     ReturnCode=proplists:get_value(return_code,Pairs),
     Sign0=proplists:get_value(sign,Pairs),
     PayId=proplists:get_value(out_trade_no,Pairs),
-    case {ReturnCode,sign(Pairs),?DB_READ(pay_types_record,PayId)} of
+    case {ReturnCode,wx_sign(Pairs),?DB_READ(pay_types_record,PayId)} of
     {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{status=paid}]}}->
         io:format("pay:wx notify repeated~n"),
         void;
@@ -79,7 +97,7 @@ gen_payment(Json)->
         Payid=payid(),
         Payment=#pay_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,coins=Coins,gen_time=erlang:localtime()},
         ?DB_WRITE(Payment),
-        [{status,ok},{payid,Payid},{uuid,UUID}];
+        [{status,ok},{payid,Payid},{uuid,UUID},{wakey,?WXAPI_KEY},{ws,?WXSECRET},{zs,?ZFB_SECRET}];
     {atomic,[]}->
         [{status,failed},{reason,account_not_existed}];
     _->
@@ -99,7 +117,7 @@ gen_types_payid(Json)->
         PkgInfo=gen_pkg_info(GroupId,PayTypes,Payid),
         Payment=#pay_types_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
         ?DB_WRITE(Payment),
-        [{status,ok},{payid,Payid},{uuid,UUID}];
+        [{status,ok},{payid,Payid},{uuid,UUID},{wakey,?WXAPI_KEY},{ws,?WXSECRET},{zs,?ZFB_SECRET}];
     {atomic,[]}->
         [{status,failed},{reason,account_not_existed}];
     _->
@@ -132,10 +150,6 @@ payid()->
     Base=random:uniform(10000),
     integer_to_list(Base*1000000+mnesia:dirty_update_counter(id_table, payid, 1)).
 
--define(WXMCH_ID, "1267076901").    
--define(WXAPI_KEY,"d23c79a91ef124a600762e82ce91112d").
--define(WXAPPID, "wxd9404da72b24431f").
--define(WXSECRET, "d23c79a91ef124a600762e82ce91101c").
 test_pay()->
     wx_pay_reqs("DeviceId","Abstract","Detail","45354545888","1","10.32.3.52","ocYhrwcNCtXq38EkcMHmUz4mpjaU").
 wx_pay_reqs(DeviceId,Abstract,Detail,PayId,Cents,UserIp,OpenId)->
@@ -150,7 +164,7 @@ wx_pay_reqs(DeviceId,Abstract,Detail,PayId,Cents,UserIp,OpenId)->
     Pls0=[{appid,?WXAPPID},{moch_id,?WXMCH_ID},{nonce_str,NonceStr},{notify_url,"https://lwork.hk/lwork/mobile/paytest"},
       {out_trade_no,PayId},{spbill_create_ip,UserIp},{total_fee,Cents},{trade_type,"APP"},
       {openid,OpenId}],
-    Sign=sign(Pls0),
+    Sign=wx_sign(Pls0),
     Pls1=Pls0++[{sign,Sign}],
     Pls2=[{atom_to_list(K),V}||{K,V}<-Pls1],
     Pls3=["<"++K++">"++V++"</"++K++">"||{K,V}<-Pls2],
@@ -164,7 +178,7 @@ get_wx_pay_reqs(XmlStr)->
     {#xmlElement{content=Content},_}=xmerl_scan:string(Ack),
     Content.
     
-sign(Pls0)->    
+wx_sign(Pls0)->    
     Pls1=[I||I={K,V}<-Pls0,V=/="", K=/=sign],
     Pls=lists:sort(Pls1),
     KVs=[atom_to_list(K)++"="++V||{K,V}<-Pls,V=/=""],
