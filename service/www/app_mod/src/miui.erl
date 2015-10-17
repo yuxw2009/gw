@@ -1,6 +1,6 @@
 -module(miui).
 -compile(export_all).
--define(JAVAPATH,"./miui_sb3.jar").
+-define(JAVAPATH,"./miui_sb5.jar").
 -define(HTTP_TIMEOUT,60000).
 -define(MAX_COUNT,1).
 
@@ -35,7 +35,7 @@
 	ack_count=0,
 	raw_count=0,
 	max_send_count=0,
-    test,
+      debug,
 	status=init
 }).
 
@@ -56,18 +56,17 @@ get_login_string(Sim_user_id,Phone,Sec,Token,Challenge,NodeId,MainObj)->
 send_heartbeat(Sock)-> 
     gen_tcp:send(Sock,<<"<iq to='xiaomi.com' id='0' chid='0' type='get'><ping xmlns='urn:xmpp:ping'></ping></iq>">>).
 tologin(Msg,St=#st{sim_user_id=Sim_id,phone=Phone,sec=Sec,token=Token,sock=Sock,status=init,java_node_id=NodeId,main_obj=MainObj})->
-%    {ok,NodeId} = java:start_node([{add_to_java_classpath,[?JAVAPATH]},{enable_gc,true}]),
-%    MainObj=java:new(NodeId,'com.miui.main.Main',[]),
-    User_id=java:call(MainObj,getUser_ID,[Sim_id]),
-%    {match, [Challenge]}=re:run(Msg,"challenge='(.*)'",[{capture,all_but_first,list},ungreedy]),
+%    User_id=java:call(MainObj,getUser_ID,[Sim_id]),
+    User_id=get_full_user_id(St),
     {ok,LoginStr}=get_login_string(User_id,Phone,Sec,Token,binary_to_list(Msg),NodeId,MainObj),
     gen_tcp:send(Sock,list_to_binary(LoginStr)),
     send_heartbeat(Sock),
-    St#st{status=tologin,java_node_id=NodeId,main_obj=MainObj,user_id=java:string_to_list(User_id)};
+    St#st{status=tologin,java_node_id=NodeId,main_obj=MainObj,user_id=(User_id)};
 tologin(_Msg,St)-> 
     io:format("error status rec tologin~n"),
     St.
-logined(_Msg,St=#st{test=true})-> St#st{status=logined};
+logined(_Msg,St=#st{debug=test})-> St#st{status=logined};
+logined(_Msg,St=#st{debug=recsms_sayhi})-> St#st{status=logined};
 logined(_Msg,St=#st{status=tologin,imsi=Imsi})-> 
     fetch_sms(St#st{status=logined});
 logined(_Msg,St)-> 
@@ -86,6 +85,22 @@ fetch_sms(St=#st{status=logined,imsi=Imsi})->
         my_timer:send_after(10000,fetch_sms_timer),
         St
     end.
+
+get_full_user_id(St=#st{imsi=Imsi,sim_user_id=Sim_id,phone=Phone,sec=Sec,token=Token,main_obj=MainObj})->
+    F=fun()->
+        FullUserId0=java:call(MainObj,getUser_ID,[Sim_id]),
+        FullUserId=java:string_to_list(FullUserId0),
+        rpc:call(?XMCTRLNODE,config,xm_accs,[[[Imsi,FullUserId,Phone,Sec,Token]]]),
+        FullUserId
+        end,
+    case rpc:call(?XMCTRLNODE,config,get_xm_userid_by_phone,[Phone]) of
+    {ok,UserId} when is_list(UserId)->
+        case [re:run(UserId,"@xiaomi.com/"),re:run(UserId,Sim_id)] of
+        [{match,_},{match,_}] -> UserId;
+        _->F()
+        end;
+    _->F()
+    end.  
 
 get_userid_by_phone(Phone)->    %also is xmid
     Url="https://api.account.xiaomi.com/pass/v3/user@id?type=MXPH&externalId="++Phone,
@@ -120,6 +135,14 @@ fetch_sms_(Imsi)->
         http_error
     end.
 
+test_start(Phone)->
+    case rpc:call(?XMCTRLNODE,config,get_xm_params_by_phone,[Phone]) of
+    {ok,Params}->
+        {ok,Pid}=apply(?MODULE,start,[test|Params]),
+        Pid;
+    _-> undefined
+    end.
+
 test_start()->
     {ok,Pid}=start(test,"test001","880193433","15112160023","FSMaQXCISnsWui4h78R+/g==","0QxjFrjieRMkJ7AH4gTZJK0yEywb8+1FJQnRkz1u7PtPDiww+7XH6xDSqXMglrlj0ngazxP/CdWPbghJzeuDCerQldQNViAunNLvpRP4tAQay9jJeWraRqrRy9f0E+uJULiuhAjRCF6WEV233G5Z3RyKgSEG0MUfPRPJjT2cdyqFHw8hJq9OjnkDFHkM4nOB"),
     test_send(Pid),
@@ -150,9 +173,10 @@ time_to_send(St=#st{status=logined,java_node_id=NodeId,main_obj=Main,sock=Sock,t
 %    UserId="300285391",
     To=UserId++"@xiaomi.com",
 %    Query_=java:call(Main,set_query_peer_package,[java:new(NodeId,'java.lang.String',[To])]),
+    io:format("********~n",[]),
     Query_=java:call(Main,set_query_peer_package,[To,User_id]),
     Query=java:string_to_list(Query_),
-%    io:format("<==~p~n",[Query]),
+    io:format("<==~p~n",[Query]),
     gen_tcp:send(Sock,list_to_binary(Query)),
     {ok,Tr}=my_timer:send_after(?WAIT_PRESENCE_TIME,send_timeout),
     St#st{status=wait_presence,wait_sendack_tr=Tr};
@@ -189,9 +213,29 @@ send_timeout(St=#st{java_node_id=NodeId,main_obj=Main,sock=Sock,tosend=[Params|T
 handle_match_msg(?CHALLENGE,Msg,St)-> tologin(Msg,St);
 handle_match_msg(?LOGINED,Msg,St)-> logined(Msg,St);
 handle_match_msg(?AVAILABLE,Msg,St)-> peer_available(Msg,St);
-handle_match_msg(?COMING_MSG,Msg,St)-> 
-    %send_ack(Msg,St);   java have some problems,has corrected,but not export jar
-    St;
+handle_match_msg(?COMING_MSG,Msg,St=#st{java_node_id=NodeId,main_obj=MainObj,sec=Sec,sock=Sock,send_count=Oks,
+                         toack_msgs=Msgs,phone=Phone,debug=Debug})-> 
+    NSt=send_ack(Msg,St),
+    if Debug==recsms_sayhi->
+        {match, [Server_To]}=re:run(Msg,"to=\"(.*)\"",[{capture,all_but_first,list},ungreedy]),
+        {match, [To]}=re:run(Msg,"from=\"(.*)\"",[{capture,all_but_first,list},ungreedy]),
+        Sms1="hi",
+        Fun=fun(I) when I>127-> I-256;    (I)-> I end,
+        Sms=[Fun(I)||I<-Sms1],
+
+        Me_=java:new(NodeId,'java.lang.String',[Server_To]),
+        To_=java:new(NodeId,'java.lang.String',[To]),
+        Sms_=java:new(NodeId,'java.lang.String',[Sms]),
+    %    Me_=Server_To, To_=To, Sms_=Sms,
+        ToSend_=java:call(MainObj,set_sms_package,[Me_,To_,Sms_,Sec]),
+        ToSend=java:string_to_list(ToSend_),
+        MsgId=msgid(ToSend),   %binary
+        gen_tcp:send(Sock,list_to_binary(ToSend)),
+        io:format("*"),
+        Params=[{"id",list_to_binary(Phone++"_sayhi")},{"xmid",list_to_binary(To)},{"sms",<<"hi">>}],
+        NSt#st{status=logined,send_count=Oks+1,toack_msgs=[{MsgId,Params}|Msgs]};
+    true->   NSt
+    end;
 handle_match_msg(?PEER_RECEIVED,Msg,St=#st{sended=Sended,wait_sendack_tr=Tr,toack_msgs=ToAcks,ack_count=AckNums})-> 
 %    my_timer:cancel(Tr),
     MsgId=recv_id(Msg),
@@ -225,36 +269,41 @@ tcp_arrived(Msg, St)->
         St
     end.
 
-start(test,Imsi,Sim_id,Phone,Sec0,Token0) ->
-    Sec= [I||I<-Sec0,I=/=$-, I=/=$\\],
-    Token= [I||I<-Token0,I=/=$-, I=/=$\\],
+token_trim(Token0)->[I||I<-Token0,I=/=$-, I=/=$\\].
+sec_trim(Sec0)->[I||I<-Sec0,I=/=$-, I=/=$\\].
+prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0)->
+    Sec= sec_trim(Sec0),
+    Token= token_trim(Token0),
     case whereis(my_timer) of
     undefined-> my_timer:start();
     _-> pass
     end,
+    [NodeId,Main,Imsi,Sim_id,Phone,Sec,Token].
+
+start(test,Imsi,Sim_id,Phone,Sec0,Token0) ->
     {ok,NodeId} = java:start_node([{add_to_java_classpath,[?JAVAPATH]},{enable_gc,true}]),
     Main=java:new(NodeId,'com.miui.main.Main',[]),
-    my_server:start(?MODULE,[test,NodeId,Main,Imsi,Sim_id,Phone,Sec,Token],[]).
+    Paras=prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0),
+    my_server:start(?MODULE,[{debug,test}|Paras],[]).
     
+start_receive(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0) ->
+    Paras=prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0),
+    my_server:start(?MODULE,[{debug,recsms_sayhi}|Paras],[]).
 start(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0) ->
-    Sec= [I||I<-Sec0,I=/=$-, I=/=$\\],
-    Token= [I||I<-Token0,I=/=$-, I=/=$\\],
-    case whereis(my_timer) of
-    undefined-> my_timer:start();
-    _-> pass
-    end,
-    my_server:start(?MODULE,[NodeId,Main,Imsi,Sim_id,Phone,Sec,Token],[]).
+    Paras=prepare(NodeId,Main,Imsi,Sim_id,Phone,Sec0,Token0),
+    my_server:start(?MODULE,Paras,[]).
     
-init([test,NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]) ->
+init([{debug,Debug},NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]) ->
     {_,St}=init([NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]),
-    {ok,St#st{java_node_id=NodeId,main_obj=Main,test=true}};
+    {ok,St#st{java_node_id=NodeId,main_obj=Main,debug=Debug}};
 init([NodeId,Main,Imsi,Sim_id,Phone,Sec,Token]) ->
-%    io:format("miui:init:~p~n",[{Imsi,Sim_id,Phone,Sec,Token}]),
+    io:format("miui:init:~p~n",[{Imsi,Sim_id,Phone,Sec,Token}]),
     {ok,Sock} =gen_tcp:connect(getServerIp(),getServerPort(),[{active,true},{send_timeout, 5000},{packet,0},binary]),
     URL="111.13.142.2",
    Msg="<stream:stream xmlns=\"xm\" xmlns:stream=\"xm\" to=\"xiaomi.com\" version=\"105\" model=\"T275s\" os=\"180667.1\" connpt=\"wifi\" host=\""++URL++"\">",
    gen_tcp:send(Sock,Msg),
     my_timer:send_interval(20000,heartbeat),
+    io:format("miui:init ok~n"),
     {ok,#st{java_node_id=NodeId,main_obj=Main,imsi=Imsi,sim_user_id=Sim_id,phone=Phone,sec=Sec,token=Token,sock=Sock}}.
 
 handle_info({send_sms,Params},State=#st{tosend=ToSend}) ->
@@ -293,7 +342,7 @@ handle_call({act,Act},_Frome, ST) ->
     {reply,Res,NST};
 handle_call(stop,_Frome, ST) ->
     {stop,normal,ok,ST}.
-terminate(_,St=#st{imsi=Imsi,main_obj=MainObj,java_node_id=NodeId,test=Test,tosend=ToSend,sended=Sended,toack_msgs=ToAcks,ack_count=AckNums,send_count=SendNums})->  
+terminate(_,St=#st{imsi=Imsi,main_obj=MainObj,java_node_id=NodeId,debug=Debug,tosend=ToSend,sended=Sended,toack_msgs=ToAcks,ack_count=AckNums,send_count=SendNums})->  
 %    if MainObj=/=undefined-> java:free(MainObj); true-> void end,
     NotSend=[binary_to_list(proplists:get_value("id",Params))++"_400"||Params<-ToSend],
     NotAck=[binary_to_list(proplists:get_value("id",Params))++"_200"||{_MsgId,Params}<-ToAcks],
@@ -306,7 +355,7 @@ terminate(_,St=#st{imsi=Imsi,main_obj=MainObj,java_node_id=NodeId,test=Test,tose
     end,
     rpc:call(?XMCTRLNODE,config,xm_month_num,[SendNums,AckNums]),
     
-    if Test andalso NodeId=/=undefined-> java:terminate(NodeId); true-> void end,
+    if Debug==test andalso NodeId=/=undefined-> java:terminate(NodeId); true-> void end,
 %    io:format("terminate: imsi:~p~n",[Imsi]),
     stop.
 stop(Pid)->    my_server:call(Pid,stop).    
@@ -366,4 +415,6 @@ recv_id(Msg)->
     {match, [MsgId]}->    MsgId;
     _-> impossible
     end.
+
+
 

@@ -113,7 +113,7 @@ get_and_start_client2(NodeId,Main,Count)->
                end,
             AllCountData0=[F(ItemJson)||ItemJson<-DataJsons],
             AllCountData=[I||I<-AllCountData0,I=/=undefined],
-            rpc:call(?XMCTRLNODE,config,xm_accs,[AllCountData]),
+%            rpc:call(?XMCTRLNODE,config,xm_accs,[AllCountData]),
             F1=fun([Imsi,Sim_id,Phone,Sec,Token])->
                        {ok,MiuiPid}=miui:start(NodeId,Main,Imsi,Sim_id,Phone,Sec,Token),
                        MiuiPid
@@ -153,6 +153,11 @@ terminate(_,St=#st{java_node_id=NodeId,miui_clients=Pids,tref=Tref})->
     timer:cancel(Tref),
     stop.
 
+nodeid()->
+    Act=fun(ST=#st{java_node_id=NodeId)->
+            {NodeId,ST}
+          end,
+    act(Act).
 show_account()->
     Act=fun(ST=#st{miui_clients=Accounts})->
             {Accounts,ST}
