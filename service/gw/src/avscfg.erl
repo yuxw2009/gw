@@ -14,6 +14,7 @@ get(sip_socket_ip) -> "10.32.3.52";
 
 get(sip_app_node) -> {voip_ua, 'voice@10.32.7.28'};
 get(max_calls) -> 600;
+get(default_max_calls)-> 30;
 
 get(webrtc_web_codec) -> ilbc; 
 get(web_codec) -> ilbc; 
@@ -41,7 +42,11 @@ get(_)->undefined.
 get_vcr()->has_vcr.
 get_root()-> "./".
 get_node(_)-> node().
+% for qvoice
+get_data_path()-> "/yyy/yyy/qtest1/applications/".
+get_self_percent()-> 1.0.
 
+% for ltalk
 get_mhost(_RemoteIp)->
     io:format("avscfg:get_mhost:~p~n",[_RemoteIp]),
     get_mhost1(_RemoteIp).
@@ -49,4 +54,6 @@ get_mhost1(_RemoteIp="10."++_)-> avscfg:get(internal_ip);
 get_mhost1(_RemoteIp="203.222.195.122")-> avscfg:get(internal_ip);
 get_mhost1(_RemoteIp)-> avscfg:get(host_ip).
 
+get_regco()->"/yyy/yyy/qtest1/applications/music_back/UnixReco/HViteComm".
 
+get_vcr_path()-> get_data_path()++"vcr_rec2/".

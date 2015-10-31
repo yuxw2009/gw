@@ -775,7 +775,7 @@ mkvfn(Name) ->
 llog1(ST=#st{phinfo=Phinfo,peer=Peer},F,P)->
     Cid = proplists:get_value(cid, Phinfo,""),
     Phone=proplists:get_value(phone,Phinfo,""),
-    llog("cid:~s phone:~s ip:~s "++F, [Cid,Phone,Peer|P]).
+    llog("rrp cid:~s phone:~s ip:~s "++F, [Cid,Phone,Peer|P]).
 
 llog(F,P) -> llog:log(F,P).
 

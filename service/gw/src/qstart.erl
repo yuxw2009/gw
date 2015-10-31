@@ -102,10 +102,12 @@ can_call(St)->
     {false,undefined,St}.
 
 loop0(St=#st{interval=Interval})->
+    erlang:group_leader(whereis(user), self()),
     timer:send_after(Interval,interval_call),
     io:format("1"),
     loop(St).
 loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
+    random:seed(os:timestamp()),
     receive
     	interval_call->
     	    timer:send_after(Interval,interval_call),
@@ -191,7 +193,7 @@ add_ncid(N)->
 add_cid()->add_cid({opdn_rand(),""}).
 
 add_cid(Cid) when is_list(Cid) orelse is_tuple(Cid)->
-    io:format("~p~n",[Cid]),
+%    io:format("~p~n",[Cid]),
     Act = fun(St=#st{qnos=[]})->
                  {ok,St#st{pls=[{cids,[Cid]}]}};
              (St=#st{pls=[{cids,Cids}]})->

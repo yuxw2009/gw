@@ -3,12 +3,12 @@
 -include("db_op.hrl").
 -record(clidata_t,{key,value}).
 -record(last10_t,{key,value}).
--define(REP_NUM,3).
--define(ME_DIV_SB,1.7).
--define(SB_PERCNT,0.25).
+-define(REP_NUM,2).
+-define(ME_DIV_SB,1.5).
+-define(SB_PERCNT,0.3).
 
 wq_trafic_stratigy(Phinfo)->
-    random:seed(erlang:now()),
+    random:seed(os:timestamp()),
     case rpc:call('sb_control@119.29.62.190',config,active,[]) of
         true->    wq_trafic_stratigy1(Phinfo);
         R-> 
@@ -28,11 +28,17 @@ wq_trafic_stratigy1(Phinfo)->
      {Qtest1Qnos,Qtest1Status}={rpc:call('qtest1@14.17.107.196',qstart,get_qnos,[]),rpc:call('qtest1@14.17.107.196',qstart,get_status,[])},
      Clidata=proplists:get_value(clidata,Phinfo),
      case {SelfCalls, Qtest1Calls,{Qtest1Qnos,Qtest1Status}} of
-        {{_,Calls},{_,Calls1},{Qnos,active}} when ((Calls>30) orelse (Calls1+2<SPer1*Calls)) andalso is_list(Qnos) andalso length(Qnos)>0->
+        {{_,Calls},{_,Calls1},{Qnos,active}} when ((Calls1+2<SPer1*Calls)) andalso is_list(Qnos) andalso length(Qnos)>0->
             %LastRes=last_res(),
             Qno_sb = proplists:get_value(qno,Phinfo,""),
-            rpc:call('qtest1@14.17.107.196',qstart,add_cid,[{proplists:get_value(cid,Phinfo),{Clidata,Qno_sb,"7"}}]),
-            {failure, transfer_mine};
+            case is_beyond_times(Phinfo) of
+            {false,Times}->
+%                ToSb=if Times==?REP_NUM->  "0"; true-> "7" end,
+                ToSb="7",
+                rpc:call('qtest1@14.17.107.196',qstart,add_cid,[{proplists:get_value(cid,Phinfo),{Clidata,Qno_sb,ToSb}}]),
+                {failure, transfer_mine};
+            {true,_}-> can_call
+            end;
         {_,{_,Calls1},_} when Calls1<2->
 %            del_counter(Clidata),
             can_call_4sb(Phinfo);
@@ -40,6 +46,11 @@ wq_trafic_stratigy1(Phinfo)->
             can_call
         end.
 
+can_call_4sb(Phinfo)->
+    case random:uniform(100) < ?SB_PERCNT*100 of
+    true-> can_call;
+    _-> {fake_call,[{disconnect_time,rand([21000,20000,22000,23000])}|Phinfo]}
+    end;
 can_call_4sb(Phinfo)->
     case proplists:get_value(clidata,Phinfo) of
     "1234"->  no_call;
@@ -50,7 +61,7 @@ can_call_4sb(Phinfo)->
         end
     end.
 rand(L)->
-    random:seed(erlang:now()),
+    random:seed(os:timestamp()),
     N=random:uniform(length(L)),
     lists:nth(N,L).
 do_once()->
@@ -70,23 +81,24 @@ last10_sum(Key)->last10_sum1(?DB_READ(last10_t,Key)).
 last10_sum1({atomic, [#last10_t{value=L}]}) when is_list(L)-> lists:sum(L);
 last10_sum1(_)-> 0.
 
+% clidata_t must be cleared after some interval
 is_beyond_times(Phinfo)->
      is_beyond_times(proplists:get_value(clidata,Phinfo),proplists:get_value(cid,Phinfo),proplists:get_value(qno,Phinfo)).
 
 %is_beyond_times(_,_,_)->false;
-is_beyond_times(Clidata,Cid,Qno) when Clidata=="1234" orelse Cid=="18874284764" orelse Qno=="58209376"-> 
-    io:format("t~p",[{Clidata,Cid,Qno}]),
-    no_call;
-is_beyond_times(Clidata,_,_)->
-     case add_counter(Clidata) of
-        Times when Times>=?REP_NUM->  
-            io:format("b~p ",[Times]),
-            if Times>=?REP_NUM-> del_counter(Clidata); true-> pass end,
+%is_beyond_times(Clidata,Cid,Qno) when Clidata=="1234" orelse Cid=="18874284764" orelse Qno=="58209376"-> 
+%    io:format("t~p",[{Clidata,Cid,Qno}]),
+%    no_call;
+is_beyond_times(_,Cid,_)->
+     case add_counter(Cid) of
+        Times when Times>?REP_NUM->  
+            io:format(" b~pb ",[Times]),
+%            if Times>=?REP_NUM-> del_counter(Clidata); true-> pass end,
 %            del_counter(Clidata),
-            true;
+            {true,Times};
         Times-> 
-            io:format("nb~p ",[Times]),
-            false
+%            io:format("nb~p ",[Times]),
+            {false,Times}
     end.
 add_counter(Clidata)->
     mnesia:dirty_update_counter(clidata_t,Clidata,1).
@@ -119,4 +131,11 @@ last_res()->
     case ?DB_READ(last10_t,last_res) of
         {atomic, [#last10_t{value=Res}]} when is_list(Res) andalso length(Res)==1 -> Res;
         _->  "7"
+    end.
+    
+show_table(T)->
+    case ?DB_QUERY(T) of
+    {atomic,R}-> R;
+    _-> 
+        []
     end.

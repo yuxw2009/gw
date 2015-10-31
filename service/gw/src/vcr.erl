@@ -17,13 +17,13 @@
 	bgn		% begin time
 }).
 
-vcr_path()->   avscfg:get_data_path()++"vcr_rec/".
+vcr_path()->   avscfg:get_vcr_path().
 init([Name]) ->
 %	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
 %	ok = save_ivf_hdr(FH),
     utility:my_print("vcr init:~p~n", [Name]),
-	{ok,#st{name=Name,fc=0,ac=0,ah=AH,bgn=now()}}.
+	{ok,#st{name=Name,fc=0,ac=0,ah=AH,bgn=os:timestamp()}}.
 handle_info(#audio_frame{codec=?PCMU,body=Body},#st{ac=AC,ah=FH}=ST) ->
 	save_pcmu_frame(FH,Body),
 	{noreply,ST#st{ac=AC+1}};
@@ -72,7 +72,7 @@ save_ivf_frame(FH,Bin) ->
 	ok = file:write(FH, Bin).
 
 save_ivf_frame_count(FH,_C,Bgn) ->
-	T = timer:now_diff(now(),Bgn) div 1000,
+	T = timer:now_diff(os:timestamp(),Bgn) div 1000,
 	file:position(FH, 24),
 	ok = file:write(FH, <<T:32/little>>).
 

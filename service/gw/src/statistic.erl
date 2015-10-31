@@ -3,7 +3,7 @@
 
 -define(SAMPLE_INTERVAL, 5000).
 
--record(state, {current_calls=0, cpu_usage="0.0", processes=[],cdc_evt=[],is_cdc_working=true}).
+-record(state, {current_calls=0, cpu_usage="0.0", processes=[],cdc_evt=[],is_cdc_working=true,max_call=avscfg:get(default_max_calls)}).
 
 restart()->
     case whereis(?MODULE) of
@@ -19,6 +19,17 @@ get()->
     receive
         {value, R}-> R
     after 5000-> timeout
+    end.
+get_max_call()->    
+    F=fun(St=#state{max_call=MaxCall})->    {MaxCall,St} end,
+    case whereis(?MODULE) of
+    undefined-> avscfg:get(default_max_calls);
+    P->  
+        P ! {call,F,self()},
+        receive
+            {value,R}-> R
+        after 2000->   avscfg:get(default_max_calls)
+        end
     end.
 is_working()->
     ensure_alive(),
@@ -69,6 +80,10 @@ on_message(dec_call, State=#state{current_calls=Calls})->
 on_message({cpu_usage_report,CpuUsage}, State)->
     State#state{cpu_usage=CpuUsage};	
 	
+on_message({call, Fun,From}, State)->
+    {Res,NSt}=Fun(State),
+    From ! {value, Res},
+    NSt;
 on_message({get_infos, From}, State=#state{is_cdc_working=false})->
 	From ! {value, cdc_node_down},
     State;

@@ -33,7 +33,7 @@ start() ->
 pinging()->
     {_,SipNode}=avscfg:get(sip_app_node),
     R=net_adm:ping(SipNode),
-    io:format("pinging ~p...~n",[R]),
+%    io:format("pinging ~p...~n",[R]),
     receive
     impossible-> void
     after 2*60*1000->
