@@ -383,6 +383,7 @@ to_list(Url) when is_atom(Url)-> atom_to_list(Url);
 to_list(Url)-> Url.
 
 country(undefined)-> default;
+country({203,222,195,122})-> "HK";
 country(Ip={_A,_B,_C,_D})->  i2c:findLocal(ip2uint(Ip)).
 continent(Ip)-> c2s(country(Ip)).    
 

@@ -19,8 +19,9 @@ login(Params,_) when is_list(Params)->
     {Acc0,Pwd0,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),proplists:get_value("device_id",Params)},
     {RawAccount,PassMD5,DevId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0)},
     utility:log("./log/xhr_poll.log","login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
+    Ip=proplists:get_value("ip",Params),
     io:format("login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
-    case local_login(Params) of
+    {obj,Pls0}=case local_login(Params) of
     {islocal,LocalJson}-> 
         register_user_login(Params,[Acc0]),
         LocalJson;
@@ -35,7 +36,9 @@ login(Params,_) when is_list(Params)->
                         end,
         io:format("login_processor login:params:~p~n",[Params]),
         company_login(Company,Account,Params,{RawAccount,PassMD5,DevId})
-    end.
+    end,
+    AccUrls=wwwcfg:get_www_url_list(utility:c2s(utility:country(Ip))),
+    {obj,[{"urls",AccUrls}|Pls0]}.
 
 logout(Params) when is_list(Params)->
     {UUID,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("device_id",Params)},
@@ -56,16 +59,19 @@ third_login(Acc="qq_"++_OpenId,Params)->third_login1(Acc,Params);
 third_login(Acc="wx_"++_OpenId,Params)->third_login1(Acc,Params).
 third_login1(Acc,Params)->
     io:format("third_login~n"),
+    Ip=proplists:get_value("ip",Params),
+    AccUrls=wwwcfg:get_www_url_list(utility:c2s(utility:country(Ip))),
     case check_crc(Params) of
     true->
         case lw_register:get_third_reg_info(Acc) of
         {atomic,[#third_reg_t{uuid=UUID,name=Name}]}->
             NewParams=lists:keystore("acc",1, Params,{"acc",Name}),
             register_user_login([{"uuid",UUID}|NewParams],[UUID]),
-            utility:pl2jso_br([{status,ok},{uuid,UUID},{name, Name},{account,Name},{class,reg},{did,""}]);
-        _-> utility:pl2jso_br([{status,ok},{account,Acc},{class,not_reg},{did,""}])
+            {atomic,[#lw_register{pwd=Pwd}]}=lw_register:get_register_info_by_uuid(UUID),
+            utility:pl2jso_br([{status,ok},{uuid,UUID},{name, Name},{pwd,Pwd},{account,Name},{class,reg},{did,""},{urls,AccUrls}]);
+        _-> utility:pl2jso_br([{status,ok},{account,Acc},{class,not_reg},{did,""},{urls,AccUrls}])
         end;
-    _-> utility:pl2jso_br([{status,failed},{reason,crc_error}])
+    _-> utility:pl2jso_br([{status,failed},{reason,crc_error},{urls,AccUrls}])
     end.
 
 company_login(Account,Params,{_XgAccount,PassMD5,DevId})->company_login(livecom,Account,Params,{_XgAccount,PassMD5,DevId}).
@@ -132,7 +138,7 @@ check_auth(UUID,_)->
        [{status,failed},{reason,no_logined}];
    #login_itm{phone=Phone,status=?ACTIVED_STATUS}->
        case lw_register:check_balance(Phone) of
-       {true,Bal}-> [{status,ok},{uuid,UUID},{balance,Bal}];
+       {true,Bal} when Bal>0 -> [{status,ok},{uuid,UUID},{balance,Bal}];
        _-> [{status,failed},{reason,balance_not_enough}]
        end;
    #login_itm{}->

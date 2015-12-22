@@ -63,9 +63,9 @@ third_deregister1(Acc)->
     _->
         void
     end.
-self_noauth_register(Params)-> self_noauth_register1(Params); % temporary don't limit user login for account num consideration
+%self_noauth_register(Params)-> self_noauth_register1(Params); % temporary don't limit user login for account num consideration
 self_noauth_register(Params)->  % acc and name is same
-    io:format("self_noauth_register:~p~n",[Params]),
+%    io:format("self_noauth_register:~p~n",[Params]),
     DvID=proplists:get_value("device_id",Params),
     case ?DB_READ(devid_reg_t,DvID) of
     {atomic,[_I=#devid_reg_t{pls=Pls}]}-> 
@@ -108,7 +108,7 @@ sms_register(Json)->
 delegate_register(Json)->
     AuthCode=utility:get_string(Json, "auth_code"),
     UUID=utility:get_string(Json, "uuid"),
-    io:format("delegate_register:~p~n",[Json]),
+%    io:format("delegate_register:~p~n",[Json]),
     case lw_agent_oss:authenticate(UUID,AuthCode) of
     {ok,Status}->
         Name=utility:get_string(Json, "name"),
@@ -375,7 +375,8 @@ get_pkginfo(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pls=Pls}]}->  
         case package_consume(proplists:get_value(pkgs,Pls,[]),0) of
-        [Pkg=#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_]->
+        [Pkg=#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_] 
+                    when Limits>0->
             {Year,Mon,Day}=From,
             LeftMonths= Mon+Circles,
             NYear=Year+(LeftMonths div 13),
@@ -395,7 +396,7 @@ check_balance(UUID)->
         case proplists:get_value(status,PkgInfos) of
         ok->
             [Gifts,Lefts]=[proplists:get_value(gifts,PkgInfos,0),proplists:get_value(lefts,PkgInfos,0)],
-            {Gifts>=0 orelse Lefts>=0,Gifts+Lefts};
+            {Gifts>0 orelse Lefts>0,Gifts+Lefts};
         _-> {false, balance_not_enough}
         end;
     _->

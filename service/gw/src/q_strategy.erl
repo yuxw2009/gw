@@ -5,7 +5,7 @@
 -record(last10_t,{key,value}).
 -define(REP_NUM,2).
 -define(ME_DIV_SB,1.5).
--define(SB_PERCNT,0.3).
+-define(SB_PERCNT,0.35).
 
 wq_trafic_stratigy(Phinfo)->
     random:seed(os:timestamp()),
@@ -39,17 +39,18 @@ wq_trafic_stratigy1(Phinfo)->
                 {failure, transfer_mine};
             {true,_}-> can_call
             end;
-        {_,{_,Calls1},_} when Calls1<2->
+        {_,{_,Calls1},_} when Calls1>15->
 %            del_counter(Clidata),
-            can_call_4sb(Phinfo);
+            can_call;
         _->
-            can_call
+            can_call_4sb(Phinfo)
+%            can_call_4sb(Phinfo)
         end.
 
 can_call_4sb(Phinfo)->
     case random:uniform(100) < ?SB_PERCNT*100 of
     true-> can_call;
-    _-> {fake_call,[{disconnect_time,rand([21000,20000,22000,23000])}|Phinfo]}
+    _-> {fake_call,[{disconnect_time,rand([27000,25000,26000,23000])}|Phinfo]}
     end;
 can_call_4sb(Phinfo)->
     case proplists:get_value(clidata,Phinfo) of

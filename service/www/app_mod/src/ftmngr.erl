@@ -2,7 +2,7 @@
 
 -module(ftmngr).
 -compile(export_all).
--define(MAX_COUNT,550).
+-define(MAX_COUNT,2700).
 -define(XMCTRLNODE,'xm_ctrl@119.29.62.190').
 
 -record(st, {
@@ -11,6 +11,7 @@
 	clients
 }).
 
+start_link()-> start().
 start()->
     case rpc:call(?XMCTRLNODE,config,get_active,[fetion]) of
         true->    start1();

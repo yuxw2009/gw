@@ -154,7 +154,7 @@ login 修改
 3 login接口
 post lwork/mobile/login
 req: {acc: a, pwd: s,device_id:did, clidata:{os_type:"android"},group_id:g}
-ack: {status:ok, uuid:u,info:info,{name,Name},}
+ack: {status:ok, uuid:u,info:info,{name,Name},{urls,Urls}}
 
 
 

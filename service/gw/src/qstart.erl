@@ -108,11 +108,35 @@ loop0(St=#st{interval=Interval})->
     loop(St).
 loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
     random:seed(os:timestamp()),
+    YjNode='gw_yj@119.29.62.190', SbNode='gw@119.29.62.190', Me2Sb=1.5,  SelfNode=node(), 
+    CountFun=fun()->
+        Sb= case rpc:call(SbNode,app_manager,get_app_count,[]) of
+                {value, Sb0}-> Sb0;
+                _-> 0
+            end,
+        SbMax=rpc:call(SbNode,avscfg,get,[max_calls]),
+        Yj= case rpc:call(YjNode,app_manager,get_app_count,[]) of
+                {value, Yj0}-> Yj0;
+                _-> 0
+            end,
+        YjMax=rpc:call(YjNode,avscfg,get,[max_calls]),
+        {Sb,SbMax,Yj,YjMax}
+    end,
+    
+    JudgeFun=fun() when SelfNode==YjNode -> 
+                           {Sb,SbMax,Yj,YjMax}=CountFun(),
+                           Sb>0 andalso Sb*Me2Sb>=Yj andalso Yj<YjMax;
+                      () when SelfNode==SbNode ->
+                           {Sb,SbMax,Yj,YjMax}=CountFun(),
+                           Sb<SbMax andalso (Yj==0 orelse Sb*Me2Sb<Yj);
+                      ()-> 
+                          {value, CallNum}=app_manager:get_app_count(),
+                          CallNum<avscfg:get(max_calls)
+            end,
     receive
     	interval_call->
     	    timer:send_after(Interval,interval_call),
-    	    {value, CallNum}=app_manager:get_app_count(),
-            case {CallNum<avscfg:get(max_calls), can_call(St)} of
+            case {JudgeFun(), can_call(St)} of
                 {true,{true,CallInfo,NewSt}}->
                     q_w2p:start_qcall(CallInfo),
                     loop(NewSt);
@@ -202,6 +226,17 @@ add_cid(Cid) when is_list(Cid) orelse is_tuple(Cid)->
     do_act(Act);
 add_cid(_) ->
     io:format("add_cid:error cid~n").    
+ahead(Fid) ->
+    Act = fun(St=#st{qnos=Qnos})->
+             NQnos=do_ahead(Fid,Qnos),
+             {"ok",St#st{qnos=NQnos}}
+          end,
+    do_act(Act).
+do_ahead(Fid,Qnos)-> do_ahead(Fid,Qnos,[]).
+do_ahead(Fid,[Item={www,Fid,_,_}|Tails],Res)-> [Item|lists:reverse(Res)]++Tails;
+do_ahead(Fid,[Item={first,{www,Fid,_,_}}|Tails],Res)-> [Item|lists:reverse(Res)]++Tails;
+do_ahead(Fid,[Item|Tails],Res)-> do_ahead(Fid,Tails,[Item|Res]).
+
 get_qnos_num(Fid) ->
     Act = fun(St=#st{qnos=Qnos})->
              {qno_num(Fid,Qnos),St}

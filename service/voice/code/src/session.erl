@@ -265,6 +265,8 @@ callee_phone_prefix("00861"++_ , "0086"++_) -> "10";
 callee_phone_prefix("0086"++_  , "0086"++_) -> "11";
 callee_phone_prefix(_Caller, _Callee)       -> "".
 
-meeting_phone_prefix(_, "0086"++_) -> "12";
-meeting_phone_prefix(_Caller, _Callee) -> "".
+%meeting_phone_prefix(_, "0086"++_) -> "12";
+%meeting_phone_prefix(_Caller, _Callee) -> "".
+meeting_phone_prefix(_Caller, "*"++_) -> "";
+meeting_phone_prefix(_Caller, _Callee) -> "00099918".
 

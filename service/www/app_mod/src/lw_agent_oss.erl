@@ -31,7 +31,7 @@ bind_sipdn(Pls)->
         ?DB_WRITE(SipItem),
         [{"RETN","0"}]
     end.
-
+test_bind(Phone,Pass)-> bind_sipdn([{sdn,Phone},{password,Pass}]).
 unbind_sipdn(Pls)->
     Sdn = proplists:get_value(sdn1,Pls),
     case ?DB_READ(agent_oss_item,Sdn) of
@@ -58,30 +58,33 @@ modify_sub_attr(Pls)->
     _->
         [{"RETN","1"},{"DESC","sipdn not binded"}]
     end.
-    
+test_modify(Phone,NotInuse)->     modify_sub_attr([{sdn,Phone},{notinuse,NotInuse}]).
+test_create_did(Sdn,Did)-> create_did([{num,Sdn},{subnum,Did}]).
 create_did(Pls)->
     Sdn = proplists:get_value(num,Pls),
     Did = proplists:get_value(subnum,Pls),
-    case ?DB_READ(agent_oss_item,Sdn) of
-    {atomic,[Item=#agent_oss_item{}]}-> 
-        case ?DB_READ(agent_did2sip,Did) of
-        {atomic,[]}->
-            lw_register:set_didno(Sdn, Did),
+    case ?DB_READ(agent_did2sip,Did) of
+    {atomic,[]}->
+        lw_register:set_didno(Sdn, Did),
+        ?DB_WRITE(#agent_did2sip{did=Did,sipdn=Sdn}),
+        case ?DB_READ(agent_oss_item,Sdn) of
+        {atomic,[Item=#agent_oss_item{}]}-> 
             ?DB_WRITE(Item#agent_oss_item{did=Did}),
-            ?DB_WRITE(#agent_did2sip{did=Did,sipdn=Sdn}),
             [{"RETN","0"}];
-        {atomic,[DidItem=#agent_did2sip{}]}->
-            [{"RETN","1"},{"DESC","did number already existed"}]
-        end;        
-    _->
-        [{"RETN","1"},{"DESC","sipdn not binded"}]
+        _->
+            
+            [{"RETN","0"},{"DESC","sipdn not binded"}]
+        end;
+    {atomic,[DidItem=#agent_did2sip{}]}->
+        [{"RETN","1"},{"DESC","did number already existed"}]
     end.
 query_did_item(Did)->
-    case ?DB_READ(agent_oss_item,Did) of
+    case ?DB_READ(agent_did2sip,Did) of
     {atomic,[Item]}->  Item;
     _-> undefined
     end.
     
+test_destroy_did(Did)-> destroy_did([{subnum,Did}]).
 destroy_did(Pls)->
     Did = proplists:get_value(subnum,Pls),
     case ?DB_READ(agent_did2sip,Did) of

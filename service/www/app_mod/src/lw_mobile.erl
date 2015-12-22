@@ -36,8 +36,9 @@ handle(Arg,'POST', ["add_info"])->
     Res= lw_register:add_info(Json),
     utility:pl2jso(Res);
 handle(Arg,'POST', ["forget_pwd"])->
-    {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
-    Res= lw_register:forgetpwd(Json),
+    IP = utility:client_ip(Arg),
+    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    Res= lw_register:forgetpwd({obj,[{"ip",IP}|Params]}),
     Res;
 handle(Arg,'POST', ["modify_pwd"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
@@ -281,6 +282,7 @@ handle_tp_call_msg(Arg,'POST', ["p2p_ios_answer"],_)->
     {{Sid_str},SDP}= utility:decode(Arg, [{opdata, o, [{session_id,s}]},{sdp,b}]),
     IP = utility:client_ip(Arg),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    io:format("p2p_ios_answer req ~p~n",[Sid_str]),
     R=rpc:call(Node, avanda, processP2p_ios_answer, [Sid,SDP]),
     io:format("p2p_ios_answer res:~p~n",[R]),
     
@@ -526,7 +528,7 @@ p2p_push(CallerNode,Phone,Content)->
 get_maxtalkt(_UUID,"*"++_,_Arg)-> no_limit;
 get_maxtalkt(UUID,_,_Arg)->
    case lw_register:check_balance(UUID) of
-   {true,Lefts} when is_number(Lefts) -> Lefts*60;
+   {true,Lefts} when is_number(Lefts) -> Lefts*60*1000;
    {false,_} -> 0;
    {true,no_limit}-> no_limit
    end.
@@ -626,15 +628,15 @@ get_wcg_node(_UUID,Ip)->
         _->    wwwcfg:get(test_node)
     end.
 
-get_node_by_ip0("00"++_,UUID=_yxwfztest,_) when UUID=="18017813673" -> 'gw@119.29.62.190';
+%get_node_by_ip0("00"++_,UUID=_yxwfztest,_) when UUID=="18017813673" -> 'gw@119.29.62.190';
 get_node_by_ip0(_Callee="0086"++_,UUID,Ip)-> 
     R=get_node_by_ip(UUID,Ip),
     io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
     R;
-get_node_by_ip0(_Callee="00"++_,UUID,Ip) -> 
-    R=get_internal_node_by_ip(UUID,Ip),
-    io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
-    R;
+%get_node_by_ip0(_Callee="00"++_,UUID,Ip) -> 
+%    R=get_internal_node_by_ip(UUID,Ip),
+%    io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
+%    R;
 get_node_by_ip0(_Callee,UUID,Ip)->
     R=get_node_by_ip(UUID,Ip),
     io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
@@ -780,9 +782,11 @@ send_notification1(DeviceToken0,Content) ->
     Payload1=rfc4627:encode(utility:pl2jso([{aps,Aps1_}])),
 %    Payload = "{\"aps\":{\"alert\":\"" ++ Content ++ "\",\"badge\":" ++ Badge ++ ",\"sound\":\"" ++ "chime" ++ "\"}}",
     DeviceToken  = str_spaceremoved(DeviceToken0),
+    Result4appstore_d=os:cmd("php priv/push4appstore_d.php "++DeviceToken++" '"++Payload0++"'"),
+    Result4appstore_r=os:cmd("php priv/push4appstore_r.php "++DeviceToken++" '"++Payload0++"'"),
     Result=os:cmd("php priv/simplepush1.php "++DeviceToken++" '"++Payload0++"'"),
     Result_r=os:cmd("php priv/simplepush1_r.php "++DeviceToken++" '"++Payload0++"'"),
-    io:format("send_notification1 result:~p~n result_r:~p~n",[Result,Result_r]),
+    io:format("send_notification1 result:~p~n",[{Result,Result_r,Result4appstore_d,Result4appstore_r}]),
     ok.
 %% send_notification not used    
 send_notification(UUID,DeviceToken,Content) ->

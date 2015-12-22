@@ -4,19 +4,19 @@
 -export([get_cdr_from/2]).
 
 start_monitor() ->
-    {Pid,_} = spawn_monitor(fun() -> init() end),
-    register(?MODULE,Pid),
-    Pid.
+    case whereis(?MODULE) of
+        undefined-> 
+            {Pid,_} = spawn_monitor(fun() -> init() end),
+            register(?MODULE,Pid),
+            Pid;
+        P->  P
+    end.
 
 %% uuid,{Phone1,Rate1},{Phone2,Rate2},{StartTime,EndTime,Duration}
 new_cdr(Type, Cdr_info) ->
-    Pid= case whereis(?MODULE) of
-           undefined-> 
-              start_monitor();
-           P->  P
-           end,
-     Pid ! {new_cdr,Type, Cdr_info},
-     ok.
+    Pid= start_monitor(),
+    Pid ! {new_cdr,Type, Cdr_info},
+    ok.
 
 init() ->
     loop().
@@ -42,7 +42,7 @@ loop() ->
     %%               sms           -> {timestamp, [phone, ...]};
     %%               voip          -> {phone, rate, start_time, end_time}
 handle_cdr_request0(Type, Cdr_info)->
-    io:format("****************************~n~p~n",[[Type,Cdr_info]]),
+%    io:format("****************************~n~p~n",[[Type,Cdr_info]]),
     handle_cdr_request(Type, Cdr_info).
 handle_cdr_request(Type, {Service_id,Audit_info, T3,T4}) when is_list(Service_id)-> handle_cdr_request(Type, {{Service_id, ""},Audit_info, T3,T4});
 handle_cdr_request(meeting, {{Service_id,_UUID},Audit_info=_GroupId, _Subject,Details})->

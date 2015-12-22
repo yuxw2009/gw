@@ -56,21 +56,25 @@ lprocess({_From, {cast, Msg}}, Module, State) ->
 			case catch Module:handle_cast(Msg, State) of
 				{noreply, NewState} ->
 					loop(Module, NewState, infinity);
-			      {'EXIT',Reason}-> Module:terminate(Reason, State);
-				{stop, Reason, NewState} ->
-					Module:terminate(Reason, NewState)
+                         {stop, Reason, NewState} -> Module:terminate(Reason, NewState);
+                          R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+                              Module:terminate(myserver_exception, State)
 			end;
 lprocess({From, {call, Tag, Msg}}, Module, State) ->			
 			case  catch Module:handle_call(Msg, {From, Tag}, State) of
 				{reply, Reply, NewState} ->
 					reply({From, Tag}, Reply),
 					loop(Module, NewState, infinity);
-			      {'EXIT',Reason}-> Module:terminate(Reason, State);
-				{stop, Reason, Reply, NewState} ->
-				    Module:terminate(Reason, NewState),
-					reply({From, Tag}, Reply);
+%			      {'EXIT',Reason}-> Module:terminate(Reason, State);
 				{noreply, NewState} ->
-					loop(Module, NewState, infinity)
+					loop(Module, NewState, infinity);
+				{stop, Reason, Reply, NewState} ->
+					reply({From, Tag}, Reply),
+				    Module:terminate(Reason, NewState);
+                           R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+                               Module:terminate(myserver_exception, State)
 			end;
 lprocess({my_server_timeout, _T}, Module, State) ->
 	case  catch Module:handle_info(timeout, State) of
@@ -78,9 +82,10 @@ lprocess({my_server_timeout, _T}, Module, State) ->
 			loop(Module, NewState,NewTime);
 		{noreply, NewState} ->
 			loop(Module, NewState, infinity);
-	      {'EXIT',Reason}-> Module:terminate(Reason, State);
-		{stop, Reason, NewState} ->
-			Module:terminate(Reason, NewState)
+		{stop, Reason, NewState} -> Module:terminate(Reason, NewState);
+	      R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+	          Module:terminate(myserver_exception, State)
 	end;
 lprocess(Msg, Module, State) ->
 	case  catch Module:handle_info(Msg, State) of
@@ -90,7 +95,7 @@ lprocess(Msg, Module, State) ->
 			loop(Module, NewState, infinity);
 		{stop, Reason, NewState} -> Module:terminate(Reason, NewState);
 	      R-> 
-	          io:format("myserver excpt:~p~n",[R]),
+                              utility:log("server_error.log","~p myserver excpt:~p~nmsg:~p",[Module,R,Msg]),
 	          Module:terminate(myserver_exception, State)
 	end.
 

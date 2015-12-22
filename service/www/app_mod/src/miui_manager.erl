@@ -1,30 +1,21 @@
 -module(miui_manager).
 -compile(export_all).
--define(MAX_COUNT,200).
+-define(MAX_COUNT,20).
 -define(XMCTRLNODE,'xm_ctrl@119.29.62.190').
+-define(INTERVAL,10000).
+-define(INTERVAL_NUMS,1000).
 
 -record(st, {
 	java_node_id,
 	main_obj,
 	tref,
 	limits=0,
+	trace_phone,
+	debug,
+	sendnums=0,
 	miui_clients
 }).
 
-get_login_string(Sim_user_id,Phone,Sec0,Token0,Challenge)->
-    Sec= [I||I<-Sec0,I=/=$-, I=/=$\\],
-    Token= [I||I<-Token0,I=/=$-, I=/=$\\],
-    Act=fun(St=#st{java_node_id=NodeId,main_obj=MainObj})->
-        Sim_=java:new(NodeId,'java.lang.String',[Sim_user_id]),
-        Phn_=java:new(NodeId,'java.lang.String',[Phone]),
-        S_=java:new(NodeId,'java.lang.String',[Sec]),
-        Token_=java:new(NodeId,'java.lang.String',[Token]),
-        Challenge_=java:new(NodeId,'java.lang.String',[Challenge]),
-        Login_=java:call(MainObj,login_package,[Sim_,Phn_,S_,Token_,Challenge_]),
-        {LoginList=java:string_to_list(Login_),St}
-    end,
-    my_server:call(?MODULE,{act,Act}).
-    
 start()->
     timer:sleep(1000),
     case rpc:call(?XMCTRLNODE,config,get_active,[xiaomi]) of
@@ -43,10 +34,85 @@ start1(JavaPath) ->
     end,
     my_server:start({local,?MODULE}, ?MODULE,[JavaPath],[]).
 
-start_sayhi()->
-    my_server:start({local,?MODULE}, ?MODULE,[JavaPath,start_sayhi_client],[]).    
-init([JavaPath]) -> init([JavaPath,get_and_start_client]).
-init([JavaPath,FunName])->
+start_onlinecheck()-> my_server:start({local,?MODULE},?MODULE,[onlinecheck,get_accounts(),miui:java_path()],[]).
+
+start_receivetest()->start_receivetest(get_accounts()).
+start_receivetest(Ms)->
+    my_server:start({local,?MODULE},?MODULE,[receive_test,Ms,miui:java_path()],[]).
+
+start_prechecktest()->
+    {ok,Pid}=my_server:start({local,?MODULE},?MODULE,[precheck_test,miui:java_path()],[]).
+
+add_from_file(Fn)->
+    add_sendtasks(get_accounts1(Fn)).
+
+add_onlinetask([UserId,Phone,Sec,Token])->
+    Act=fun(ST=#st{java_node_id=NodeId,main_obj=Main,miui_clients=Clients})->
+        {ok,Pid}=miui:start_onlinecheck(NodeId,Main,"onlinecheck",UserId,Phone,Sec,Token),
+        erlang:monitor(process,Pid),
+        ST#st{miui_clients=[Pid|Clients]}
+          end,
+    cast(Act).
+    
+add_sendtasks(Ms)-> [add_sendtask(I)||I<-Ms].
+add_sendtask([UserId,Phone,Sec,Token])->
+    Act=fun(ST=#st{java_node_id=NodeId,main_obj=Main,miui_clients=Clients})->
+        {ok,Pid}=miui:start_receive_test(NodeId,Main,"test",UserId,Phone,Sec,Token),
+        erlang:monitor(process,Pid),
+        ST#st{miui_clients=[Pid|Clients]}
+          end,
+    cast(Act).
+
+announce_sendnum(AddNums)->
+    Fun=fun(St=#st{sendnums=Sends0,miui_clients=Pids})->
+               Sends=Sends0+AddNums,
+               if (Sends div ?INTERVAL_NUMS) > (Sends0 div ?INTERVAL_NUMS)->
+                   [miui:stop(P)||P<-Pids],
+                   timer:sleep(2000),
+                   restart_vpn(),
+                   timer:sleep(10000),
+                   flush_msg(get_account_time),
+                   St#st{sendnums=Sends};
+               true->
+                   St#st{sendnums=Sends}
+               end
+           end,
+    cast(Fun).
+% *********************************************************************************
+init([precheck_test,JavaPath]) -> 
+    {ok,St}=init([JavaPath,fun get_and_start_precheck_client/3]),
+    {ok,Tref}=my_timer:send_interval(?INTERVAL,get_account_time),
+    {ok,St#st{tref=Tref,debug=precheck_test}};
+init([onlinecheck,Ms,JavaPath]) -> 
+    F=fun(NodeId,Main,_)->
+        Rets=[miui:start_onlinecheck(NodeId,Main,"onlinecheck",UserId,Phone,Sec,Token)||[UserId,Phone,Sec,Token]<-Ms],
+        Pids0=[P||{ok,P}<-Rets],
+        MonF=fun(P)->
+                     erlang:monitor(process, P),
+                     P
+                 end,
+        [MonF(P)||P<-Pids0,is_pid(P)],
+        Pids0
+    end,
+    init([JavaPath,F]);
+init([receive_test,Ms,JavaPath]) -> 
+    F=fun(NodeId,Main,_)->
+        Rets=[miui:start_receive_test(NodeId,Main,"receive_test",UserId,Phone,Sec,Token)||[UserId,Phone,Sec,Token]<-Ms],
+        Pids0=[P||{ok,P}<-Rets],
+        MonF=fun(P)->
+                     erlang:monitor(process, P),
+                     P
+                 end,
+        [MonF(P)||P<-Pids0,is_pid(P)],
+        Pids0
+    end,
+    init([JavaPath,F]);
+    
+init([JavaPath]) -> 
+    {ok,St}=init([JavaPath,fun get_and_start_client/3]),
+    {ok,Tref}=my_timer:send_interval(?INTERVAL,get_account_time),
+    {ok,St#st{tref=Tref}};
+init([JavaPath,Fun])->
     erlang:group_leader(whereis(user), self()),
 %    io:format("cookie:~p~n",[erlang:get_cookie()]),
     {ok,NodeId} = java:start_node([{add_to_java_classpath,[JavaPath]},{enable_gc,true}]),
@@ -54,89 +120,18 @@ init([JavaPath,FunName])->
     Main=java:new(NodeId,'com.miui.main.Main',[]),
 %    io:format("9999999999999999999999~p~n",[Main]),
     St=#st{java_node_id=NodeId,main_obj=Main},
-    Pids=?MODULE:FunName(NodeId,Main,?MAX_COUNT),
-    {ok,Tref}=my_timer:send_interval(10000,get_account_time),
-    {ok,St#st{miui_clients=Pids,tref=Tref,limits=?MAX_COUNT}}.
+    Pids=Fun(NodeId,Main,?MAX_COUNT),
+    {ok,St#st{miui_clients=Pids,limits=?MAX_COUNT}}.
 
-%get_and_start_client(NodeId,Main,Count)->get_and_start_client1(NodeId,Main,Count);
-get_and_start_client(NodeId,Main,Count)->
-    case rpc:call('xm_ctrl@119.29.62.190',config,get_active,[xiaomi]) of
-        true->    get_and_start_client2(NodeId,Main,Count);
-        R-> 
-            io:format("oh"),
-            []
-    end.
-
-get_and_start_client1(NodeId,Main,Count)->
-    Url="http://sms.91yunma.cn/openapi/getxmaccount2.html?Type=fasong&Amount="++integer_to_list(Count),
-    case miui:httpc_call(get,{Url}) of
-    {ok,Json}->
-        case utility:decode_json(Json, [{ret, i},{data, r}]) of
-        {0, DataJsons}-> 
-            F=fun(ItemJson)->
-                   Imsi=utility:get_string(ItemJson,"imsi"),
-                   Content=utility:get_string(ItemJson,"content"),
-                   case re:run(Content,"sim_user_id%26quot%3B%3A%26quot%3B(.*)%26quot%3B.*26quot%3Bphone%26quot%3B%3A%26quot%3B(.*)%26quot%3B.*26quot%3Bst%26quot%3B%3A%26quot%3B(.*)%26quot%3B.*26quot%3Bsec%26quot%3B%3A%26quot%3B(.*)%26quot%3B",[{capture,all_but_first,list},ungreedy]) of
-                   {match,[Sim_id,Phone,Token0,Sec0]}-> 
-                       {Sec,Token}={http_uri:decode(Sec0),http_uri:decode(Token0)},
-                       {ok,MiuiPid}=miui:start(NodeId,Main,Imsi,Sim_id,Phone,Sec,Token),
-                       MiuiPid;
-                   _-> undefined
-                   end
-               end,
-            Pids0=[F(ItemJson)||ItemJson<-DataJsons],
-            MonF=fun(P)->
-                         erlang:monitor(process, P),
-                         P
-                     end,
-            [MonF(P)||P<-Pids0,is_pid(P)];
-        _-> []
-        end;
-    _->
-        []
-    end.
-start_sayhi_client(NodeId,Main,Count)-> todo.
-get_and_start_client2(NodeId,Main,Count)->
-    Url="http://sms.91yunma.cn/openapi/getxmaccount2.html?Type=fasong&Amount="++integer_to_list(Count),
-    case miui:httpc_call(get,{Url}) of
-    {ok,Json}->
-        case utility:decode_json(Json, [{ret, i},{data, r}]) of
-        {0, DataJsons}-> 
-            F=fun(ItemJson)->
-                   Imsi=utility:get_string(ItemJson,"imsi"),
-                   Content=utility:get_string(ItemJson,"content"),
-                   case re:run(Content,"sim_user_id%26quot%3B%3A%26quot%3B(.*)%26quot%3B.*26quot%3Bphone%26quot%3B%3A%26quot%3B(.*)%26quot%3B.*26quot%3Bst%26quot%3B%3A%26quot%3B(.*)%26quot%3B.*26quot%3Bsec%26quot%3B%3A%26quot%3B(.*)%26quot%3B",[{capture,all_but_first,list},ungreedy]) of
-                   {match,[Sim_id,Phone,Token0,Sec0]}-> 
-                       {Sec,Token}={http_uri:decode(Sec0),http_uri:decode(Token0)},
-%                       {ok,MiuiPid}=miui:start(NodeId,Main,Imsi,Sim_id,Phone,Sec,Token),
-%                       MiuiPid;
-                       [Imsi,Sim_id,Phone,Sec,Token];
-                   _-> undefined
-                   end
-               end,
-            AllCountData0=[F(ItemJson)||ItemJson<-DataJsons],
-            AllCountData=[I||I<-AllCountData0,I=/=undefined],
-%            rpc:call(?XMCTRLNODE,config,xm_accs,[AllCountData]),
-            F1=fun([Imsi,Sim_id,Phone,Sec,Token])->
-                       {ok,MiuiPid}=miui:start(NodeId,Main,Imsi,Sim_id,Phone,Sec,Token),
-                       MiuiPid
-                 end,
-            Pids0=[F1(I)||I<-AllCountData],
-            MonF=fun(P)->
-                         erlang:monitor(process, P),
-                         P
-                     end,
-            [MonF(P)||P<-Pids0,is_pid(P)];
-        _-> []
-        end;
-    _->
-        []
-    end.
-    
-handle_info(get_account_time,State=#st{miui_clients=Pids,java_node_id=NodeId,main_obj=Main,limits=MaxCount})->
-    io:format("."),
+handle_info(get_account_time,State=#st{miui_clients=Pids,java_node_id=NodeId,main_obj=Main,limits=MaxCount,debug=Debug})->
+%    io:format("."),
     if length(Pids)<MaxCount ->
-        NewPids=get_and_start_client(NodeId,Main,MaxCount-length(Pids)),
+        NewPids=
+            if Debug==precheck_test->
+                get_and_start_precheck_client(NodeId,Main,MaxCount-length(Pids));
+            true->
+                get_and_start_client(NodeId,Main,MaxCount-length(Pids))
+            end,
         {noreply,State#st{miui_clients=Pids++NewPids}};
     true->{noreply,State}
     end;
@@ -148,6 +143,9 @@ handle_info(Msg,State)->
 handle_call({act,Act},_Frome, ST=#st{java_node_id=NodeId}) ->
     {Res,NST}=Act(ST),
     {reply,Res,NST}.
+handle_cast({act,Act}, ST) ->
+    NST=Act(ST),
+    {noreply,NST};
 handle_cast(stop, ST) ->
     {stop,normal,ST}.
 terminate(_,St=#st{java_node_id=NodeId,miui_clients=Pids,tref=Tref})->  
@@ -157,7 +155,7 @@ terminate(_,St=#st{java_node_id=NodeId,miui_clients=Pids,tref=Tref})->
     stop.
 
 nodeid()->
-    Act=fun(ST=#st{java_node_id=NodeId)->
+    Act=fun(ST=#st{java_node_id=NodeId})->
             {NodeId,ST}
           end,
     act(Act).
@@ -197,6 +195,13 @@ restore()->
 act(Act)->    act(whereis(?MODULE),Act).
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 
+cast(Act)->
+    case whereis(?MODULE) of
+    P when is_pid(P)->
+        my_server:cast(P,{act,Act});
+    _-> void
+    end.
+
 stop()->stop(whereis(?MODULE)).
 stop(Pid)->    my_server:cast(Pid,stop).    
 
@@ -228,4 +233,93 @@ detect_reboot({_,_,Day})->
         timer:sleep(1000*60*10),
         detect_reboot(Date)
     end.
+
+get_login_string(Sim_user_id,Phone,Sec0,Token0,Challenge)->
+    Sec= [I||I<-Sec0,I=/=$-, I=/=$\\],
+    Token= [I||I<-Token0,I=/=$-, I=/=$\\],
+    Act=fun(St=#st{java_node_id=NodeId,main_obj=MainObj})->
+        Sim_=java:new(NodeId,'java.lang.String',[Sim_user_id]),
+        Phn_=java:new(NodeId,'java.lang.String',[Phone]),
+        S_=java:new(NodeId,'java.lang.String',[Sec]),
+        Token_=java:new(NodeId,'java.lang.String',[Token]),
+        Challenge_=java:new(NodeId,'java.lang.String',[Challenge]),
+        Login_=java:call(MainObj,login_package,[Sim_,Phn_,S_,Token_,Challenge_]),
+        {LoginList=java:string_to_list(Login_),St}
+    end,
+    my_server:call(?MODULE,{act,Act}).
+
+get_and_start_precheck_client(NodeId,Main,Count)->    get_and_start_client2(NodeId,Main,Count,precheck).
+get_and_start_client(NodeId,Main,Count)->
+    case rpc:call('xm_ctrl@119.29.62.190',config,get_active,[xiaomi]) of
+        true->    get_and_start_client2(NodeId,Main,Count,undefined);
+        R-> 
+            io:format("oh"),
+            []
+    end.
+
+get_and_start_client2(NodeId,Main,Count,Type)->
+    Url= if Type==precheck->  "http://sms.91yunma.cn/openapi/getxmprecheckaccount.html?Type=precheck&Amount="++integer_to_list(Count);
+             true->  "http://sms.91yunma.cn/openapi/getxmaccount2.html?Type=fasong&Amount="++integer_to_list(Count)
+         end,
+    case miui:httpc_call(get,{Url}) of
+    {ok,Json}->
+        case utility:decode_json(Json, [{ret, i},{data, r}]) of
+        {0, DataJsons}-> 
+            F=fun(ItemJson)->
+                   Imsi=utility:get_string(ItemJson,"imsi"),
+                   Content=utility:get_string(ItemJson,"content"),
+                   case re:run(Content,"userID=(.*)&phone=(.*)&token=(.*)&sec=(.*)$",[{capture,all_but_first,list},ungreedy]) of
+                   {match,[Sim_id,Phone,Token0,Sec0]}-> 
+                       {Sec,Token}={http_uri:decode(Sec0),http_uri:decode(Token0)},
+                       [Imsi,Sim_id,Phone,Sec,Token];
+                   _-> undefined
+                   end
+               end,
+            AllCountData0=[F(ItemJson)||ItemJson<-DataJsons],
+            AllCountData=[I||I<-AllCountData0,I=/=undefined],
+            F1=fun([Imsi,Sim_id,Phone,Sec,Token])->
+                       case miui:start(Type,NodeId,Main,Imsi,Sim_id,Phone,Sec,Token) of
+                       {ok,MiuiPid}->   MiuiPid;
+                       _-> undefined
+                       end
+                 end,
+            Pids00=[F1(I)||I<-AllCountData],
+            Pids0=[I||I<-Pids00,I=/=undefined],
+            MonF=fun(P)->
+                         erlang:monitor(process, P),
+                         P
+                     end,
+            [MonF(P)||P<-Pids0,is_pid(P)];
+        _-> []
+        end;
+    _->
+        []
+    end.
     
+get_n_accounts(N)-> {First,_}=lists:split(N,get_accounts()), First.
+get_accounts(N)->lists:nth(N,get_accounts()).
+get_accounts()->get_accounts1("100miui_account.txt").
+get_accounts1(Fn)->
+    {_,Bin}= file:read_file(Fn),
+    {_,Ms}=re:run(Bin,"userID=(.*)&phone=(.*)&token=(.*)&sec=(.*)\r?\n",[global,{capture,all_but_first,list},ungreedy]),
+    [[UserId,Phone,Sec,Token]||[UserId,Phone,Token,Sec]<-Ms].
+
+test_sends()->test_sends(<<"300285391">>).  %825704759  mf
+test_sends(To)-> test_sends(To,miui_manager:show_account()).
+test_sends(To,Ps)->test_sends(To,Ps,1).
+
+test_sends(_,[],N)->N;
+test_sends(To,[P|T],N)->
+    miui:test_send(P,To,list_to_binary(integer_to_list(N))),
+    test_sends(To,T,N+1).
+
+log(Str,Cmds)-> 
+    io:format(Str++"~n",Cmds),
+    utility:log("xm.log","miui_manager: "++Str,Cmds).
+
+restart_vpn()->
+    os:cmd("service vpn restart").
+flush_msg(Msg) ->
+    receive Msg -> flush_msg(Msg)
+     after 0 -> ok
+     end.

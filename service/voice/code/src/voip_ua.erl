@@ -94,9 +94,10 @@ terminate(St=#state{max_talkT=MaxTalkT,timer_ref=InviteT,alertT=AlertT})->
 	timer:cancel(InviteT),
 	timer:cancel(AlertT),
 	case St#state.uuid of
-	{qvoice,_}-> void;
+	{"qvoice",_}-> void;
 	{GroupId,_} when GroupId==fzd orelse GroupId=="fzd" -> generate_cdr4shuobar(St);
-	{_,_}-> generate_cdr(St)
+	{_,_}-> generate_cdr(St);
+    _-> void
 	end,
 	traffic(St),
 	stop.
@@ -423,7 +424,37 @@ maxtalk_judge(State0=#state{max_time=Maxtime})->
         true-> State0
     end.
 
-traffic(St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
+traffic(_St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
     Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
       {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
     rpc:call('traffic@lwork.hk',traffic,add,[Trf]).
+    
+    
+%%%%%%%%%%%%%%%%%%%%%%%%  for test
+start_alarmpro()->
+    register(alarmpro, spawn(fun detect_alarm/0)).
+detect_alarm()->detect_alarm(0).
+detect_alarm(N)->
+    case {net_adm:ping('qtest1@14.17.107.196'),net_adm:ping('qtest@14.17.107.196'),net_adm:ping('www@14.17.107.196')} of
+    {pong,pong,pong}->
+        io:format(" ~p ",[N]),
+        timer:sleep(60000),
+        detect_alarm(0);
+    _-> 
+        io:format(" ~p ",[N]),
+        if N>2-> alarm();         true-> void        end,
+        timer:sleep(60000),
+        detect_alarm(N+1)
+    end.
+alarm()->
+    [fake_call(P)||P<-alarm_phone()].
+fake_call(Phone)->
+    Info=make_info("008618038668866",Phone,"888888888",""),
+    Pid=start(self(),a, Info),
+    invite(Pid).
+make_info(Cid,PhNo,QQNo,Clidata) ->
+    [{phone,PhNo},{qcall,true},
+     {uuid,{qvoice,86}},
+     {audit_info,[{uuid,Cid}]},{userclass, "fzd"},
+     {cid,Cid},{qno,QQNo},{clidata,Clidata}].
+alarm_phone()-> ["008618017813673"].%["008618017813673","008618151927225"].

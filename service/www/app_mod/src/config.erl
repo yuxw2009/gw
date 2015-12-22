@@ -6,6 +6,7 @@
 -record(fetion_acc,{phone,pwd,deviceid}).
 -record(xmphones,{phone,sim_id}).  %sim_id就是xmid，就是user_id
 -record(xm_month_num,{month=month_key(),sendnum=0,acknum=0}).
+-record(ft_month_num,{month=month_key(),sendnum=0,acknum=0}).
 
 active()-> get_active().
 
@@ -14,6 +15,7 @@ month_key()->
     {Y,M}.
 
 init()->
+    mnesia:create_table(ft_month_num,[{attributes,record_info(fields,ft_month_num)},{disc_copies,[node()]}]),
     mnesia:create_table(fetion_acc,[{attributes,record_info(fields,fetion_acc)},{disc_copies,[node()]}]),
     mnesia:create_table(xm_month_num,[{attributes,record_info(fields,xm_month_num)},{disc_copies,[node()]}]),
     mnesia:create_table(xmphones,[{attributes,record_info(fields,xmphones)},{disc_copies,[node()]}]),
@@ -77,6 +79,17 @@ xm_month_num(SendNums,AckNums)->
             ?DB_WRITE(#xm_month_num{month=MK,sendnum=SendNums,acknum=AckNums})
     end.
 
+add_ft_month_num(SendNums,AckNums)->
+    MK=month_key(),
+    case ?DB_READ(ft_month_num,MK) of
+        {atomic,[XmMonth=#ft_month_num{sendnum=SN0,acknum=AN0}]}->
+            ?DB_WRITE(XmMonth#ft_month_num{sendnum=SN0+SendNums,acknum=AN0+AckNums});
+        _->
+            ?DB_WRITE(#ft_month_num{month=MK,sendnum=SendNums,acknum=AckNums})
+    end.
+
 fetion_acc(Phone,Pwd,DevId)-> ?DB_WRITE(#fetion_acc{phone=Phone,pwd=Pwd,deviceid=DevId}).
 
 get_xm_month_num(Mon={_Y,_M})->  mnesia:dirty_read(xm_month_num,Mon).
+get_ft_month_num(Mon={_Y,_M})->  mnesia:dirty_read(ft_month_num,Mon).
+

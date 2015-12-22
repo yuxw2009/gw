@@ -362,12 +362,12 @@ start_talk_process(State=#state{})->
 
 send_qno(State=#state{call_info=PhInfo})->
     Qno = proplists:get_value(qno,PhInfo,""),
-    DelayBase=1500,
+    DelayBase=2000,
     Delay_qq = DelayBase,% + (random:uniform(3)-1)*1000,
     delay(Delay_qq),
-    dial_qno(State,"22"),
+    dial_qno(State,"2"),
     delay(Delay_qq),
-    dial_qno(State,"22"),
+    dial_qno(State,"2"),
     delay(2000),
     dial_qno(State,Qno),
     dial_qno(State,"#"),
@@ -395,7 +395,7 @@ record_first_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid})->
     stop_recording(State),
     my_print("end recording first hint...",[]),
     {Res,FirstFn}.
-a_record_new_authcode_hint(State,Owner)-> a_record_new_authcode_hint(State,Owner,10000).
+a_record_new_authcode_hint(State,Owner)-> a_record_new_authcode_hint(State,Owner,9000).
 a_record_new_authcode_hint(State,Owner,Delay_ms)->
     delay(Delay_ms),
 %    delay(1000),
@@ -415,10 +415,10 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid},Owner)->
 %        recognize_ahead(vcr_fullname(Fn),Owner),
         HeadFn="Head"++Fn,
         send2rrp(RrpPid,{start_record_rrp,[HeadFn]}),
-        delay(3000),
+        delay(3500),
         stop_recording(State),
         recognize_authhead(vcr_fullname(HeadFn),Owner),
-        delay(8000),
+        delay(7500),
         send2rrp(RrpPid,stop_record_rrp1);
         pass;
     true-> 
@@ -564,16 +564,6 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid,start_time=Star
                 {recognize_authhead,false}->
                     inform_result(State#state{call_info=[{recds,"recognize_authhead_false"}|PhInfo]},"0"),
                     io:format("recognize_authhead false exit~n");
-               {ahead_authcode,RecDs0}->
-                  io:format("ahead_authcode:~p~n",[RecDs0]),
-                  RecDs= case RecDs0 of
-                             [A,B,C,D|_]-> [A,B,C,D];
-                             _-> RecDs0++"#"
-                             end,
-                  dial_auth_code(State,RecDs),
-                  Res_=delay_after_dial_auth(State),
-                  inform_result(State#state{call_info=[{recds,"ahead"++RecDs0}|PhInfo]},Res_),
-                  io:format("#",[]);
               {authcode_record,{no_appid,Fn}}->
                   io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 7~n"),
                   inform_result(State#state{call_info=[{recds,"no_appid"}|PhInfo]},"7"),
@@ -586,11 +576,23 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid,start_time=Star
                        {ok, RecDs0=[D1,D2,D3,D4,D5,D6|_]} -> 
                            RecDs=[D1,D2,D3,D4,D5,D6],
                            dial_auth_code(State,RecDs),
-                           Res_=delay_after_dial_auth(State),
-                           %temparily
-                           delay(13000),
-                           inform_result(State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_),
-                           io:format("(.~p.)",[RecDs0]);
+                           {Res_,AfterFn}= delay_after_dial_auth(State),
+                           delay(10000),
+                           if Res_=="7"->
+                                io:format("aftercode again: "),
+                                case recognize(vcr_fullname(AfterFn), Self) of
+                                    {ok, NRecDs0=[ND1,ND2,ND3,ND4,ND5,ND6|_]} -> 
+                                        NRecDs=[ND1,ND2,ND3,ND4,ND5,ND6],
+                                        dial_auth_code(State,NRecDs),
+                                        {NRes_,NAfterFn}= delay_after_dial_auth(State),
+                                        io:format("again result:~p~n",[NRes_]),
+                                        inform_result(State#state{call_info=[{recds,"again"++NRecDs0++"_"++NRes_}|PhInfo]},NRes_);
+                                    _-> inform_result(State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_)
+                                end;
+                            true->
+                                inform_result(State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_)
+                            end;
+%                           io:format("(.~p.)",[RecDs0]);
                        {ok, RecDs} when D3or4=="7"->     % tx bug
                            dial_auth_code(State,RecDs++"#"),
                            delay_after_dial_auth(State),
@@ -602,9 +604,9 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid,start_time=Star
                        {failed,not_matched}-> 
                %            RN = if FirstRecogAck == "5" -> "5"; true->"0" end,
                %            inform_result(State,RN),
-                           inform_result(State#state{call_info=[{recds,auth_unmatched}|PhInfo]},"0"),
+                           inform_result(State#state{call_info=[{recds,"auth_unmatched"++"first"++D3or4}|PhInfo]},"0"),
                            wcgsmon:qcall_fail(),
-                           file:copy(vcr_fullname(Fn),"./fail_vcr/"++Fn++".pcm"),
+                           %file:copy(vcr_fullname(Fn),"./fail_vcr/"++Fn++".pcm"),
                            io:format("g"),
                            void
                    after 10000->
@@ -629,14 +631,17 @@ start_talk_process_newauth(State=#state{call_info=PhInfo,aid=Aid,start_time=Star
 %                    Result6= if DiscTime=/=undefined-> io:format(" ^ "), "7"; true-> no_report end,
 %                    Result6="7",
                     Result6="0",
+                    delay(2000),
                     inform_result(State#state{call_info=[{recds,"first"++FirstRes}|PhInfo]},Result6),
                     ok
             end,
-            file:copy(vcr_fullname(FirstFn),"./firstqq_not7/"++FirstFn++".pcm");
+%            file:copy(vcr_fullname(FirstFn),"./firstqq_not7/"++FirstFn++".pcm");
+            ok;
         {failed,not_matched}-> 
             io:format("f"),
             inform_result(State#state{call_info=[{recds,first_not_matched}|PhInfo]},no_report),
-            file:copy(vcr_fullname(FirstFn),"./firstqq_not7/"++FirstFn++".pcm")
+            failed
+            %file:copy(vcr_fullname(FirstFn),"./firstqq_not7/"++FirstFn++".pcm")
     after 3000->
             q_wkr:stopVOIP(Aid),
             io:format("h"),
@@ -677,7 +682,7 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid})->
     dial_qno(State,"**"),
     Self=self(),
     spawn(fun()-> judge_if_normal_by_rrp(State,Self) end),
-    async(fun()-> a_record_new_authcode_hint(State,Self,500) end,Self),
+    async(fun()-> a_record_new_authcode_hint(State,Self,1000) end,Self),
     {NewState,Res}=
     receive
     {recognize_authhead,false}->
@@ -695,26 +700,9 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid})->
            {ok, RecDs0=[D1,D2,D3,D4,D5,D6|_]} -> 
                RecDs=[D1,D2,D3,D4,D5,D6],
                dial_auth_code(State,RecDs),
-               {Res_,AfterFn}= delay_after_dial_auth(State),
-               if Res_=="7"->
-                    io:format("aftercode again: "),
-                    delay(10000),
-                    case recognize(vcr_fullname(AfterFn), Self) of
-                        {ok, NRecDs0=[ND1,ND2,ND3,ND4,ND5,ND6|_]} -> 
-                            NRecDs=[ND1,ND2,ND3,ND4,ND5,ND6],
-                            dial_auth_code(State,NRecDs),
-                            {NRes_,NAfterFn}= delay_after_dial_auth(State),
-                            io:format("again result:~p~n",[NRes_]),
-                            {State#state{call_info=[{recds,"again"++NRecDs0++"_"++NRes_}|PhInfo]},NRes_};
-                        _-> {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_}
-                    end;
-                true->
-                    {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_}
-                end;
-
-
-%               io:format(" .~p. afterres: ~p~n",[RecDs,Res_]),
-%               {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_};
+              Res_=delay_after_dial_auth(State),
+               io:format(" .~p. afterres: ~p~n",[RecDs,Res_]),
+               {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_};
            {ok, RecDs}->     % tx bug
                dial_auth_code(State,RecDs++"#"),
                delay_after_dial_auth(State),
@@ -722,24 +710,7 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid})->
                {State#state{call_info=[{recds,RecDs}|PhInfo]},"1"};
            {failed,not_matched}-> 
                io:format("g"),
-               RecDs0="888888",
-               dial_auth_code(State,RecDs0),
-               {Res_,AfterFn}= delay_after_dial_auth(State),
-               if Res_=="7"->
-                    io:format("aftercode again: "),
-                    delay(10000),
-                    case recognize(vcr_fullname(AfterFn), Self) of
-                        {ok, NRecDs0=[ND1,ND2,ND3,ND4,ND5,ND6|_]} -> 
-                            NRecDs=[ND1,ND2,ND3,ND4,ND5,ND6],
-                            dial_auth_code(State,NRecDs),
-                            {NRes_,NAfterFn}= delay_after_dial_auth(State),
-                            io:format("again result:~p~n",[NRes_]),
-                            {State#state{call_info=[{recds,"g_again"++NRecDs0++"_"++NRes_}|PhInfo]},NRes_};
-                        _-> {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_}
-                    end;
-                true->
-                    {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_}
-                end
+               {State#state{call_info=[{recds,no_authcode}|PhInfo]},"0"}
         after 3000->
                io:format("t"),
                {State#state{call_info=[{recds,auth_timeout}|PhInfo]},no_report}
@@ -779,12 +750,13 @@ recognize_authhead(Fn,TalkPid)->
     CmdStr= avscfg:get_regco()++"/HViteHead "++Fn,
     R = os:cmd(CmdStr),
 %    io:format("q_w2p recognize_authhead result:~p fn:~p~n",[R,Fn]),
-    case re:run(R,"QING.*\n.*SHU.*\n.*RU.*\n.*YI\.*\n.*XIA.*\n.*LIU.*\n.*WEI.*\n.*YAN.*\n.*ZHENG.*\n.*MA.*\n") of
+%    case re:run(R,"QING.*\n.*SHU.*\n.*RU.*\n.*YI\.*\n.*XIA.*\n.*LIU.*\n.*WEI.*\n.*YAN.*\n.*ZHENG.*\n.*MA.*\n") of
+    case re:run(R,".*YI\.*\n.*XIA.*\n.*LIU.*\n") of
     {match,_}->  
         TalkPid ! {recognize_authhead,true},
         true;
     _-> 
-        TalkPid ! {recognize_authhead,false},
+        TalkPid ! {recognize_authhead,true},
         false
     end.
 recognize_after(Fn,TalkPid)->
@@ -793,7 +765,8 @@ recognize_after(Fn,TalkPid)->
 
     R = os:cmd(CmdStr),
 %    io:format("q_w2p recognize_after result:~p fn:~p~n",[R,Fn]),
-    case re:run(R,"XIAN.*\n.*YI.*\n.*WEI.*\n.*NIN\.*\n.*ZHANG.*\n.*HAO.*\n") of
+%    case re:run(R,"XIAN.*\n.*YI.*\n.*WEI.*\n.*NIN.*\n.*ZHANG.*\n.*HAO.*\n") of
+    case re:run(R,".*YI.*\n.*WEI.*\n.*NIN.*\n") of
     {match,_}->  "1";
     _-> "7"
     end.
@@ -854,7 +827,7 @@ dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])->
         Rand=random:uniform(600),
         delay(Rand);
 %        delay(1000+Rand);
-    _-> delay(20+random:uniform(30))
+    _-> delay(20+random:uniform(100))
     end,
     q_wkr:eventVOIP(Appid, {dial,H}),
     dial_qno(State,Rest).
@@ -867,11 +840,11 @@ dial_auth_code(State=#state{call_info=PhInfo,rrp_pid=RrpPid},[])->
 %    Res=send2rrp(RrpPid,{start_record_rrp1,[Fn]}),
     State;
 dial_auth_code(State=#state{aid=Appid,call_info=PhInfo},[H|Rest])-> 
-    Rand=random:uniform(300),
     case proplists:get_value(qfile,PhInfo,"") of
     ""->    
-        delay(50+Rand);  % must > 900, if 500 can't jf
-    _-> delay(50+Rand)
+        Rand=random:uniform(300),
+        delay(100+Rand);  % must > 900, if 500 can't jf
+    _-> delay(100)
     end,
     my_print("q_w2p dial auth:~p",[H]),
     q_wkr:eventVOIP(Appid, {dial,H}),
@@ -947,7 +920,7 @@ inform_result2sb(#state{call_info=PhInfo,start_time=StartTime},Res) ->
         _-> q_strategy:update_last10(0)
     end,
     q_strategy:record_last(Res),
-%    io:format(" tosb~p ",[Res]),
+    io:format(" tosb~p ",[Res]),
     log("to_sb:~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
     Ret.
 
@@ -969,7 +942,7 @@ inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
 my_result(Qno,StartTime,RecDs,Filename,"1",_) ->
     my_print("my_result recds:~p~n",[RecDs]),
     mylog(Filename++"_ok.txt","~s",[Qno]);
-my_result(Qno,_StartTime,RecDs,Filename,Result,_) when RecDs=="first4" orelse RecDs==no_authcode orelse Result=="0"->
+my_result(Qno,_StartTime,RecDs,Filename,_,_) when RecDs=="first4" orelse RecDs==no_authcode->
     mylog(Filename++"_kajie.txt","~s",[Qno]);
 my_result(Qno,_StartTime,"first5",Filename,_,_) ->
     mylog(Filename++"_gaimi.txt","~s",[Qno]);

@@ -10,7 +10,7 @@ sip_port()->
 
 config_defaults() ->
     [#cfg_entry{key		= listenport,
-        default	= 5060,   %sip_port(),
+        default	= sip_port(),%5060,   %
         type	= integer,
         soft_reload	= false
        }].
@@ -33,19 +33,20 @@ init()->
 loop({CdrPid,RatePid,OperatorPid}=Pids) ->
     receive
 	    {'DOWN', _Ref, process, Pid, _Reason} ->
+	           timer:sleep(500),
 		    NewPids =
-			    case Pid of
-			        CdrPid -> 
-					    NewCdrPid = cdrserver:start_monitor(),
-						{NewCdrPid,RatePid,OperatorPid};
-					RatePid ->
+                    case Pid of
+                    CdrPid -> 
+                        NewCdrPid = cdrserver:start_monitor(),
+                        {NewCdrPid,RatePid,OperatorPid};
+                    RatePid ->
                         NewRatePid = rateserver:start_monitor(),
-						{CdrPid,NewRatePid,OperatorPid};
+                        {CdrPid,NewRatePid,OperatorPid};
                     OperatorPid ->				
-					    NewOperatorPid = operator:start_monitor(),
-						{CdrPid,RatePid,NewOperatorPid}		
-			    end,
-			loop(NewPids);
+                        NewOperatorPid = operator:start_monitor(),
+                        {CdrPid,RatePid,NewOperatorPid}		
+                    end,
+                loop(NewPids);
         Message -> 
             io:format("XEngine receive: ~p~n",[Message]),
             loop(Pids)
