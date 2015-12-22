@@ -7,6 +7,7 @@
 -define(DEFAULT_QNODE,'qtest1@14.17.107.196').
 
 %start_call(Node,Fid)->
+start_call(Fid) when is_integer(Fid)->    start_call(integer_to_list(Fid));
 start_call(Fid)->    
     Qnos=get_left_qnos(Fid),
     do_start_call(Fid,Qnos).
@@ -58,6 +59,22 @@ auto_restart(Fid)->
     _-> set_status(Fid,finished)
     end.
     
+restart_kajie(Fid)->
+    case get_status(Fid) of
+    Status when Status==finished orelse Status==stop->
+        case get_kajie_qnos(Fid) of
+        Lefts when length(Lefts)>0 -> 
+            do_start_call(Fid,Lefts),
+            file:delete(fullname(Fid++"_kajie.txt")),
+            "ok, restart kajie amount:"++integer_to_list(length(Lefts));
+        _-> 
+            set_status(Fid,finished),
+            "no more needed to proceed"
+        end;
+    _->
+        "still proceeding,please wait..."
+    end.
+
 restart_redial1(Fid)->
     case get_status(Fid) of
     finished->
@@ -183,8 +200,10 @@ get_raw_qno(Fid)->
     {ok,Bin}->
         Lines=string:tokens(binary_to_list(Bin),"\r\n"),
         F=fun(Line)->
-          [Qno|_]=string:tokens(Line," -"),
-          filter_num(Qno)
+          case string:tokens(Line," -") of
+          [Qno|_]->          filter_num(Qno);
+          _-> ""
+          end
         end,
         [Item||Item<-[F(Line)||Line<-Lines], length(Item)>0];
     _-> []
@@ -193,7 +212,7 @@ get_raw_qno(Fid)->
 filter_num(Phone)->  [I||I<-Phone, lists:member(I, "0123456789")].
 
 get_ok_qnos(Fid)-> get_raw_qno(Fid,"_ok.txt").
-get_kajie_qnos(Fid)-> get_raw_qno(Fid,"_kajie.txt").
+get_kajie_qnos(Fid)-> deduplicate(get_raw_qno(Fid,"_kajie.txt")).
 get_gaimi_qnos(Fid)-> get_raw_qno(Fid,"_gaimi.txt").
 get_redial1_qnos(Fid)-> get_raw_qno(Fid,"_redial1.txt").
 get_perhaps_success(Fid)->
@@ -215,8 +234,8 @@ filename(Fid)->
     {atomic,[#qfileinfo{fn=Fn}]}-> Fn;
     _-> <<"">>
     end.
-get_node_by_EmpId("gw1")-> 'gw1@119.29.62.190';
-get_node_by_EmpId("ddd")-> 'gw@119.29.62.190';
+get_node_by_EmpId("gw1")-> 'gw@119.29.62.190';
+get_node_by_EmpId("ddd")-> 'gw_yj@119.29.62.190';
 get_node_by_EmpId(_)-> ?DEFAULT_QNODE.
 get_node(Fid)->
     case fileinfo(Fid) of

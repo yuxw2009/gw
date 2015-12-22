@@ -2845,7 +2845,7 @@ loadContent.prototype = {
 //              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'zj' + '" target="_blank" class="downloadFile">'+"再解"+'</a>',
               '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'stop'+ '" target="_blank" class="downloadFile">'+"停止"+'</a>',
               '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'start'+ '" target="_blank" class="downloadFile">'+"继续"+'</a>',
-              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'refresh'+ '" target="_blank" class="downloadFile onClick="refresh_item(this)"">'+"刷新"+'</a>',
+              '<a href="/q_cmd.yaws?fid=' + msg.file_id+'&uuid='+uuid+'&cmd='+'restartkj'+ '" target="_blank" class="downloadFile">'+"解卡"+'</a>',
              '</span></span>',
              '<span class="fsize file_gray oks" > ' + msg['oks'] + '</span>',            
              '<span class="fsize file_gray kjs"> ' + msg['kjs'] + '</span>',            

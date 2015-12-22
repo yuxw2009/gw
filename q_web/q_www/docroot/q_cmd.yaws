@@ -39,8 +39,8 @@ out(A) ->
     Result=fid:check(UUID,Fid),
     if Result->
         case proplists:get_value("cmd",Param) of
-            "zj"->
-                {html,fid:restart_redial1(Fid)};
+            "restartkj"->
+                {html,fid:restart_kajie(Fid)};
             "start"-> 
                 fid:start_call(Fid),
                 "";
