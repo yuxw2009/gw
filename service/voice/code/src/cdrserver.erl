@@ -96,8 +96,11 @@ handle_cdr_request(voip, {{Service_id,_UUID},Audit_info,Phone,{StartTime,EndTime
     callstat:save(Service_id,CDR),
     KouFei =proplists:get_value(callback,Options),
     io:format("voip koufei: ~p~n",[{KouFei,Charge}]),
-    {Node,Mod,Fun,UUID0}=KouFei,
-    rpc:call(Node,Mod,Fun,[UUID0,Charge]);
+    case KouFei of
+    {Node,Mod,Fun,UUID0}->
+        rpc:call(Node,Mod,Fun,[UUID0,Charge]);
+    _-> void
+    end;
 %    Callback=proplists:get_value(callback,Options,fun(_)-> void end),
  %   Callback(Charge);
 handle_cdr_request(sms, Plist)->

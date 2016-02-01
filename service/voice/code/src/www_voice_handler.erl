@@ -2,7 +2,7 @@
 
 -compile(export_all).
 -include("call.hrl").
--include("yaws_arg.hrl").
+-include("yaws_api.hrl").
 
 %% handle start meeting request
 handle(Arg, 'POST', ["meetings"]) ->

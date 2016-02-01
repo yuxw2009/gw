@@ -411,6 +411,7 @@ received_new_request(#request{method = "ACK"} = Request, _YxaCtx, AppModule) ->
 
 received_new_request(Request, YxaCtx, AppModule) when is_record(Request, request) ->
     logger:log(debug, "Transaction layer: No state for received request, starting new transaction"),
+    logger:log(debug, "Request:~p~nAppModule:~p~n",[Request,AppModule]),
     case servertransaction:start_link(Request, YxaCtx) of
 	{ok, STPid} when is_pid(STPid) ->
 	    %% returns false if it is a CANCEL and we find a transaction to cancel, otherwise true

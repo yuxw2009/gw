@@ -15,17 +15,16 @@ loop(State)->
     end.
 
 on_message({{can_call, Uid}, From}, State=#state{tid=Tid})->
+    Res=
     case ets:lookup(Tid, Uid) of
-    []->
-        From ! {?MODULE, ok};
+    []->        true;
     [{Uid, SipPid}]->
         case is_process_alive(SipPid) of
-        true->
-            exit(SipPid,kill);
-        false->
-            From ! {?MODULE, ok}
+        true-> false;
+        false-> true
         end
     end,
+    From ! {?MODULE,Res},
     State;
 on_message({{start_call, {Uid, Options}}, From}, State=#state{tid=Tid})->
     case ets:lookup(Tid, Uid) of

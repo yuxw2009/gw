@@ -2,7 +2,7 @@
 
 -compile(export_all).
 
--include("yaws_arg.hrl").
+-include("yaws_api.hrl").
 
 %%(voice@ZTE105601D02.zte.com.cn)18> yaws_utility:a2jsos([aa,bbb],[{1,2},{3,4}]).
 %%[{obj,[{aa,1},{bbb,2}]},{obj,[{aa,3},{bbb,4}]}]

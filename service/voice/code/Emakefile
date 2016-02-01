@@ -10,5 +10,5 @@
 {"yxa/src/transactionlayer/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
 {"yxa/src/transportlayer/*",      [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.
 {"yxa/src/*", [{outdir, "yxa/ebin/"},{i,"yxa/src/include"},{i,"yxa/src/eldap"}]}.
-{"src/*",      [{outdir, "ebin/"},{i,"include"},{i,"yxa/src/include"}]}.
+{"src/*",      [{outdir, "ebin/"},{i,"include"},{i,"yxa/src/include"},{i,"/usr/lib/yaws/include/"}]}.
 {"yxa/yaws/src/*", [{outdir, "yxa/ebin/"},{i,"yxa/src/include"}]}.

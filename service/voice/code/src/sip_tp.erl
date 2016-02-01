@@ -1,10 +1,10 @@
--module(voip_ua).
+-module(sip_tp).
 -compile(export_all).
 
 -include("siprecords.hrl").
 -include("sipsocket.hrl").
 
--record(state,{owner,
+-record(state,{peerpid,
                timer_ref,   %% for invite timeout
                role,    %% caller | callee
                from,
@@ -36,40 +36,38 @@ invite_in_dialog(UA,SDP) -> UA ! {invite_in_dialog,SDP}.
 stop(UA) -> UA ! stop.
 
 	
-start_with_sdp(Owner,Options,SDP)->
-    spawn(fun() -> init(Owner,Options,SDP) end).
+start_with_sdp(Peer,Options,SDP)->
+    spawn(fun() -> init(Peer,Options,SDP) end).
 
-init(Owner,Options,SDP) ->
+init(Peer,Options,SDP) ->
     invite(self(), SDP),
-    init(Owner, Options).	
+    init(Peer, Options).	
 	
 start(Owner,_From_not_used, Options) ->
     spawn(fun()-> init(Owner,Options) end).
 
-init(Owner,Options) ->
+init(Peer,Options) ->
     Phone = proplists:get_value(phone, Options),
     UUID = proplists:get_value(uuid, Options),
     Audit_info = proplists:get_value(audit_info, Options),
     Maxtime = proplists:get_value(max_time, Options),
     Cid0 = proplists:get_value(cid, Options),
 %    io:format("voip_ua:options:~p~n",[Options]),
-    init(Owner,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
+    init(Peer,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
     
-init(Owner,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
+init(Peer,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
     Cid = session:trans_caller_phone(Phone0,Cid0),
     From=session:caller_addr(Cid ),
     Phone = session:trans_callee_phone0(Phone0,UUID),
     process_flag(trap_exit,true),
     To=session:callee_addr(Phone),
-    CanCall=uid_manager:can_call(Cid),
     if
-        CanCall-> uid_manager:start_call(Cid, [{sip_pid, self()}, {owner,Owner}]);
-        true-> 
-            io:format("cid:~p calling already cannot call again~n",[Cid]),
-            stop(self())
+        is_integer(Maxtime)-> void;
+        true->
+            uid_manager:start_call(Cid, [{sip_pid, self()}, {peerpid,Peer}])
     end,
-    _Ref = erlang:monitor(process,Owner),
-    loop(idle, #state{owner=Owner,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone0,sip_phone=Phone,max_time=Maxtime, cid=Cid0,
+    _Ref = erlang:monitor(process,Peer),
+    loop(idle, #state{peerpid=Peer,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone0,sip_phone=Phone,max_time=Maxtime, cid=Cid0,
                              sip_cid=Cid,options=Options}).
 
 %% StateName: idle | trying | |ring | ready | cancel    
@@ -104,7 +102,7 @@ terminate(St=#state{max_talkT=MaxTalkT,timer_ref=InviteT,alertT=AlertT})->
 	traffic(St),
 	stop.
 
-on_message({'DOWN', _Ref, process, Owner, _Reason},Status,State=#state{owner=Owner})->
+on_message({'DOWN', _Ref, process, Owner, _Reason},Status,State=#state{peerpid=Owner})->
     stop(self()),
     {Status,State};
     
@@ -136,104 +134,17 @@ on_message({invite_in_dialog, SDP},ready,State) ->
     {ok, Pid, _Branch} = siphelper:send_request(Invite),
     {ready,State#state{invite_request=Invite,dialog=NewDialog,transaction_pid=Pid,sdp=SDP}};    
     
-%% {branch_result,Pid,Branch,BranchState,#response{}}
-on_message({branch_result,_,_,_,#response{status=183,body= <<>>}=_Response},trying,State) ->
-        notify_status(State, prering),
-    {trying,State};
-
-on_message({branch_result,_,_,_,#response{status=180,body= <<>>}=_Response},trying,State) ->
-        notify_status(State, prering),
-    {trying,State};
-
-
 on_message(max_talk_timeout,ready,State=#state{from=From,to=To}) ->
     io:format("voip max_talk_timeout,from:~p to:~p~n", [From, To]),
     send_bye(State),
     stop;
-on_message(alert_timeout,Status,State=#state{owner=Owner}) ->
+on_message(alert_timeout,Status,State=#state{peerpid=Owner}) ->
 %    io:format("alert_timeout sent to~p~n",[Owner]),
     Owner !{alert,self()},
     {Status,State};
 on_message(trying_detecting_timeout,trying,_State) ->
     stop;
 
-on_message({branch_result,_,_,_,#response{status=180,body=SDP}=Response},trying,State) ->
-    Dialog = create_dialog(State#state.invite_request, Response),
-    NewState = State#state{dialog=Dialog,sdp=SDP},
-    status_change(ring,NewState), 
-    timer:cancel(State#state.timer_ref),
-    {ring,NewState};
-
-on_message({branch_result,_,_,_,#response{status=183,body=SDP}=Response},trying,State) ->
-    Dialog = create_dialog(State#state.invite_request, Response),
-    NewState = State#state{dialog=Dialog,sdp=SDP},
-    status_change(ring,NewState), 
-    timer:cancel(State#state.timer_ref),
-    {ring,NewState};
-    
-on_message({branch_result,_,_,_,#response{status=180,body=SDP}=_Response},ring,State) ->
-    NewState = State#state{sdp=SDP},
-    {ring,NewState};
-
-on_message({branch_result,_,_,_,#response{status=183,body=SDP}=_Response},ring,State) ->
-    NewState = State#state{sdp=SDP},
-    {ring,NewState};
-	
-
-on_message({branch_result,_,_,_,#response{status=200,body=SDP}=Response},trying,State0=#state{}) ->
-    State =maxtalk_judge(State0),
-	timer:cancel(State#state.timer_ref),
-    Dialog = create_dialog(State#state.invite_request, Response),
-    
-    NewState = send_ack(State#state{dialog=Dialog}),
-    NewState0 = case SDP of
-                <<>> -> NewState;
-                _->  NewState#state{sdp=SDP}
-            end,
-    notify_status(NewState0, ring),
-    NewState1=status_change(ready,NewState0),
-    {ready,NewState1};	
-
-
-on_message({branch_result,_,_,_,#response{status=200,body=SDP}},ring,State0=#state{}) ->
-    State =maxtalk_judge(State0),
-    NewState = send_ack(State),
-    NewState0 = case SDP of
-                <<>> -> NewState;
-                _->  NewState#state{sdp=SDP}
-            end,
-    NewState1=status_change(ready,NewState0),
-    {ready,NewState1};
-
-on_message({branch_result,_,_,_,#response{status=200}},ready,State) ->
-    NewState = send_ack(State),
-    {ready,NewState};
-
-on_message({branch_result,_,_,_,#response{status=Status}},_,State) when Status >= 400, Status =< 699->
-    send_ack(State),
-    notify_status(State, busy),
-    stop;
-
-on_message({branch_result, _, _, _, {408, _Reason}}, trying, _State) ->
-    stop;
-
-on_message({branch_result, _, _, _, {408, _Reason}}, ring, _State) ->
-    stop;
-
-on_message({branch_result, _, _, _, {500, _Reason}}, trying, _State) ->
-    stop;
-
-on_message({branch_result, _, _, _, {500, _Reason}}, ring, _State) ->
-    stop;
-
-on_message({branch_result, _, _, _, {503, _Reason}}, trying, State) ->
-     notify_status(State, status_503),
-    stop;
-
-on_message({branch_result, _, _, _, {503, _Reason}}, ring, State) ->
-     notify_status(State, status_503),
-    stop;
-    
 on_message({new_response, #response{status=200}=Response, _YxaCtx}, StateName,State) ->
     case siphelper:cseq(Response#response.header) of
         {CSeqNo, "INVITE"} 
@@ -273,16 +184,108 @@ on_message({clienttransaction_terminating, _, _}, StateName, State) ->
 on_message({'EXIT', _, normal}, StateName,State) ->
    {StateName, State};
 
+on_message(Branch={branch_result,_,_,_,#response{status=SipStatus,body=Body}},Status,State) ->
+    State#state.peerpid ! {tp_status,SipStatus,Body},
+    on_branch_result(Branch,Status,State);
+
 on_message(Unhandeld,StateName,State=#state{role=Role}) ->
     %%io:format("UserAgent ~p receive unhandled message: ~p STATE: ~p~n",[Role,Unhandeld,StateName]),
     logger:log(debug, "UserAgent ~p receive unhandled message: ~p STATE: ~p~n",[Role,Unhandeld,StateName]),
     {StateName,State}. 
 
+%% {branch_result,Pid,Branch,BranchState,#response{}}
+on_branch_result({branch_result,_,_,_,#response{status=183,body= <<>>}=_Response},trying,State) ->
+        notify_status(State, prering),
+    {trying,State};
+
+on_branch_result({branch_result,_,_,_,#response{status=180,body= <<>>}=_Response},trying,State) ->
+        notify_status(State, prering),
+    {trying,State};
+
+on_branch_result({branch_result,_,_,_,#response{status=180,body=SDP}=Response},trying,State) ->
+    Dialog = create_dialog(State#state.invite_request, Response),
+    NewState = State#state{dialog=Dialog,sdp=SDP},
+    status_change(ring,NewState), 
+    timer:cancel(State#state.timer_ref),
+    {ring,NewState};
+
+on_branch_result({branch_result,_,_,_,#response{status=183,body=SDP}=Response},trying,State) ->
+    Dialog = create_dialog(State#state.invite_request, Response),
+    NewState = State#state{dialog=Dialog,sdp=SDP},
+    status_change(ring,NewState), 
+    timer:cancel(State#state.timer_ref),
+    {ring,NewState};
+    
+on_branch_result({branch_result,_,_,_,#response{status=180,body=SDP}=_Response},ring,State) ->
+    NewState = State#state{sdp=SDP},
+    {ring,NewState};
+
+on_branch_result({branch_result,_,_,_,#response{status=183,body=SDP}=_Response},ring,State) ->
+    NewState = State#state{sdp=SDP},
+    {ring,NewState};
+	
+
+on_branch_result({branch_result,_,_,_,#response{status=200,body=SDP}=Response},trying,State0=#state{}) ->
+    State =maxtalk_judge(State0),
+	timer:cancel(State#state.timer_ref),
+    Dialog = create_dialog(State#state.invite_request, Response),
+    
+    NewState = send_ack(State#state{dialog=Dialog}),
+    NewState0 = case SDP of
+                <<>> -> NewState;
+                _->  NewState#state{sdp=SDP}
+            end,
+    notify_status(NewState0, ring),
+    NewState1=status_change(ready,NewState0),
+    {ready,NewState1};	
+
+
+on_branch_result({branch_result,_,_,_,#response{status=200,body=SDP}},ring,State0=#state{}) ->
+    State =maxtalk_judge(State0),
+    NewState = send_ack(State),
+    NewState0 = case SDP of
+                <<>> -> NewState;
+                _->  NewState#state{sdp=SDP}
+            end,
+    NewState1=status_change(ready,NewState0),
+    {ready,NewState1};
+
+on_branch_result({branch_result,_,_,_,#response{status=200}},ready,State) ->
+    NewState = send_ack(State),
+    {ready,NewState};
+
+on_branch_result({branch_result,_,_,_,#response{status=Status}},_,State) when Status >= 400, Status =< 699->
+    send_ack(State),
+    notify_status(State, busy),
+    stop;
+
+on_branch_result({branch_result, _, _, _, {408, _Reason}}, trying, _State) ->
+    stop;
+
+on_branch_result({branch_result, _, _, _, {408, _Reason}}, ring, _State) ->
+    stop;
+
+on_branch_result({branch_result, _, _, _, {500, _Reason}}, trying, _State) ->
+    stop;
+
+on_branch_result({branch_result, _, _, _, {500, _Reason}}, ring, _State) ->
+    stop;
+
+on_branch_result({branch_result, _, _, _, {503, _Reason}}, trying, State) ->
+     notify_status(State, status_503),
+    stop;
+
+on_branch_result({branch_result, _, _, _, {503, _Reason}}, ring, State) ->
+     notify_status(State, status_503),
+    stop;
+on_branch_result(Br, Status, State) ->
+    io:format("unhandled branch_result:~p status:~p~n",[Br,Status]),
+    {Status,State}.
 
 %% internal function    
 
 notify_status(State, Status) ->
-    State#state.owner ! {callee_status, Status}.
+    State#state.peerpid ! {callee_status, Status}.
 
 status_change(Status,State) -> 
     Role = State#state.role,
@@ -290,11 +293,11 @@ status_change(Status,State) ->
     case {Role,Status} of
         {caller,ring} ->
             notify_status(State, ring),
-            State#state.owner ! {callee_sdp, SDP},
+            State#state.peerpid ! {callee_sdp, SDP},
             State;      
         {caller,ready} ->
             notify_status(State, hook_off),
-            State#state.owner ! {callee_sdp, SDP},
+            State#state.peerpid ! {callee_sdp, SDP},
             State#state{start_time=calendar:local_time()};      
         _ ->
             State
@@ -351,6 +354,7 @@ do_send_invite(Request,State) ->
     Header = Request#request.header,
     CSeq = State#state.invite_cseq + 1,
     NewHeader = keylist:set("CSeq", [lists:concat([CSeq, " ", Request#request.method])], Header),
+%    NewHeader = keylist:set("Max-Forwards", ["70"], NewHeader0),
     NewRequest = Request#request{header=NewHeader},
     {ok, Pid, _Branch} = siphelper:send_request(NewRequest),
     State#state{invite_cseq=CSeq,transaction_pid=Pid,invite_request=NewRequest,contact=Contact}.

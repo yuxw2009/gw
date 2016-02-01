@@ -48,7 +48,7 @@ start_generate_request_1(Method, From, To, ExtraHeaders, Body,UserInfos) ->
     {Megasec, Sec, Microsec} = now(),
 
     CallId = lists:concat([Megasec * 1000000 + Sec, "-", Microsec,
-			   "@", siprequest:myhostname()
+			   "@", sipcfg:get(sip_socket_ip)
 			  ]),
     CSeq = 1,
 

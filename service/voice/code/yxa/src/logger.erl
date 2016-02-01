@@ -16,7 +16,7 @@
 %%-compile(export_all).
 
 -behaviour(gen_server).
-
+-compile(export_all).
 %%--------------------------------------------------------------------
 %% External exports
 %%--------------------------------------------------------------------
@@ -127,7 +127,8 @@ start_link() ->
 start_link(LogBase) when is_list(LogBase) ->
     gen_server:start_link({local, logger}, ?MODULE, [LogBase], []).
 
-
+rotate_logs()->
+    gen_server:call(logger,{rotate_logs}).
 %%--------------------------------------------------------------------
 %% @spec    (Level, Format) -> ok
 %%

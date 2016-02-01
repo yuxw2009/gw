@@ -2,6 +2,12 @@
 -compile(export_all).
 
 start_monitor() ->
+    case whereis(?MODULE) of
+    undefined-> void;
+    P-> 
+        exit(P,killed),
+        timer:sleep(1000)
+    end,    
     {Pid,_}=spawn_monitor(fun()-> init() end),
     register(?MODULE,Pid),
     Pid.

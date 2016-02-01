@@ -232,6 +232,7 @@ trans_callee_phone0(Phone,UUID)->
     end.
     
 trans_callee_phone(Phone,{"fzd",_}=_UUID)-> Phone;
+trans_callee_phone(Phone="*0086"++_,_)->  Phone;
 trans_callee_phone("*"++Phone,_)->  "*000001"++filter_phone(Phone);
 trans_callee_phone("+"++Phone,UUID)->  trans_callee_phone("00"++Phone,UUID);
 trans_callee_phone(Phone="00"++_,UUID={_Group_id,_})->  group_callee_prefix(UUID)++filter_phone(Phone);
@@ -265,8 +266,8 @@ callee_phone_prefix("00861"++_ , "0086"++_) -> "10";
 callee_phone_prefix("0086"++_  , "0086"++_) -> "11";
 callee_phone_prefix(_Caller, _Callee)       -> "".
 
-%meeting_phone_prefix(_, "0086"++_) -> "12";
-%meeting_phone_prefix(_Caller, _Callee) -> "".
-meeting_phone_prefix(_Caller, "*"++_) -> "";
-meeting_phone_prefix(_Caller, _Callee) -> "00099918".
+meeting_phone_prefix(_, "0086"++_) -> "12";
+meeting_phone_prefix(_Caller, _Callee) -> "".
+%meeting_phone_prefix(_Caller, "*"++_) -> "";
+%meeting_phone_prefix(_Caller, _Callee) -> "00099918".
 

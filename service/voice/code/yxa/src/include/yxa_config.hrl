@@ -46,6 +46,7 @@
 	[
 	 %% General
 	 #cfg_entry{key		= databaseservers,
+	          default=[node()],
 		    list_of	= true,
 		    type	= atom
 		   },
@@ -111,7 +112,8 @@
 		   },
 	 #cfg_entry{key		= sipuserdb_file_filename,
 		    type	= string,
-		    soft_reload	= false
+		    default="./db/sipuserdb",
+		    soft_reload	= true
 		   },
 	 #cfg_entry{key		= sipuserdb_file_refresh_interval,
 		    type	= integer,

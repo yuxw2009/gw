@@ -100,4 +100,4 @@ generate_tag() ->
     Out1 = siprequest:make_base64_md5_token(In),
     Out = string:to_lower(Out1),	%% tags are case-insensitive
     %% don't make the tag longer than it has to be.
-    "yxa-" ++ string:substr(Out, 1, 9).
+    "vos-" ++ string:substr(Out, 1, 9).

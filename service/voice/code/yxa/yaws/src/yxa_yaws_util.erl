@@ -432,6 +432,7 @@ get_yxa_application_node() ->
 %% part of get_yxa_application_node/0, inet:gethostname/0 without the
 %% domain-name removing part.
 %% Returns : {ok, Hostname}, Hostname = string()
+my_hostname() -> {ok, "10.32.7.37"};
 my_hostname() ->
     case inet_udp:open(0, []) of
         {ok, Socket} ->

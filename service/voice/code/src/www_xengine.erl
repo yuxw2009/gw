@@ -1,7 +1,7 @@
 -module(www_xengine).
 -compile(export_all).
 
--include("yaws_arg.hrl").
+-include("yaws_api.hrl").
 -include("call.hrl").
 
 session_id()-> integer_to_list(mnesia:dirty_update_counter(id_table, session_id, 1)).
