@@ -1,6 +1,7 @@
 -module(qstart).
 -compile(export_all).
--record(st,{qnos=[],status=active,interval=100,pls=[{cids,[]}]}).
+-define(RESERVE_DAYS,5).
+-record(st,{interval_ref,qnos=[],lastday=date(),status=active,interval_base=10000,interval=200,pls=[{cids,[]}]}).
 
 add_my_owncid_www_qnos(Qnos={www,_Fid,_Node,_Qnos})->
     ensure_alive(),
@@ -72,8 +73,6 @@ make_info(Cid,PhNo,QQNo,Filename,Clidata) ->
      {cid,Cid},{qno,QQNo},{qfile,Filename},{clidata,Clidata}].
 opdn_rand()->  integer_to_list(phone_prefxs()+random:uniform(999999999)).
 phone_prefxs()->lists:nth(random:uniform(2),[18000000000,13000000000]).
-interval()->
-    q_w2p:delay(1000).
     
 can_call(St=#st{qnos=[{first,Qnos={www,Fid,Wwwnode,_}}|RestQnos]})->
     rpc:call(Wwwnode,fid,set_status,[Fid,proceeding]),
@@ -106,7 +105,7 @@ loop0(St=#st{interval=Interval})->
     timer:send_after(Interval,interval_call),
     io:format("1"),
     loop(St).
-loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
+loop(St=#st{qnos=Qnos,lastday=Lastday,status=Status,interval_base=BaseInterval,interval_ref=Tref})->
     random:seed(os:timestamp()),
     YjNode='gw_yj@119.29.62.190', SbNode='gw@119.29.62.190', Me2Sb=1.5,  SelfNode=node(), 
     CountFun=fun()->
@@ -135,22 +134,29 @@ loop(St=#st{qnos=Qnos,status=Status,interval=Interval})->
             end,
     receive
     	interval_call->
-    	    timer:send_after(Interval,interval_call),
-            case {JudgeFun(), can_call(St)} of
+%            io:format("i"),
+            my_timer:cancel(Tref),
+            Rate=q_strategy:success_rate(),
+            Interval=if is_float(Rate) andalso Rate>0.0-> BaseInterval+erlang:round(200/Rate); true-> 3600000 end,
+            Today=date(),
+            if Lastday =/=Today->   os:cmd("rm -rf "++n_days_ago_dir(?RESERVE_DAYS)); true-> void end,
+            %Interval=Interval0,%+random:uniform(5)*1000,
+    	    {ok,NTref}=my_timer:send_after(Interval,interval_call),
+            case {JudgeFun(), can_call(St#st{lastday=Today})} of
                 {true,{true,CallInfo,NewSt}}->
                     q_w2p:start_qcall(CallInfo),
-                    loop(NewSt);
+                    loop(NewSt#st{interval=Interval,interval_ref=Tref});
                 {_,{_,_,NSt}}->
-                    loop(NSt)
+                    loop(NSt#st{interval=Interval,interval_ref=Tref})
             end;
     	{add, NewQnos}-> loop(St#st{qnos=add_to_queue(Qnos,NewQnos)});
     	{add_myown_cid, NewQnos}-> loop(St#st{qnos=add_to_queue(Qnos,NewQnos),pls=[{cids,myown}]});
     	{add_head, NewQnosItem}-> loop(St#st{qnos=[NewQnosItem|Qnos]});
     	{pause}-> loop(St#st{status=deactive});
     	{restore}-> loop(St#st{status=active});
-    	{set_interval, NewInterv}->loop(St#st{interval=NewInterv});
+    	{set_interval, NewInterv}->loop(St#st{interval_base=NewInterv});
     	{show, From}->
-    	     io:format("****~p~n",[{St,From}]),
+%    	     io:format("****~p~n",[{St,From}]),
             From ! St,
     	    loop(St);
         {do_act,Act,From}->
@@ -189,7 +195,7 @@ show()->
     	    P ! {show,self()},
     	    receive
     	    	Ack-> 
-    	    	    io:format("###~p~n",[Ack]),
+    	    	  %  io:format("###~p~n",[Ack]),
     	    	    Ack
     	    after 2000->
     	    	timeout
@@ -303,4 +309,6 @@ call_n(QQ,N)->
     timer:sleep(20000),
     call_n(QQ,N-1).
 
-    
+n_days_ago_dir(N)->
+    Nago=calendar:gregorian_days_to_date(calendar:date_to_gregorian_days(date())-N),
+    vcr:vcr_path()++rrp:mkday_dir(Nago).

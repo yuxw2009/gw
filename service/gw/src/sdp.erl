@@ -208,7 +208,7 @@ parse_rtcp_fb_attr("ccm fir") -> {rtcp_fb,ccm_fir};
 parse_rtcp_fb_attr("goog-remb") -> {rtcp_fb,goog_remb};
 parse_rtcp_fb_attr("nack") -> {rtcp_fb,nack};
 parse_rtcp_fb_attr("goog-remb ") -> {rtcp_fb,goog_remb};
-parse_rtcp_fb_attr("nack ") -> {rtcp_fb,nack}.
+parse_rtcp_fb_attr("nack "++_) -> {rtcp_fb,nack}.
 
 get_kv(Attribute) ->
   case string:chr(Attribute, $:) of

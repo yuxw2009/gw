@@ -762,12 +762,13 @@ flush_msg(Msg) ->
 %     end,
      pass.
 
+mkday_dir(Date)->
+    {Y,Mo,D} = Date,
+    xt:int2(Y)++xt:int2(Mo)++xt:int2(D).
 mkvfn(Name) ->
-    {_,Mo,D} = date(),
     {H,M,S} = time(),
-	Name++"_"++xt:int2(Mo)
-             ++xt:int2(D)
-             ++"_"
+    Date=mkday_dir(date()),
+    Date++"/"++Name++"_"
              ++xt:int2(H)
              ++xt:int2(M)
              ++xt:int2(S).
@@ -775,7 +776,7 @@ mkvfn(Name) ->
 llog1(ST=#st{phinfo=Phinfo,peer=Peer},F,P)->
     Cid = proplists:get_value(cid, Phinfo,""),
     Phone=proplists:get_value(phone,Phinfo,""),
-    llog("rrp cid:~s phone:~s ip:~s "++F, [Cid,Phone,Peer|P]).
+    llog("cid:~s phone:~s ip:~s "++F, [Cid,Phone,Peer|P]).
 
 llog(F,P) -> llog:log(F,P).
 

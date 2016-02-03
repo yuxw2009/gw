@@ -3,10 +3,9 @@
 -include_lib("kernel/include/file.hrl").
 
 jfnum(Date)->jfnum(Date,".").
-jfnum(Date,Dir)->  length(jf_qqs(Date,Dir)).
-jf_qqs(Date,Dir)->
+jfnum(Date,Dir)->
 	F=fun(Fn)->
-	      {ok, Re} = re:compile("\"(.*)\",\".*\",\"1\",\".*\",.*",[ungreedy]),
+	      {ok, Re} = re:compile("\"(\\d+)\",\"\\d+\",\"1\",\"\\d+\",.*",[ungreedy]),
 	      {_,Value}=file:read_file(Fn),
 	      Result=
 	      case re:run(Value, Re, [global,{capture, all_but_first, binary}]) of
@@ -19,16 +18,15 @@ jf_qqs(Date,Dir)->
 	Fns=[Dir++"/"++Fn||Fn<-Fns0],
 	Fns1=[Fn||Fn<-Fns,after_date(Fn,Date)],
 	Res=[F(Fn)||Fn<-Fns1,filename:extension(Fn)==".log"],
-	io:format("~p: ",[erlang:localtime()]),
-	lists:concat(Res).
+	length(lists:usort(lists:concat(Res))).
 
 mine_jfnum(Date)->
 	F=fun(Fn)->
 	      {_,Value}=file:read_file(Fn),
 	      R=re:split(Value,"\r\n")
 	    end,
-	{ok,Fns}=file:list_dir("."),
-	Res=[F(Fn)||Fn<-Fns,filename:extension(Fn)==".txt",after_date(Fn,Date), string:str(Fn,"_ok.txt")>0],
+	{ok,Fns}=file:list_dir("result"),
+	Res=[F("result/"++Fn)||Fn<-Fns,filename:extension(Fn)==".txt",after_date("result/"++Fn,Date), string:str(Fn,"_ok.txt")>0],
 	length(lists:usort(lists:concat(Res))).
  
 after_date(Fn,Date)->

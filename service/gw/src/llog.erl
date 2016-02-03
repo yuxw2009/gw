@@ -1,8 +1,8 @@
 -module(llog).
 -compile(export_all).
 
--define(SysLog, "./wrtc.log").
--define(BakLog, "./wrtclog.bak").
+-define(SysLog, "log/wrtc.log").
+-define(BakLog, "log/wrtclog.bak").
 
 -define(LOGMAXSIZE, 20000000).
 -define(BUFMAXSIZE, 400*1000).

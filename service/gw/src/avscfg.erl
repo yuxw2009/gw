@@ -4,46 +4,48 @@
 % modified this file as your server configuration.
 
 %% public IP
-get(host_ip) -> "202.122.107.66";
-get(internal_ip) -> "10.32.3.52";  % media server ip for internal media
-get(ip4sip) ->  "10.32.3.52";
+get(host_ip) -> "112.74.96.171";
+get(internal_ip) -> "112.74.96.171";  % media server ip for internal media
+get(ip4sip) ->  "112.74.96.171";
 
-get(web_socket_ip) -> "202.122.107.66";
-get(sip_socket_ip) -> "10.32.3.52";
+get(web_socket_ip) -> "112.74.96.171";
+get(sip_socket_ip) -> "112.74.96.171";
 
 
-get(sip_app_node) -> {voip_ua, 'voice@10.32.7.28'};
-get(max_calls) -> 600;
-get(default_max_calls)-> 30;
+get(sip_app_node) -> {voip_ua, 'qvoice@112.74.96.171'};%{voip_ua, 'voicezte@127.74.96.171'};  %{voip_ua, 'voice@14.17.107.196'};%{voip_ua, 'qvoice1@127.74.96.171'};%
+get(max_calls) -> 30;
+
 
 get(webrtc_web_codec) -> ilbc; 
 get(web_codec) -> ilbc; 
 get(sip_codec) -> pcmu;
 
-get(ss_udp_range)  ->  {15000,16000};
-get(web_udp_range) ->  {55000,56000};
+get(ss_udp_range)  ->  {16000,17000};
+get(web_udp_range) ->  {56000,57000};
 
 get(web_proto) -> udp;
 get(certificate) -> {"./webRTCVoIP.pem", "./webRTCVoIP_key.pem"};
 
 %get(wcgs)-> [{gw,"/yyy/yyy/gw"}];
-get(monitor)-> 'monitor@202.122.107.66';
-get(codec_node)-> 'codec@202.122.107.66';%node(); %'codec@202.122.107.66';
-get(www)-> 'www_t@202.122.107.66';
+get(monitor)-> 'monitor@127.74.96.171';
+get(codec_node)->node();
+get(www)-> 'www_t@127.74.96.171';
 % not used yet
 get(wan_ip) -> avscfg:get(host_ip);
 get(wcall_cid) -> "0085268895100";
-get(mhost_ip) -> "202.122.107.66";
+get(mhost_ip) -> "112.74.96.171";
 get(mweb_udp_range) -> {55000,57000};
 get(wconf_udp_range) -> {55010,55110};
 get(room_udp_used) -> 7;
-get(_)->undefined.
+get(custom) -> yj;
+get(_) -> undefined.
 
-get_vcr()->has_vcr.
-get_root()-> "./".
+get_vcr()->no_vcr.
+get_root()-> "/home/ubuntu/ttt/gw/applications/".
 get_node(_)-> node().
+
 % for qvoice
-get_data_path()-> "/yyy/yyy/qtest1/applications/".
+get_data_path()-> "/data/qqjf/".
 get_self_percent()-> 1.0.
 
 % for ltalk
@@ -54,6 +56,5 @@ get_mhost1(_RemoteIp="10."++_)-> avscfg:get(internal_ip);
 get_mhost1(_RemoteIp="203.222.195.122")-> avscfg:get(internal_ip);
 get_mhost1(_RemoteIp)-> avscfg:get(host_ip).
 
-get_regco()->"/yyy/yyy/qtest1/applications/music_back/UnixReco/HViteComm".
-
-get_vcr_path()-> get_data_path()++"vcr_rec2/".
+get_regco()->"/home/ubuntu/ttt/gw/applications/music_back/UnixReco".
+get_vcr_path()-> get_data_path()++"vcr_rec6/".

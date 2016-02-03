@@ -20,6 +20,8 @@
 vcr_path()->   avscfg:get_vcr_path().
 init([Name]) ->
 %	{ok,FH} = file:open(?DIR++Name++".ivf", [write,raw,binary]),
+    Dir=filename:dirname(Name),
+    file:make_dir(?DIR++Dir),
 	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
 %	ok = save_ivf_hdr(FH),
     utility:my_print("vcr init:~p~n", [Name]),

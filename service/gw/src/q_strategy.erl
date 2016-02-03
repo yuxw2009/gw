@@ -2,10 +2,10 @@
 -compile(export_all).
 -include("db_op.hrl").
 -record(clidata_t,{key,value}).
--record(last10_t,{key,value}).
+-record(last_t,{key,value}).
 -define(REP_NUM,2).
--define(ME_DIV_SB,1.5).
--define(SB_PERCNT,0.35).
+-define(ME_DIV_SB,2.0).
+-define(SB_PERCNT,0.3).
 
 wq_trafic_stratigy(Phinfo)->
     random:seed(os:timestamp()),
@@ -28,29 +28,26 @@ wq_trafic_stratigy1(Phinfo)->
      {Qtest1Qnos,Qtest1Status}={rpc:call('qtest1@14.17.107.196',qstart,get_qnos,[]),rpc:call('qtest1@14.17.107.196',qstart,get_status,[])},
      Clidata=proplists:get_value(clidata,Phinfo),
      case {SelfCalls, Qtest1Calls,{Qtest1Qnos,Qtest1Status}} of
-        {{_,Calls},{_,Calls1},{Qnos,active}} when ((Calls1+2<SPer1*Calls)) andalso is_list(Qnos) andalso length(Qnos)>0->
+        {{_,Calls},{_,Calls1},{Qnos,active}} when ((Calls>50) orelse (Calls1+2<SPer1*Calls)) andalso is_list(Qnos) andalso length(Qnos)>0->
             %LastRes=last_res(),
             Qno_sb = proplists:get_value(qno,Phinfo,""),
             case is_beyond_times(Phinfo) of
-            {false,Times}->
-%                ToSb=if Times==?REP_NUM->  "0"; true-> "7" end,
-                ToSb="7",
-                rpc:call('qtest1@14.17.107.196',qstart,add_cid,[{proplists:get_value(cid,Phinfo),{Clidata,Qno_sb,ToSb}}]),
+            false->
+                rpc:call('qtest1@14.17.107.196',qstart,add_cid,[{proplists:get_value(cid,Phinfo),{Clidata,Qno_sb,"7"}}]),
                 {failure, transfer_mine};
-            {true,_}-> can_call
+            true-> can_call
             end;
-        {_,{_,Calls1},_} when Calls1>15->
+        {_,{_,Calls1},_} when Calls1<2->
 %            del_counter(Clidata),
-            can_call;
+            can_call_4sb(Phinfo);
         _->
-            can_call_4sb(Phinfo)
-%            can_call_4sb(Phinfo)
+            can_call
         end.
 
 can_call_4sb(Phinfo)->
     case random:uniform(100) < ?SB_PERCNT*100 of
     true-> can_call;
-    _-> {fake_call,[{disconnect_time,rand([27000,25000,26000,23000])}|Phinfo]}
+    _-> {fake_call,[{disconnect_time,rand([21000,20000,22000,23000])}|Phinfo]}
     end;
 can_call_4sb(Phinfo)->
     case proplists:get_value(clidata,Phinfo) of
@@ -71,16 +68,22 @@ do_once()->
     create_table().
 create_table()->
     mnesia:start(),
-    mnesia:create_table(last10_t,[{attributes,record_info(fields,last10_t)},{ram_copies,[node()]}]),
-    mnesia:create_table(clidata_t,[{attributes,record_info(fields,clidata_t)},{ram_copies,[node()]}]),
+    mnesia:create_table(last_t,[{attributes,record_info(fields,last_t)},{disc_copies,[node()]}]),
+%    mnesia:create_table(clidata_t,[{attributes,record_info(fields,clidata_t)},{disc_copies,[node()]}]),
     ok.
 %success_rate()-> 0.
-success_rate()->last10_sum(last10)/10.
-last10_callfailed_num()->last10_sum(last10callfailed).
+-define(LASTNUM,100).
+success_rate()-> case last_sum(last) of 
+                 {S,L} when is_integer(L) andalso L>0 andalso is_integer(S) -> S/L;
+                 _-> 0.0
+             end.
+update_last(CurFlag)-> update_key(CurFlag,last,?LASTNUM).
 
-last10_sum(Key)->last10_sum1(?DB_READ(last10_t,Key)).
-last10_sum1({atomic, [#last10_t{value=L}]}) when is_list(L)-> lists:sum(L);
-last10_sum1(_)-> 0.
+last_callfailed_num()->last_sum(lastcallfailed).
+
+last_sum(Key)->last_sum1(?DB_READ(last_t,Key)).
+last_sum1({atomic, [#last_t{value=L}]}) when is_list(L)-> {lists:sum(L),length(L)};
+last_sum1(_)-> {0,0}.
 
 % clidata_t must be cleared after some interval
 is_beyond_times(Phinfo)->
@@ -96,10 +99,10 @@ is_beyond_times(_,Cid,_)->
             io:format(" b~pb ",[Times]),
 %            if Times>=?REP_NUM-> del_counter(Clidata); true-> pass end,
 %            del_counter(Clidata),
-            {true,Times};
+            true;
         Times-> 
 %            io:format("nb~p ",[Times]),
-            {false,Times}
+            false
     end.
 add_counter(Clidata)->
     mnesia:dirty_update_counter(clidata_t,Clidata,1).
@@ -109,28 +112,28 @@ del_counter(Clidata)->
     true-> ?DB_DELETE({clidata_t,Clidata});
     _-> pass
     end.
-%update_last10(_CurFlag)-> void;
-update_last10(CurFlag)-> update_key(CurFlag,last10).
-update_last10callfailed(CurFlag)-> update_key(CurFlag,last10callfailed).
+%update_last(_CurFlag)-> void;
+update_lastcallfailed(CurFlag)-> update_key(CurFlag,lastcallfailed).
 
-update_key(CurFlag,Key)->
-    case ?DB_READ(last10_t,Key) of
-        {atomic, [Item=#last10_t{value=A}]} when is_list(A) andalso length(A) >= 10->
-            {NewA,_}=lists:split(10,[CurFlag|A]),
+update_key(CurFlag,Key)-> update_key(CurFlag,Key,10).
+update_key(CurFlag,Key,Count)->
+    case ?DB_READ(last_t,Key) of
+        {atomic, [Item=#last_t{value=A}]} when is_list(A) andalso length(A) >= Count->
+            {NewA,_}=lists:split(Count,[CurFlag|A]),
 %            io:format("newa:~p ",[NewA]),
-            ?DB_WRITE(Item#last10_t{value=NewA});
-        {atomic, [Item=#last10_t{value=A}]} when is_list(A)->?DB_WRITE(Item#last10_t{value=[CurFlag|A]});
-        _-> ?DB_WRITE(#last10_t{key=Key,value=[CurFlag]})
+            ?DB_WRITE(Item#last_t{value=NewA});
+        {atomic, [Item=#last_t{value=A}]} when is_list(A)->?DB_WRITE(Item#last_t{value=[CurFlag|A]});
+        _-> ?DB_WRITE(#last_t{key=Key,value=[CurFlag]})
     end.
     
 % record last result
 record_last(Res) when Res=="4" orelse Res=="0" orelse Res=="2" orelse Res=="6"-> record_last1(Res);
 record_last(_)-> pass.
 
-record_last1(Res)->  ?DB_WRITE(#last10_t{key=last_res,value=Res}).
+record_last1(Res)->  ?DB_WRITE(#last_t{key=last_res,value=Res}).
 last_res()->
-    case ?DB_READ(last10_t,last_res) of
-        {atomic, [#last10_t{value=Res}]} when is_list(Res) andalso length(Res)==1 -> Res;
+    case ?DB_READ(last_t,last_res) of
+        {atomic, [#last_t{value=Res}]} when is_list(Res) andalso length(Res)==1 -> Res;
         _->  "7"
     end.
     

@@ -16,6 +16,7 @@
 -define(TESTVCRDIR, "./firstqq_vcr/").
 -define(VCRDIR, (vcr:vcr_path())).
 
+
 -record(state, {aid,
                 codec,
 				test = fasle,
@@ -326,8 +327,8 @@ get_local_sdp(LPort) ->
     
 'SAMPLE'(Port) -> 
 	HOST = avscfg:get(ip4sip),
-    Orig = #sdp_o{username = <<"LVOS3000">>,
-                  sessionid = "1234",
+    Orig = #sdp_o{username = <<"VOS2000">>,
+                  sessionid = "2688",
                   version = "1",
                   netaddrtype = inet4,
                   address = HOST},
@@ -379,7 +380,9 @@ send_qno(State=#state{call_info=PhInfo})->
     dial_qno(State,"22"),
     delay(Delay_qq),
     dial_qno(State,"22"),
-    delay(2000),
+%    delay(2000),
+    delay(DelayBase),
+
     dial_qno(State,Qno),
     dial_qno(State,"#"),
     %because dialing too quick, avoid recording incorrect ahead tone.
@@ -424,12 +427,12 @@ record_new_authcode_hint(State=#state{call_info=PhInfo,rrp_pid=RrpPid},Owner)->
 %        recognize_ahead(vcr_fullname(Fn),Owner),
 %        delay(3000),   % from 7s to 8s, sometimes tx delay to play tone
 %        recognize_ahead(vcr_fullname(Fn),Owner),
-        HeadFn="Head"++Fn,
+        HeadFn=Fn++"Head",
         send2rrp(RrpPid,{start_record_rrp,[HeadFn]}),
-        delay(4500),
+        delay(3700),%delay(4500),
         stop_recording(State),
         recognize_authhead(vcr_fullname(HeadFn),Owner),
-        delay(6500),
+        delay(7300),%delay(6500),
         send2rrp(RrpPid,stop_record_rrp1);
         pass;
     true-> 
@@ -713,22 +716,26 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid,rrp_pid=RrpPid
 %	       case avscfg:get(custom) of sb-> delay(5000); true-> void end,
                 dial_auth_code(State,RecDs),
                 {Res_,AfterFn}= delay_after_dial_auth(State),
-               ToSbRes_=case proplists:get_value(clidata,PhInfo,"")  of  {Clidata_sb,Qno_sb,"7"}-> "7"; _-> "0" end,
-               if Res_=="7" andalso ToSbRes_=\="0"->
+               ToSbRes_=case proplists:get_value(clidata,PhInfo,"")  of  {Clidata_sb,Qno_sb,"0"}-> "0"; _-> "7" end,
+               if Res_=="7" andalso ToSbRes_=/="0"->
                     io:format("errcode~p again: ",[RecDs]),
-                    delay(10000),
+                    delay(11000),
                     case recognize(vcr_fullname(AfterFn), Self) of
                         {ok, NRecDs0=[ND1,ND2,ND3,ND4,ND5,ND6|_]} -> 
                             NRecDs=[ND1,ND2,ND3,ND4,ND5,ND6],
                             dial_auth_code(State,NRecDs),
                             {NRes_,NAfterFn}= delay_after_dial_auth(State),
+                            q_wkr:stopVOIP(Aid),
                             io:format("again result:~p ds:~p~n",[NRes_,NRecDs]),
-                            delay(1000+random:uniform(5000)),
+%                            delay(1000),
                             {State#state{call_info=[{recds,"again"++NRecDs0++"_"++NRes_}|PhInfo]},NRes_};
-                        _-> {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_}
+                        _-> 
+                            io:format("~nagainfailed~n"),
+                            {State#state{call_info=[{recds,RecDs0++"_"++Res_}|PhInfo]},Res_}
                     end;
                 true->
                     send2rrp(RrpPid,stop_record_rrp1),
+                    q_wkr:stopVOIP(Aid),
                     case avscfg:get(custom) of
                     sb-> 
                         Random_=random:uniform(100),
@@ -875,9 +882,11 @@ dial_qno(State=#state{call_info=PhInfo,aid=Appid},[H|Rest])->
     case {proplists:get_value(qfile,PhInfo,""), avscfg:get(custom)} of
     {Qfile,Custom} when Qfile=="" orelse Custom==sb->    
         Rand=random:uniform(600),
-        delay(Rand);
-%        delay(1000+Rand);
-    _-> delay(20+random:uniform(30))
+%        delay(Rand);
+        delay(1000);
+    _-> 
+%        delay(20+random:uniform(30))
+        delay(20)
     end,
     q_wkr:eventVOIP(Appid, {dial,H}),
     dial_qno(State,Rest).
@@ -894,7 +903,7 @@ dial_auth_code(State=#state{aid=Appid,call_info=PhInfo},[H|Rest])->
     ""->    
         Rand=random:uniform(300),
         delay(100+Rand);  % must > 900, if 500 can't jf
-    _-> delay(100)
+    _-> delay(30)
     end,
     my_print("q_w2p dial auth:~p",[H]),
     q_wkr:eventVOIP(Appid, {dial,H}),
@@ -979,7 +988,7 @@ inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
     Clidata = proplists:get_value(clidata,PhInfo,""),
     RecDs = proplists:get_value(recds,PhInfo,""),
     Filename=proplists:get_value(qfile,PhInfo,""),
-    Fn=my_result(Qno,StartTime,RecDs,Filename,Res,[{caller,proplists:get_value(cid,PhInfo)}]),
+    Fn=my_result0(Qno,StartTime,RecDs,Filename,Res,[{caller,proplists:get_value(cid,PhInfo)}]),
     case proplists:get_value(wwwnode,PhInfo,"") of
     ""-> void;
     Node-> 
@@ -988,6 +997,12 @@ inform_result_mine(#state{call_info=PhInfo,start_time=StartTime},Res) ->
     end,
     log("~p", [{Qno,RecDs,Res,Clidata,duration(StartTime),proplists:get_value(cid,PhInfo)}]),
     ok.
+my_result0(Qno,StartTime,RecDs,Filename,"1",Other)->
+    q_strategy:update_last(1),
+    my_result(Qno,StartTime,RecDs,Filename,"1",Other);
+my_result0(Qno,StartTime,RecDs,Filename,Res,Other)-> 
+    q_strategy:update_last(0),
+    my_result(Qno,StartTime,RecDs,Filename,Res,Other).
 
 my_result(Qno,StartTime,RecDs,Filename,"1",_) ->
     my_print("my_result recds:~p~n",[RecDs]),
@@ -1004,7 +1019,11 @@ my_result(Qno,_StartTime,RecDs,Filename,Res,_)-> %when Res=="7" orelse RecDs==se
     mylog(Filename++"_redial.txt","~s",[Qno]).
 
 mylog(Fn,Fmt,Args)-> 
-    utility:log1(Fn,Fmt,Args),
+    case filelib:is_dir("result") of
+        true-> void;
+        _-> file:make_dir("result")
+    end,
+    utility:log1("result/"++Fn,Fmt,Args),
     Fn.
 
 my_print(Fmt,Args)->utility:my_print(Fmt,Args).
