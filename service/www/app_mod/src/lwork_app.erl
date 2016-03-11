@@ -41,12 +41,12 @@ process_request(Path, Method, Arg) ->
     
 check_orgin_request(Path,Method,Arg)->	
     Origin=origin(Arg),
+ %   io:format("origin:~p~n",[{Origin,Path,Method}]),
 	case access_auth:check_origin(Origin) of
         true-> 
             JsonObj = do_request(Arg, Method, Path),
 			[{header, "Access-Control-Allow-Origin: *"}, encode_to_json(JsonObj)];
         _->
-%            io:format("arg:~p~n", [Arg]),
             {content, "application/json", enc_json([{status, failed}, {reason, cross_authen_failed},{o, Origin}])}
     end.
 
@@ -86,7 +86,9 @@ handle(Arg, Method, ["lwork","voices0"|Params]) ->   %% remove old inteface
     utility:pl2jso([{data_enc,Enc_bin}]);
 
 handle(Arg, Method, ["lwork","voices1"|Params]) -> 
+    io:format("lwork_app:voices1:path:~p~nclidata:~p~n",[Params,Arg#arg.clidata]),
     Obj=voice_handler:handle(Arg, Method, Params),
+    io:format("lwork_app:ack:~p~n",[Obj]),
     Obj;
 %    Json_str=rfc4627:encode(Obj),
 %    Sep=[$a+random:uniform(9),$a+random:uniform(20)],

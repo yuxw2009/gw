@@ -76,8 +76,8 @@ loop(StateName,State=#state{cid=_CID}) ->
         Message -> 
 %%            utility:log("voip_ua: ~p received Message:~n~p~n",[self(),Message]),
             case (catch on_message(Message,StateName,State)) of
-               {'EXIT',_R}-> 
-%%	            utility:log("voip_ua: ~p 'EXIT'~nreason:~p~n",[self(),R]),
+               {'EXIT',R}-> 
+	            utility:log("voip_ua: ~p 'EXIT'~nreason:~p~n",[self(),R]),
 		      terminate(State),
                    exit(sip_signal_exit);
                 {NewStateName,NewState} -> 
@@ -157,6 +157,9 @@ on_message({new_response, #response{status=200}=Response, _YxaCtx}, StateName,St
     end,
     {StateName, State};
     
+on_message({new_request, FromPid, Ref, _NewRequest=#request{method="ACK"}, _YxaCtx},StateName,State) ->
+    FromPid ! {ok, self(), Ref},
+    {StateName,State};
 on_message({new_request, FromPid, Ref, NewRequest, _YxaCtx},StateName,State) ->
     THandler = transactionlayer:get_handler_for_request(NewRequest),
     FromPid ! {ok, self(), Ref},
@@ -167,6 +170,9 @@ on_message({new_request, FromPid, Ref, NewRequest, _YxaCtx},StateName,State) ->
             transactionlayer:send_response_handler(THandler, 200, "Ok"),
             stop;
         "OPTIONS" ->                        
+            transactionlayer:send_response_handler(THandler, 200, "Ok"),
+            {StateName,State#state{dialog=NewDialog}};
+        "INVITE" ->                        
             transactionlayer:send_response_handler(THandler, 200, "Ok"),
             {StateName,State#state{dialog=NewDialog}};
         _ ->
@@ -353,8 +359,8 @@ do_send_invite(Request,State) ->
     [Contact] = keylist:fetch('contact', Request#request.header),
     Header = Request#request.header,
     CSeq = State#state.invite_cseq + 1,
-    NewHeader = keylist:set("CSeq", [lists:concat([CSeq, " ", Request#request.method])], Header),
-%    NewHeader = keylist:set("Max-Forwards", ["70"], NewHeader0),
+    NewHeader0 = keylist:set("CSeq", [lists:concat([CSeq, " ", Request#request.method])], Header),
+    NewHeader = keylist:set("Max-Forwards", ["70"], NewHeader0),
     NewRequest = Request#request{header=NewHeader},
     {ok, Pid, _Branch} = siphelper:send_request(NewRequest),
     State#state{invite_cseq=CSeq,transaction_pid=Pid,invite_request=NewRequest,contact=Contact}.

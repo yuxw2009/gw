@@ -308,14 +308,22 @@ handle_cast(_Msg, State) ->
 handle_info({act,Act}, State) ->
     State1 = Act(State),
     {noreply,State1};
-handle_info({callee_status, Status},State=#state{rtp_pid=RtpPid,rrp_pid=RrpPid}) ->
+handle_info({callee_status, Status},State=#state{rtp_pid=RtpPid,rrp_pid=RrpPid,call_info=CallInfo}) ->
     if 
-	    Status == ring -> 
-			rtp:info(RtpPid, {media_relay,RrpPid}),
-			my_timer:send_after(?TALKTIMEOUT,timeover);
+        Status == ring -> 
+            rtp:info(RtpPid, {media_relay,RrpPid}),
+            my_timer:send_after(?TALKTIMEOUT,timeover);
+        Status == hook_off -> 
+            {IsRecord,RecFile}={proplists:get_value(isrecord,CallInfo),proplists:get_value(recordfile,CallInfo)},
+            io:format("ready:recordinfo:~p",[{IsRecord,RecFile}]),
+            if IsRecord->
+                DualVcr=new_vcr:start({abs,RecFile}),
+                rrp:start_dual_record(RrpPid,DualVcr);
+            true-> void
+            end;
         true -> 
-		    ok 
-	end,
+            ok 
+    end,
     {noreply,State#state{status=Status}};
 handle_info({callee_sdp,SDP_FROM_SS},State=#state{aid=Aid,rrp_pid=RrpPid}) ->
     llog("app ~p ss sdp: ~p",[Aid,SDP_FROM_SS]),
@@ -421,14 +429,22 @@ start_sip_call(State=#state{test=true, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid
 	rtp:info(RtpPid, {media_relay,RrpPid}),
 	State#state{start_time=now(),status=hook_off};
 start_sip_call(State=#state{aid=Aid, call_info=CallInfo, rtp_pid=RtpPid, rrp_port=RrpPort, rrp_pid=RrpPid}) ->
-	{APPMODU,SIPNODE} = avscfg:get(sip_app_node),
-	SDP_TO_SS = get_local_sdp(RrpPort),
-	UA = rpc:call(SIPNODE,APPMODU,start_with_sdp,[self(),CallInfo, SDP_TO_SS]),
+    {IsRecord,RecFile}={proplists:get_value(isrecord,CallInfo),proplists:get_value(recordfile,CallInfo)},
+    CallInfo_=
+        if IsRecord->
+            {AbsFile,RelFile}=new_vcr:mkvfn(RecFile),
+            F=fun()-> [_Name_,Host_]=string:tokens(atom_to_list(node()),"@"), Host_ end,
+            CallInfo1_=lists:keystore(recordfile,1,CallInfo,{recordfile,AbsFile}),
+            lists:keystore(recurl,1,CallInfo1_,{recurl,"http://"++F()++":8071/"++RelFile});
+        true-> CallInfo
+        end,
+    CallInfo1=[{gw_node,atom_to_list(node())}|CallInfo_],
+    {APPMODU,SIPNODE} = avscfg:get(sip_app_node),
+    SDP_TO_SS = get_local_sdp(RrpPort),
+    UA = rpc:call(SIPNODE,APPMODU,start_with_sdp,[self(),CallInfo1, SDP_TO_SS]),
     _Ref = erlang:monitor(process,UA),
-    llog("gw ~p port ~p call ~p sdp_to_ss ~p~n", [Aid,RrpPort,CallInfo,SDP_TO_SS]),
-      Phone = proplists:get_value(cid,CallInfo),
-
-	State#state{start_time=now(),status=invite,sip_ua=UA}.
+    llog("gw ~p port ~p call ~p sdp_to_ss ~p~n", [Aid,RrpPort,CallInfo1,SDP_TO_SS]),
+    State#state{start_time=now(),call_info=CallInfo1,status=invite,sip_ua=UA}.
 	
 get_port_from_sdp(SDP_FROM_SS) when is_binary(SDP_FROM_SS)->
     {#session_desc{connect={_Inet4,Addr}},[St2]} = sdp:decode(SDP_FROM_SS),

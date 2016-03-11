@@ -56,6 +56,7 @@ init(Owner,Options) ->
     init(Owner,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
     
 init(Owner,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
+       io:format("voip_ua:init uuid:~p~n",[UUID]),
     Cid = session:trans_caller_phone(Phone0,Cid0),
     From=session:caller_addr(Cid ),
     Phone = session:trans_callee_phone0(Phone0,UUID),
@@ -95,9 +96,9 @@ terminate(St=#state{max_talkT=MaxTalkT,timer_ref=InviteT,alertT=AlertT})->
 	timer:cancel(MaxTalkT),
 	timer:cancel(InviteT),
 	timer:cancel(AlertT),
+       io:format("voip_ua:terminate uuid:~p~n",[St#state.uuid]),
 	case St#state.uuid of
 	{"qvoice",_}-> void;
-	{GroupId,_} when GroupId==fzd orelse GroupId=="fzd" -> generate_cdr4shuobar(St);
 	{_,_}-> generate_cdr(St);
     _-> void
 	end,
@@ -295,7 +296,7 @@ status_change(Status,State) ->
         {caller,ready} ->
             notify_status(State, hook_off),
             State#state.owner ! {callee_sdp, SDP},
-            State#state{start_time=calendar:local_time()};      
+            State#state{start_time=os:timestamp()};      
         _ ->
             State
     end.
@@ -362,52 +363,26 @@ generate_cdr(State)->
     if
         State#state.start_time =/= undefined ->
             StartTime = State#state.start_time,
-            EndTime = calendar:local_time(),
-            TimeInfo   = {StartTime,EndTime,session:time_diff(StartTime,EndTime)},
+            EndTime = os:timestamp(),
+            {StartLT,EndLT}={calendar:now_to_local_time(StartTime),calendar:now_to_local_time(EndTime)},
+            TimeLen=session:time_diff(StartLT,EndLT),
+            TimeInfo   = {StartLT,EndLT,TimeLen},
             UUID = State#state.uuid,
             Audit_info = State#state.audit_info,
             Phone = State#state.phone,
             Options=State#state.options,
-            cdrserver:new_cdr(voip, {UUID,Audit_info, Phone,TimeInfo,Options});
+            cdrserver:new_cdr(voip, {UUID,Audit_info, Phone,TimeInfo,Options}),
+            case UUID of
+            {"xh",EID} -> 
+                CallerInfo1 = {State#state.cid,0},
+                CalleeInfo1 = {Phone,1},
+                TimeInfo1={StartTime,EndTime,TimeLen},
+                io:format("voip_ua:generate_cdr:~nrpc:call:~p~n",[Options]),
+                rpc:call('company@lwork.hk',zteapi,new_cdr,[{2, EID},CalleeInfo1,CallerInfo1,TimeInfo1,Options]);
+            _         -> pass
+            end;
         true -> 
             no_cdr_needed
-    end.
-
-generate_cdr4shuobar(State)->
-    if
-        State#state.start_time =/= undefined ->
-            upload_cdr(cdr_url_paras(State)),
-            ok;
-        true -> 
-            no_cdr_needed
-    end.
-
-cdr_url_paras(State)->
-    Start = seconds(State#state.start_time),
-    End=seconds(calendar:local_time()),
-    {_,UUID_STR} = State#state.uuid,
-    %            Phone = State#state.phone,
-    CdrId=integer_to_list(www_xengine:bill_id(shuobar)),
-    Stime=integer_to_list(Start),
-    Etime=integer_to_list(End),
-    Callee = State#state.phone,
-    MyIp=sipcfg:myip(),
-    Key="lwfzdcdr",
-    Type = "direct",
-    Sign=hex:to(erlang:md5([CdrId,UUID_STR,Stime,Etime,MyIp,Key,Type])),
-    Paras=[{"cdrid", CdrId},{"uuid",UUID_STR},{"stime",Stime},{"etime",Etime},{"ip",MyIp},{"sign",Sign},{"type",Type},{"callphone",Callee}],
-    ParaStrs=[K++"="++V||{K,V}<-Paras],
-    string:join(ParaStrs,"&").
-upload_cdr(Body) ->  upload_cdr(Body, "http://openapi.shuobar.cn/cdr/wcgreport.html").
-upload_cdr(Body,URL) ->
-    inets:start(),
-    Result = httpc:request(get, {URL++"?"++Body,[]},[{timeout,10 * 1000}],[]),
-%%    utility:log("cdr req:~p~n",[Body]),
-
-    case Result of
-        {ok, {_,_,_Ack}} -> 
-        ok;
-        _ -> failed
     end.
 
 seconds(Localtime)->    

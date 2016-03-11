@@ -321,8 +321,8 @@ package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=F
                                 Mins) when is_integer(Circles0)->
     CurCircle=circles(Period,FromDate),
     if  CurCircle> Circles0-> package_consume(T,Mins);
-        Consumed0+Mins>Limits-> [H#package_info{cur_consumed=Limits}|package_consume(T,Consumed0+Mins-Limits)];
         CurCircle>CurCircle0-> [H#package_info{cur_circle=CurCircle,cur_consumed=Mins}|T];
+        Consumed0+Mins>Limits-> [H#package_info{cur_consumed=Limits}|package_consume(T,Consumed0+Mins-Limits)];
         true-> [H#package_info{cur_consumed=Consumed0+Mins}|T]
     end.
 consume_minutes(UUID,Minutes)->
@@ -396,7 +396,7 @@ check_balance(UUID)->
         case proplists:get_value(status,PkgInfos) of
         ok->
             [Gifts,Lefts]=[proplists:get_value(gifts,PkgInfos,0),proplists:get_value(lefts,PkgInfos,0)],
-            {Gifts>0 orelse Lefts>0,Gifts+Lefts};
+            {Gifts>=0 orelse Lefts>=0,Gifts+Lefts};
         _-> {false, balance_not_enough}
         end;
     _->
@@ -406,6 +406,6 @@ check_balance(UUID)->
 get_group_id(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{group_id=GroupId}]} ->   GroupId;
-    _-> "livecom"
+    _-> unregistered
     end.
 

@@ -7,12 +7,12 @@
 start()->
     my_server:start({local,?MODULE}, ?MODULE,[],[]).
     
-sip_incoming(Caller,"*0086"++Phone,Origin=#siporigin{addr="10.32.4.11"},SDP,OpPid)->
+sip_incoming(Caller,"*0086"++Phone,Origin=#siporigin{},SDP,OpPid)->
     call_tp(Caller,"000999180086"++Phone,Origin,SDP,OpPid);
-sip_incoming(Caller,Callee,Origin=#siporigin{addr="10.32.4.11"},SDP,OpPid)->
+sip_incoming(Caller,Callee,Origin=#siporigin{},SDP,OpPid)->
     call_tp(Caller,Callee,Origin,SDP,OpPid).
     
-call_tp(Caller,Callee,#siporigin{addr="10.32.4.11"},SDP,OpPid)->
+call_tp(Caller,Callee,#siporigin{addr=Addr},SDP,OpPid) when Addr=="10.32.3.58" orelse Addr=="10.32.4.11"->
     Act=fun(ST=#st{callers=Callers})->
             io:format("sip_incoming callers:~p~n",[Callers]),
             case lists:keyfind(Caller,#call_t.caller,Callers) of

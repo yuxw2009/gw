@@ -16,7 +16,8 @@
 
 
 %% external API
-stop(UA) -> UA ! stop.
+stop(UA) -> 
+    UA ! stop.
 
 	
 start(Request=#request{method="INVITE"},YxaCtx=#yxa_ctx{thandler = THandler})->
@@ -73,6 +74,7 @@ on_message(stop,StateName,State=#state{transaction_pid=THandler})->
     stop;   
     
 on_message(stop,_,_State) ->
+    io:format("abnormal ~p state ~p~n",[stop,_State]),
     stop;
 on_message({'DOWN', _Ref, process, Owner, _Reason},Status,State=#state{peerpid=Owner})->
     stop(self()),
@@ -87,12 +89,15 @@ on_message(trying_detecting_timeout,trying,_State) ->
     stop;
 
 on_message({new_request, FromPid, Ref, NewRequest, Ctx=#yxa_ctx{thandler = undefined}},StateName,State) ->
-    io:format("sip_op new_request no thandler :~p frompid:~p~n",[NewRequest,FromPid] ),
+%    io:format("sip_op new_request no thandler :~p frompid:~p~n",[NewRequest,FromPid] ),
     FromPid ! {ok, self(), Ref},
     {StateName,State};
     
+on_message({new_request, FromPid, Ref, _NewRequest=#request{method="ACK"}, _YxaCtx},StateName,State) ->
+    FromPid ! {ok, self(), Ref},
+    {StateName,State};
 on_message({new_request, FromPid, Ref, NewRequest, _YxaCtx},StateName,State) ->
-    io:format("sip_op new_request ~p ctx :~p~n",[NewRequest,_YxaCtx] ),
+%    io:format("sip_op new_request ~p ctx :~p~n",[NewRequest,_YxaCtx] ),
     THandler = transactionlayer:get_handler_for_request(NewRequest),
     FromPid ! {ok, self(), Ref},
 
@@ -104,8 +109,11 @@ on_message({new_request, FromPid, Ref, NewRequest, _YxaCtx},StateName,State) ->
         "OPTIONS" ->                        
             transactionlayer:send_response_handler(THandler, 200, "Ok"),
             {StateName,State#state{dialog=NewDialog}};
+        "INVITE" ->                        
+            transactionlayer:send_response_handler(THandler, 200, "Ok"),
+            {StateName,State#state{dialog=NewDialog}};
         _ ->
-            transactionlayer:send_response_handler(THandler, 501, "Not Implemented"),
+            transactionlayer:send_response_handler(THandler, 200, "OK"),
             {StateName,State#state{dialog=NewDialog}}
     end;
     
@@ -120,16 +128,20 @@ on_message({'EXIT', _, normal}, StateName,State) ->
    {StateName, State};
 on_message({tp_status,Status,Body}, StateName,State=#state{transaction_pid=THandler}) ->
     transactionlayer:send_response_handler(THandler, Status, "OK", [{"Content-Type", ["application/sdp"]}], Body),
-    notify_status(self(),Status),
-   {StateName, State};
+    NewStateName=notify_status(self(),Status,StateName),
+   {NewStateName, State};
 on_message(Unhandeld,StateName,State=#state{}) ->
     {StateName,State}. 
 
-notify_status(OpPid,Status)->
-    io:format("8888888888888888888888888888888888888notify_status:~p~n",[Status]),
-    notify_status1(OpPid,Status).
-notify_status1(OpPid,200)->  call_mgr:enter_talking(OpPid);
-notify_status1(_,_)-> void.
+notify_status(OpPid,Status,StateName)->
+    case notify_status1(OpPid,Status) of
+        not_changing-> StateName;
+        NewStatename-> NewStatename
+    end.
+notify_status1(OpPid,200)->  call_mgr:enter_talking(OpPid), ready;
+notify_status1(_,180)-> ring;
+notify_status1(_,183)-> ring;
+notify_status1(_,_)-> not_changing.
 %% internal function    
 
 create_dialog(Request, Response) when is_record(Request, request), is_record(Response, response) ->
@@ -148,7 +160,7 @@ send_bye(State) ->
     if 
         Dialog =/= null ->
             {ok, Bye, _Dialog, _Dst} = 
-                sipdialog:generate_new_request("BYE", [], <<>>, Dialog),
+                sipdialog:generate_new_request("BYE", [{"Max-Forwards", ["9"]}], <<>>, Dialog),
                 siphelper:send_request(Bye);
         true ->
             pass

@@ -55,7 +55,6 @@ handle(Arg,'POST', ["login"])->
     IP = utility:client_ip(Arg),
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     Res=login_processor:login([{"ip",IP}|Params]),
-    io:format("logined  res:~p~n",[Res]),
     Res;
 handle(Arg,'POST', ["third_reg"])->
     IP = utility:client_ip(Arg),
@@ -111,7 +110,7 @@ handle(Arg,'POST', ["package_usage"])->
 handle(Arg,'POST', ["get_recharges"])->
     {UUID}= utility:decode(Arg, [{uuid, s}]),
     Res=lw_register:get_recharges(UUID),
-    io:format("get_recharges:ack:~p~n",[Res]),
+    io:format("get_recharges:uuid:~p ack:~p~n",[UUID,Res]),
     utility:pl2jso(Res);
 handle(Arg,'POST', ["query_status"])->
     IP = utility:client_ip(Arg),
@@ -134,13 +133,12 @@ handle(Arg,'POST', ["login1"])->
     IP = utility:client_ip(Arg),
     {UUID,Pwd, {obj, Clidatas}}= utility:decode(Arg, [{uuid, s}, {pwd, s}, {clidata,o}]),
     R=login_processor:login(UUID,IP,Pwd,Clidatas),
-    io:format("login:~p res:~p~n",[UUID,R]),
     R;
 handle(Arg, 'POST', ["voip", "calls"]) ->
     _IP = utility:client_ip(Arg),
     {UUID_SNO,Callee}= utility:decode(Arg, [{user_id, s},{callee_phone, s}]),
     R=login_processor:autheticated(UUID_SNO,Callee),
-%    io:format("call auth result:~p~n",[{UUID_SNO,R}]),
+    io:format("call auth result:~p~n",[{UUID_SNO,R}]),
     case R of
     [{status,ok},{uuid,UUID}|_]-> start_call0(UUID, Arg);
     [{status,failed},{reason,Reason}]->
@@ -854,7 +852,7 @@ get_failed_note(balance_not_enough)->
       {content,<<"亲爱的用户,您的账户余额不足,请充值。如有疑问请拨打*812或者*810,谢谢！">>}];
 get_failed_note(not_actived)->
     [{status,failed},{reason,not_actived},{type,alert},{timelen,5},
-      {content,<<"呼叫失败：电话未激活，可能原因：1额度用完；2 套餐到期；3 当天拨打超过限制时长，请与代理商或者管理员联系。">>}];
+      {content,<<"呼叫失败：电话未激活，可能原因：1 当月额度用完；2 套餐到期；3 当天拨打超过限制时长;4 拨打违规 详细请与代理商或者管理员联系,请用本软件拨打*810或者*812联系。">>}];
 get_failed_note(no_logined)->
     [{status,failed},{reason,no_logined},{type,tips},{timelen,5},
       {content,<<"您好,为确保账户安全,麻烦您重新登录,给您带来不便,敬请谅解">>}];

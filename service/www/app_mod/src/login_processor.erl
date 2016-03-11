@@ -9,11 +9,16 @@ login(Params) when is_list(Params)->
     case proplists:get_value("acc",Params) of
     undefined->  login(Params, <<"uuid">>);
     Acc when is_binary(Acc) ->
-        UUID = case lw_register:get_name_item(Acc) of
-                       {atomic, [#name2uuid{uuid=U}]}->  U;
-                       _-> Acc
-                   end,
-        login([{"uuid",UUID} | Params], <<"uuid">>)
+        UUID=
+        case lw_register:get_register_info_by_uuid(Acc) of
+        {atomic,[_]}-> Acc;
+        _->
+           case lw_register:get_name_item(Acc) of
+               {atomic, [#name2uuid{uuid=U}]}->  U;
+               _-> Acc
+           end
+        end,
+        login(Params++[{"uuid",UUID}], <<"uuid">>)
     end.
 login(Params,_) when is_list(Params)->
     {Acc0,Pwd0,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),proplists:get_value("device_id",Params)},
@@ -30,12 +35,13 @@ login(Params,_) when is_list(Params)->
                           "livecom_"++Account1 -> {livecom,Account1};
                           Account2-> 
                               case string:tokens(Account2,"@") of
-                              [Account3]-> {livecom,Account3};
-                              [Account3,Company_]-> {list_to_binary(Company_),Account3}
+                              [Account3]-> {"livecom",Account3};
+                              [Account3,Company_]-> {Company_,Account3}
                               end
                         end,
         io:format("login_processor login:params:~p~n",[Params]),
-        company_login(Company,Account,Params,{RawAccount,PassMD5,DevId})
+        io:format("login ~p ~p ~p ~n", [Company, Account, PassMD5]),
+        company_login(lwork,Company,Account,Params,{RawAccount,PassMD5,DevId})
     end,
     AccUrls=wwwcfg:get_www_url_list(utility:c2s(utility:country(Ip))),
     {obj,[{"urls",AccUrls}|Pls0]}.
@@ -75,6 +81,26 @@ third_login1(Acc,Params)->
     end.
 
 company_login(Account,Params,{_XgAccount,PassMD5,DevId})->company_login(livecom,Account,Params,{_XgAccount,PassMD5,DevId}).
+company_login(lwork,Company,Account,Params,{_XgAccount,PassMD5,_DevId})->   % for login to lwork
+    SessionIP=proplists:get_value("ip",Params),
+    io:format("login ~p ~p ~p ~p ~p~n", [Company, Account, PassMD5, "", SessionIP]),
+    Res = rpc:call(snode:get_service_node(), lw_auth, login, [Company, Account, PassMD5, "",SessionIP]),
+    Res1=case Res of
+        {ok, UUID} -> 
+            {obj,ProfileObj}=Profile=get_profile(UUID,SessionIP),
+            {obj,InfoObj}=utility:get(Profile,profile),
+            Name=utility:get(utility:get(Profile,profile),name),
+            PhoneJson=utility:get(utility:get(Profile,profile),phone),
+            {ok,PhoneObj,_}=rfc4627:decode(PhoneJson),
+            Phone=utility:get(PhoneObj,"mobile"),
+            FullAccout=Account++"@"++Company,
+            NewParams0=lists:keystore("group_id",1, Params,{"group_id",list_to_binary(Company)}),
+            NewParams=lists:keystore("acc",1, NewParams0,{"acc",list_to_binary(FullAccout)}),
+            register_user_login(NewParams,[Phone]),
+            utility:pl2jso([{status, ok}, {uuid, Phone},{account,list_to_binary(FullAccout)},{"name", Name},{info,Profile},{type,company}]);
+        {failed, Reason}     -> utility:pl2jso([{status, failed}, {reason, pwd_not_match}])
+    end,
+    Res1.
 company_login(Company,Account,Params,{_XgAccount,PassMD5,DevId})->
     Type = usr,
     DeviceToken = if is_list(DevId)-> list_to_binary(DevId); true-> <<"">> end,
@@ -99,6 +125,71 @@ company_login(Company,Account,Params,{_XgAccount,PassMD5,DevId})->
         {obj,[{"uuid",UUID},{"name", Name},{"account",list_to_binary(Account)}|ProfileList]};
     R-> R
     end.
+
+get_profile(UUID,Ip)->
+    Summary = get_user_profile(UUID, Ip),
+%    {ShortName, OrgId, OrgHier} = get_org_hierarchy(list_to_integer(UUID), Ip),
+    HierJson = get_org_hierarchy_json(UUID, Ip),
+    FirstElement = fun([])    -> <<"">>;
+                      ([V|_]) -> list_to_binary(V) 
+                   end, 
+    SubDepFun = fun(SubDeps) ->
+                    utility:a2jsos([department_id, {department_name,fun erlang:list_to_binary/1}], SubDeps)
+                end,
+    HierFun = fun({SN,OId, SubDeps}) ->
+                    utility:pl2jso([{short_name, list_to_binary(SN)}, 
+                                    {org_id, OId},
+                                   {departments, utility:a2jsos([department_id, 
+                                                                {sub_departments, SubDepFun}], SubDeps)}])
+                end,    
+    utility:pl2jso([{profile, fun(V)-> utility:a2jso([uuid, {name, fun erlang:list_to_binary/1}, 
+                                                            {employee_id, fun erlang:list_to_binary/1},
+                                                            phone, 
+                                                            {department, fun erlang:list_to_binary/1}, 
+                                                            {mail, FirstElement}, photo],
+                                                 V)  
+                          end},
+                    {groups, fun(V)-> utility:a2jsos([group_id, {name, fun erlang:list_to_binary/1}, 
+                                                                {attribute, fun erlang:list_to_binary/1},
+                                                                members
+                                                                ],
+                                               V)
+                           end},
+                    {external, fun(V)-> utility:a2jsos([uuid, 
+                                                        {name, fun erlang:list_to_binary/1},
+                                                        {eid, fun erlang:list_to_binary/1},
+                                                        {markname, fun erlang:list_to_binary/1},
+                                                        phone,
+                                                        mail,
+                                                        status
+                                                        ],
+                                               V)
+                               end},
+%                    {hierarchy, HierFun},
+                    {im_id,fun(V)-> utility:pl2jso(V) end},
+                  %%  {departments, fun(V) -> [list_to_binary(I) || I<-V] end},
+                    {unread_events, fun(V) -> utility:pl2jso(V) end}], Summary++[{hierarchy, HierJson}]++[{status, ok}]).
+
+get_user_profile(UUID,SessionIP) ->
+  %%  io:format("get_user_profile ~p ~p  ~n", [UUID,SessionIP]),
+    %%[{profile, [1, "dhui",  "0131000020", ["00861334567890"], "R&D", ["dhui@livecom.hk"], <<"photo.gif">>]},
+    %% {groups,  [{2, "all",  "rr", [2,3]}, {3, "recent", "rd", [4,5]}]},
+    %% {default_group, 2},
+    %% {default_view, task},
+    %% {external, [{UUID, name, eid, markname, phone}]}
+    %% {unread_events, [{task, 2},{poll, 3}]}
+    %%].
+    %%{value, Profile} = rpc:call(snode:get_service_node(), lw_instance, get_user_profile, [UUID,SessionIP]),
+    {value, Profile} = rpc:call(snode:get_service_node(), lw_instance, request, 
+                                            [UUID, lw_auth, get_user_profile, [UUID], SessionIP]),
+    Profile.
+
+get_org_hierarchy_json(UUID,SessionIP) ->
+  %%   io:format("get_org_hierarchy ~p ~p~n", [UUID,SessionIP]),
+     %%{value, Hier} = rpc:call(snode:get_service_node(), lw_instance, get_org_hierarchy, [UUID,SessionIP]),
+     {value, Hier} = rpc:call(snode:get_service_node(), lw_instance, request, 
+                                          [UUID, lw_auth, get_org_hierarchy_json, [UUID], SessionIP]),
+     Hier.
 
 local_login(Params)->
     UUID=proplists:get_value("uuid",Params),
@@ -138,7 +229,7 @@ check_auth(UUID,_)->
        [{status,failed},{reason,no_logined}];
    #login_itm{phone=Phone,status=?ACTIVED_STATUS}->
        case lw_register:check_balance(Phone) of
-       {true,Bal} when Bal>0 -> [{status,ok},{uuid,UUID},{balance,Bal}];
+       {true,Bal} when Bal==no_limit orelse Bal>0 -> [{status,ok},{uuid,UUID},{balance,Bal}];
        _-> [{status,failed},{reason,balance_not_enough}]
        end;
    #login_itm{}->
@@ -300,7 +391,6 @@ case {get_account_tuple(Phone), get_account_tuple_bydid(Phone)} of
 update_itm(Itm)->  ?DB_WRITE(Itm).
 show_usertab()-> ?DB_QUERY(login_itm).
     
-get_group_id(Phone) when Phone=="31230646" orelse Phone=="31230648" orelse Phone=="31230653"->  "livecom";
 get_group_id(Phone)->
     R=
     case get_tuple_by_uuid_did(Phone) of
@@ -311,7 +401,7 @@ get_group_id(Phone)->
         end;
     _-> undefined
     end,
-    if is_binary(R)-> binary_to_list(R); true-> R end.
+    if is_binary(R)-> binary_to_list(R); is_atom(R)-> atom_to_list(R); true-> R end.
     
 set_status(UUID,Status)->
     case get_tuple_by_uuid_did(UUID) of

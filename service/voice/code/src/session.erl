@@ -102,8 +102,10 @@ start_uas(Phone1,Phone2,UUID) ->
                    "fzd"-> "18888888888";
                    _-> trans_caller_phone(Phone1,Phone2)
                    end,
-    {Caller,_} = sipua:start_monitor(Session,caller,caller_addr(CallerCid),callee_addr(trans_callee_phone0(Phone1,UUID))),    
-    {Callee,_} = sipua:start_monitor(Session,callee,caller_addr(trans_caller_phone(Phone2,Phone1)),callee_addr(trans_callee_phone0(Phone2,UUID))),
+    CalleeUUID={element(1,UUID),Phone2},
+    {Caller,_} = sipua:start_monitor(Session,caller,caller_addr(CallerCid),callee_addr(trans_callee_phone0(Phone1,CalleeUUID))),   
+    CallerUUID={element(1,UUID),Phone1},
+    {Callee,_} = sipua:start_monitor(Session,callee,caller_addr(trans_caller_phone(Phone2,Phone1)),callee_addr(trans_callee_phone0(Phone2,CallerUUID))),
     
     {Caller,Callee}.
             
@@ -146,7 +148,14 @@ generator_cdr0(State=#state{options=Options}) ->
             CallerInfo = {State#state.caller_name,State#state.caller_phone,State#state.caller_rate},
             CalleeInfo = {State#state.callee_name,State#state.callee_phone,State#state.callee_rate},
             TimeInfo   = {StartTime,EndTime,time_diff(StartTime,EndTime)},
-            cdrserver:new_cdr(callback, {UUID,State#state.group_id, {CallerInfo,CalleeInfo},TimeInfo,Options});
+            cdrserver:new_cdr(callback, {UUID,State#state.group_id, {CallerInfo,CalleeInfo},TimeInfo,Options}),
+            case UUID of
+            {"ZTE",EID} -> 
+                CallerInfo1 = {State#state.caller_phone,State#state.caller_rate},
+                CalleeInfo1 = {State#state.callee_phone,State#state.callee_rate},
+                rpc:call('company@10.32.3.38',zteapi,new_cdr,[{1, EID},CallerInfo1,CalleeInfo1,TimeInfo]);
+            _         -> pass
+            end;
         true -> 
             no_cdr_needed
     end.        
@@ -234,6 +243,8 @@ trans_callee_phone0(Phone,UUID)->
 trans_callee_phone(Phone,{"fzd",_}=_UUID)-> Phone;
 trans_callee_phone(Phone="*0086"++_,_)->  Phone;
 trans_callee_phone("*"++Phone,_)->  "*000001"++filter_phone(Phone);
+trans_callee_phone(Phone,{"livecom",_}=UUID) when length(Phone) =<4 ->  % livecom subphone
+    trans_callee_phone("*"++Phone,UUID);
 trans_callee_phone("+"++Phone,UUID)->  trans_callee_phone("00"++Phone,UUID);
 trans_callee_phone(Phone="00"++_,UUID={_Group_id,_})->  group_callee_prefix(UUID)++filter_phone(Phone);
 trans_callee_phone(Phone="2"++_,{"dth",_}=_UUID) when length(Phone) == 5 ->  % sip small phone????????????????

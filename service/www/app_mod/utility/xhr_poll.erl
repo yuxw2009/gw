@@ -1,7 +1,7 @@
 -module(xhr_poll).
 -compile(export_all).
 -define(SHAKE_TIME_LEN, 60*1000).
--define(DETECT_NUM, 3).
+-define(DETECT_NUM, 10).
 -define(DISCONNECT_NUM,10).
 -record(state, {report_to, queue=[], pid, shake_timer,timeout_num=0, attrs=[],status=unpushable}).
 

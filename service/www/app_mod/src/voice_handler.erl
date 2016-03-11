@@ -7,6 +7,7 @@
 -include("yaws_api.hrl").
 -define(NOTICE,"./log/www_notice.log").
 -define(TOKENS,"./log/tokens.log").
+-define(WWW_VOICE,'www_voice@10.32.3.52').
 
 %%% request handlers
 %% handle stop VOIP  request
@@ -105,79 +106,147 @@ handle(Arg, 'POST', ["fzdvoip", "status_with_qos"]) ->
 		    end;
 	    _ -> utility:pl2jso([{status, failed},{reason,cnm}])
     end;
+
+%% handle start meeting request
+handle(Arg, 'POST', ["meetings"]) ->
+    {ok, Json, _} = rfc4627:decode(Arg#arg.clidata),	
+    UUID = utility:get_string(Json, "uuid"),
+%    Group = utility:get_binary(Json, "group_id"),
+    Group = login_processor:get_group_id(UUID),
+    Subject = utility:get_binary(Json, "subject"),
+    MObjs = utility:get(Json, "members"),
+    Members = [{utility:get_binary(Obj, "name"), utility:get_string(Obj, "phone")}  || Obj <- MObjs],
+    %%Members = [{"dhui","008615300801756"}],
+    case rpc:call(?WWW_VOICE, www_voice_handler, start_meeting, [Group,UUID,Members]) of
+        {value,MeetingId, Details} ->
+%           io:format("voice_handler meetings details:~p~n",[Details]),
+           utility:pl2jso([{status, ok}, 
+    	            {meeting_id, list_to_binary(MeetingId)},
+    	            {details, utility:a2jsos([member_id, 
+    	            	                      status, 
+    	            	                      name, 
+    	            	                      {phone, fun erlang:list_to_binary/1}],
+    	            	                     Details)}]);
+        {value,Reason}      -> utility:pl2jso([{status, failed},{reason,Reason}])
+    end;
+%% handle stop meeting request
+handle(Arg, 'GET', ["meetings", MeetingId,"delete"]) -> handle(Arg, 'DELETE', ["meetings", MeetingId]);
+handle(Arg, 'DELETE', ["meetings", MeetingId]) ->
+    UUID = utility:query_string(Arg, "uuid"),
+    Group = login_processor:get_group_id(UUID),
+    ok = rpc:call(?WWW_VOICE, www_voice_handler, stop_meeting, [Group,UUID,MeetingId]),
+    utility:pl2jso([{status, ok}]);
+%% handle get active meeting info request
+handle(Arg, 'GET', ["meetings"]) ->
+    UUID = utility:query_string(Arg, "uuid"),
+    Group = login_processor:get_group_id(UUID),
+    {value, ActiveMeetings} = rpc:call(?WWW_VOICE, www_voice_handler, get_meeting, [Group,UUID,undefined]),
+    utility:pl2jso([{status, ok}, 
+    	            {meetings, utility:a2jsos([{meeting_id, fun erlang:list_to_binary/1},
+    	            	                       {details, fun(V) ->  
+    	            	                                     utility:a2jsos([member_id, status, 
+    	            	                                     	            name,
+    	            	                                     	            {phone, fun erlang:list_to_binary/1}], V) 
+    	            	                                 end},
+    	            	                        meeting_status
+    	            	                      ],
+    	            	                      ActiveMeetings)}]);
+%% handle get active meeting member status request
+handle(Arg, 'GET', ["meetings", MeetingId, "status"]) ->
+    UUID = utility:query_string(Arg, "uuid"),
+    Group = login_processor:get_group_id(UUID),
+    Members=
+    case rpc:call(?WWW_VOICE, www_voice_handler, get_meeting, [Group,UUID,MeetingId]) of
+        {value,[{_MeetingId, AM,ongoing}|_]}  ->    [{MemberId, Status} || {MemberId, Status, _, _}<- AM];
+        Other ->         
+            io:format("meeting other:~p ~n", [Other]),
+            []
+    end,
+    utility:pl2jso([{status, ok},
+    	            {members, utility:a2jsos([member_id, status], Members)}
+    	            ]);
+%% handle add new member request
+handle(Arg, 'POST', ["meetings",MeetingId, "members"]) ->
+    {ok, Json, _} = rfc4627:decode(Arg#arg.clidata),		
+    UUID = utility:get_string(Json, "uuid"),
+    Group = login_processor:get_group_id(UUID),
+    Name = utility:get_binary(Json,"name"),
+    Phone = utility:get_string(Json,"phone"),
+    {value,MemberInfo} = rpc:call(?WWW_VOICE, www_voice_handler, join_meeing_member, [Group, UUID,MeetingId,Name,Phone ]),
+    io:format("post members:~p~n",[MemberInfo]),
+    utility:pl2jso([{status, ok},
+    	            {new_member, utility:a2jso([member_id, status, 
+    	            	                         name, 
+    	            	                         {phone, fun erlang:list_to_binary/1}
+    	            	                        ], 
+    	            	                        MemberInfo)}
+    	            ]);
+%% handle redial or hangup a member request
+handle(Arg, 'POST', ["meetings",MeetingId, "members", MemberId]) ->
+    {ok, Json, _} = rfc4627:decode(Arg#arg.clidata),
+    UUID = utility:get_string(Json, "uuid"),
+    Status= utility:get_atom(Json,"status"),
+    Group = login_processor:get_group_id(UUID),
+    rpc:call(?WWW_VOICE, www_voice_handler, modify_meeting_members, [Group, UUID,MeetingId,MemberId,Status ]),
+    utility:pl2jso([{status, ok}]);
+
+handle(Arg, 'GET', ["meetings", "cdrs"]) ->
+    UUID = utility:query_string(Arg, "uuid"),
+    Group = login_processor:get_group_id(UUID),
+    Year = utility:query_integer(Arg, "year"),
+    Month = utility:query_integer(Arg, "month"),
+    {value,History} = rpc:call(?WWW_VOICE, www_voice_handler, get_meeting_history, [Group,UUID,Year,Month]),
+    
+%    io:format("get_meeting_history: ~p~n", [History]),
+    utility:pl2jso([{status, ok}, {details, utility:a2jsos([meeting_id,subject,
+                                                            {timestamp, fun(Date)->list_to_binary(utility:d2s(Date)) end},status,
+                                                            {members, fun(Ms) ->
+                                                                          utility:a2jsos([seq,name,{phone, fun erlang:list_to_binary/1}], Ms)
+
+                                                                      end
+                                                            }],
+                                              History)}]);
+
 handle(Arg, M, Ps) ->
     utility:pl2jso([{status,failed},{reason,und}]).
 
-handle_startcall("",Arg)->   handle_fzd_startcall(Arg);
 handle_startcall(GroupId,Arg)-> 
     {UUID}=utility:decode(Arg, [{uuid,s}]),
     handle_startcall(lw_mobile:get_node_by_ip0(UUID,utility:client_ip(Arg)),GroupId,Arg).
 handle_startcall(Node,GroupId,Arg)->
+    case check_token(Arg) of
+    {pass,_}->
+    		startcall_nochecktoken(Node,GroupId,Arg);
+     Excep->
+        io:format("post illegal!from ip:~p original:~p~nExcp:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg),Arg#arg.clidata]),
+        utility:pl2jso([{status, failed},{reason,c}])
+    end.
+
+check_token(Arg)->
+    case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
+    {UUID, SDP, Phone,Class}->
+        AuthCode=utility:get_string_by_stringkey("auth_code",Arg),
+        check_token(UUID, [Phone,GroupId,AuthCode]);
+    _-> failed
+    end.
+startcall_nochecktoken(Node,GroupId,Arg)->
     case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
     {UUID, SDP, Phone,Class}->
         AuthCode=utility:get_string_by_stringkey("auth_code",Arg),
          io:format("GroupId:~p AuthCode:~p Phone:~p~n",[GroupId,AuthCode,Phone]),
-        case check_token(UUID, [Phone,GroupId,AuthCode]) of
-            {pass, Phone2} ->
-        		Res = start_voip(Node,GroupId,UUID, Class, Phone2, SDP, no_limit,utility:client_ip(Arg)),
-%        		io:format("voice_handler start_voip node:~p res:~p~n",[Node,Res]),
-        		case Res of
-        			{SID, SDP2} -> 
-        			    handleP2pCall(UUID,Phone,Node,SID,SDP2,Arg),
-        			    utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
-        			Err -> utility:pl2jso([{status, failed},{reason,a}])
-        		end;
-        	_ ->
-        %			    utility:log(?NOTICE,"post token illegal!from ip:~p original:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg)]),
-        	    utility:pl2jso([{status, failed},{reason,what_do_you_want}])
+        Res = start_voip(Node,GroupId,UUID, Class, Phone, SDP, no_limit,Arg),
+        case Res of
+        	{SID, SDP2} -> 
+        	    handleP2pCall(UUID,Phone,Node,SID,SDP2,Arg),
+        	    utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
+        	Err -> utility:pl2jso([{status, failed},{reason,a}])
         end;
-     _->
-        io:format("post illegal!from ip:~p original:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg)]),
-        utility:pl2jso([{status, failed},{reason,c}])
-    end.
-    
-handle_fzd_startcall(Arg)->
-      case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
-      {UUID, SDP, Phone,Class}->
-            MaxtalkT0 = 
-                      if 
-                          Class =="registered"-> no_limit;
-                          Class== "test"-> 75*1000;
-                          true->
-                              case catch list_to_integer(Class) of
-                              M when is_integer(M)-> M;
-                              _-> no_limit
-                              end
-                       end,
-      
-             io:format("UUID:~p Phone:~p~n",[UUID,Phone]),
-		case check_token(UUID, string:tokens(Phone,"@")) of
-		    {pass, Phone2,Others=[FeeLength]} ->
-%		         io:format("Phone:~p Others:~p~n",[Phone,Others]),
-		         MaxtalkT = case catch list_to_integer(FeeLength) of
-		                              IFee when is_integer(IFee) andalso IFee > 0-> IFee;
-		                              _-> MaxtalkT0
-		                          end,
-				Res = start_voip(fzd,UUID, Class, Phone2, SDP, MaxtalkT,utility:client_ip(Arg)),
-				case Res of
-					{SID, SDP2} -> utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
-					Err -> utility:pl2jso([{status, failed},{reason,a}])
-				end;
-		    {pass, Phone2} ->
-				Res = start_voip(fzd,UUID, Class, Phone2, SDP, MaxtalkT0,utility:client_ip(Arg)),
-				case Res of
-					{SID, SDP2} -> utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
-					Err -> utility:pl2jso([{status, failed},{reason,a}])
-				end;
-			_ ->
-%			    utility:log(?NOTICE,"post token illegal!from ip:~p original:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg)]),
-			    utility:pl2jso([{status, failed},{reason,what_do_you_want}])
-		end;
-     _->
-%        utility:log(?NOTICE,"post illegal!from ip:~p original:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg)]),
+     Excep->
+        io:format("post illegal!from ip:~p original:~p~nExcp:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg),Arg#arg.clidata]),
         utility:pl2jso([{status, failed},{reason,c}])
     end.
 
+%check_token(UUID, [Phone, GroupId, AuthCode])-> {pass,Phone};    
 check_token(UUID, [Phone, GroupId, AuthCode]) when is_binary(GroupId)-> check_token(UUID, [Phone, binary_to_list(GroupId), AuthCode]);
 check_token(UUID, [Phone, GroupId, _])  when GroupId=="dth_common" orelse GroupId=="common"-> {pass,Phone};
 check_token(UUID, [Phone, "dth", _]) -> {pass,Phone};
@@ -220,22 +289,16 @@ start_call1(WcgNode,SDP,Options) ->
 start_call1(SDP,Options) ->
     wcg_disp:call(SDP, Options).
 
-start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
+start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, Arg)->
 %    BA=xhr_poll:start([]),
+    SessionIP=utility:client_ip(Arg),
+    {Subgroup_id,Guid} = utility:decode(Arg,[{subgroup_id,s},{guid,s}]),
+    {IsRecord,RecordFile}= if ServiceId=="xh"->  {true,ServiceId++"_"++Subgroup_id++"_"++Guid}; true-> {false,""} end,
     Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
-                                   {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)}],
+                                   {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)},
+                                   {subgroup_id,Subgroup_id},{guid,Guid},{isrecord,IsRecord},{recordfile,RecordFile},{gw,WcgNode}],
+
     case start_call1(WcgNode,SDP, Options) of
-          {successful,Node,Session_id, Callee_sdp}->
-              {enc_sid(Node, Session_id), Callee_sdp};
-          Reason -> 
-              Reason
-   end.
-    
-start_voip(ServiceId,UUID, Class, Phone, SDP, MaxtalkT, SessionIP)->
-%    BA=xhr_poll:start([]),
-    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
-                                  {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)}],
-    case start_call1(SDP, Options) of
           {successful,Node,Session_id, Callee_sdp}->
               {enc_sid(Node, Session_id), Callee_sdp};
           Reason -> 

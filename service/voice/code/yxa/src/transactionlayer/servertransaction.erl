@@ -1128,6 +1128,11 @@ send_response_statemachine(Method, Status, proceeding) when Status >= 100, Statu
 
 send_response_statemachine("INVITE", Status, proceeding) when Status >= 200, Status =< 299 ->
     logger:log(debug, "UAS decision: Requested to send 2xx response ~p to INVITE when in state 'proceeding' - " ++
+	       "doing reliably and still in proceeding", [Status]),
+    {send, true, completed};
+
+send_response_statemachine("INVITE", Status, proceeding) when Status >= 200, Status =< 299 ->
+    logger:log(debug, "UAS decision: Requested to send 2xx response ~p to INVITE when in state 'proceeding' - " ++
 	       "doing so (unreliably) and entering state 'terminated'", [Status]),
     {send, false, terminated};
 

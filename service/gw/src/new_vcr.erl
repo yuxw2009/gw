@@ -4,7 +4,7 @@
 -define(PCMU,0).
 -define(LINEAR,99).
 -define(VP8, 100).
--define(DIR, "./new_vcr/").
+-define(DIR, "/data/new_vcr/").
 
 -define(MIX_PERIOD, 20).
 -define(MIX_SR, 8000).
@@ -29,10 +29,22 @@
 	bgn		% begin time
 }).
 
-init([Name]) ->
-	{ok,AH} = file:open(?DIR++Name++".pcm", [write,raw,binary]),
+vcr_path()-> ?DIR.
+
+start(Name) ->
+	{ok,Pid} = my_server:start(?MODULE,[Name],[]),
+	Pid.
+	
+
+init([{abs,Name}]) ->
+     io:format("new_vcr:open:~p~n",[Name]),
+    Dir=filename:dirname(Name),
+    file:make_dir(Dir),	
+    {ok,AH} = file:open(Name, [write,raw,binary]),
     {ok, TRef} = my_timer:send_interval(?MIX_PERIOD, mix_2_file),
-	{ok,#st{name=Name,ac=0,ah=AH,bgn=now(),tmr=TRef}}.
+	{ok,#st{name=Name,ac=0,ah=AH,bgn=now(),tmr=TRef}};
+init([Name]) ->
+	init([{abs,vcr_path()++Name++".pcm"}]).
 handle_info(mix_2_file, #st{ins=Ins0, ah=FH, common_f=CF0}=ST) ->
     {SmpSum0, Ins} = mix_all(Ins0),
     {Bin, CF} = to_bin(SmpSum0, CF0),
@@ -65,6 +77,18 @@ terminate(normal, #st{name=Name,ac=AC,ah=AH}) ->
 	ok.
 
 % ----------------------------------	
+mkday_dir(Date)->
+    {Y,Mo,D} = Date,
+    xt:int2(Y)++xt:int2(Mo)++xt:int2(D).
+mkvfn(Name) ->
+    {H,M,S} = time(),
+    Date=mkday_dir(date()),
+    NewName=Date++"/"++Name++"_"
+             ++xt:int2(H)
+             ++xt:int2(M)
+             ++xt:int2(S),
+    {vcr_path()++NewName++".pcm", NewName++".pcm"}.
+
 save_ivf_hdr(FH) ->
 	{W,H} = {640,480},
 	NF = 0,
@@ -88,10 +112,6 @@ save_ivf_frame_count(FH,_C,Bgn) ->
 save_pcmu_frame(FH,Bin) ->
 	ok = file:write(FH,Bin).
 % ----------------------------------	
-start(Name) ->
-	{ok,Pid} = my_server:start(?MODULE,[Name],[]),
-	Pid.
-	
 stop(Pid) when is_pid(Pid) ->
 	my_server:call(Pid,stop);
 stop(_) -> ok.

@@ -33,17 +33,23 @@ handle(Arg,'GET', [])->
 handle(Arg,'POST', ["package_pay","wx"])->
     io:format("~p~n",[Arg#arg.clidata]),
     Pairs=get_pairs(binary_to_list(Arg#arg.clidata)),
+    io:format("pairs:~p~n",[Pairs]),
     ReturnCode=proplists:get_value(return_code,Pairs),
     Sign0=proplists:get_value(sign,Pairs),
     PayId=proplists:get_value(out_trade_no,Pairs),
+    Total_cent=list_to_integer(proplists:get_value(total_fee,Pairs,0)),  % cent
+    Fee=trunc(Total_cent/100),
     case {ReturnCode,wx_sign(Pairs),?DB_READ(pay_types_record,PayId)} of
     {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{status=paid}]}}->
         io:format("pay:wx notify repeated~n"),
         void;
-    {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{uuid=UUID,pkg_info=PkgInfo}]}}->
+    {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{uuid=UUID,pkg_info=PkgInfo,money=Fee}]}}->
         lw_register:add_pkg(UUID,PkgInfo),
         lw_register:add_payids(UUID, [PayId]),
         ?DB_WRITE(Item#pay_types_record{pls=Pairs,status=paid,paid_time=erlang:localtime()});
+    {"SUCCESS",Sign0,{atomic,[Item=#pay_types_record{uuid=UUID,pkg_info=PkgInfo,money=Money}]}}->
+        io:format("money error,recharge failed, should:~p but:~p pls reback the money~n",[Money,Fee]),
+        ?DB_WRITE(Item#pay_types_record{pls=Pairs,status=paid_error,paid_time=erlang:localtime()});
     _Other->    
          io:format("pay wx:other:~p~n",[_Other])
     end,
@@ -124,10 +130,13 @@ gen_types_payid(Json)->
         [{status,failed},{reason,error_params}]
     end.
 
+get_all_paidrecord()->
+    {_,Res}=mnesia:transaction(fun()->(qlc:e(qlc:q([X||X<-mnesia:table(pay_types_record),element(4,X)==paid])))  end), 
+    Res.
 gift_for_reg(UUID)->
     case lw_register:get_group_id(UUID) of
     <<"dth_common">> ->
-        PkgInfo=gen_pkg_info("dth_common",dth_basic1,"gift"),
+        PkgInfo=gen_pkg_info("dth_common",dth_temp2,"gift"),
         lw_register:add_pkg(UUID,PkgInfo);
     _-> void
     end.

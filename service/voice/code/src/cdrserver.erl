@@ -14,9 +14,13 @@ start_monitor() ->
 
 %% uuid,{Phone1,Rate1},{Phone2,Rate2},{StartTime,EndTime,Duration}
 new_cdr(Type, Cdr_info) ->
-    Pid= start_monitor(),
-    Pid ! {new_cdr,Type, Cdr_info},
-    ok.
+    Pid= case whereis(?MODULE) of
+           undefined-> 
+              start_monitor();
+           P->  P
+           end,
+     Pid ! {new_cdr,Type, Cdr_info},
+     ok.
 
 init() ->
     loop().
@@ -69,11 +73,10 @@ handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{
     CDR = #cdr{key={www_xengine:bill_id(Service_id), Service_id}, type=Type, quantity=Quantity,
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR),
-    KouFei =proplists:get_value(callback,Options),
-    io:format("callback koufei: ~p~n",[{KouFei,Charge}]),
-    {Node,Mod,Fun,UUID0}=KouFei,
-    rpc:call(Node,Mod,Fun,[UUID0,Charge]);
-    
+    case proplists:get_value(callback,Options) of
+    {Node,Mod,Fun,UUID0}->    rpc:call(Node,Mod,Fun,[UUID0,Charge]);
+    _-> void
+    end;    
 
 handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{_Name2,Phone2,_}},{StartTime,EndTime,Quantity}})->
     % modify to rate from rate_server
@@ -85,6 +88,25 @@ handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR);
 
+handle_cdr_request(voip, {{Service_id="xh",_UUID},Audit_info,Phone,{StartTime,EndTime,Quantity},Options})->
+    % modify to rate from rate_server
+    BillId=proplists:get_value(guid,Options,www_xengine:bill_id(Service_id)),
+    
+    Type = voip,
+    [{_, Rate}] = get_rates(Service_id, Type, [Phone]),
+    Charge = Rate*to_minute(Quantity),
+    Cdr_details=#voip_detail{phone=Phone,rate=Rate, start_time=StartTime, end_time=EndTime},
+    Key={BillId, Service_id}, 
+    CDR = #cdr{key=Key, type=Type, quantity=Quantity,
+                        charge=Charge, audit_info=Audit_info, details=Cdr_details},
+    callstat:save(Service_id,CDR),
+    KouFei =proplists:get_value(callback,Options),
+    io:format("voip koufei: ~p~n",[{_UUID,KouFei,Charge}]),
+    case KouFei of
+    {Node,Mod,Fun,UUID0}->
+        rpc:call(Node,Mod,Fun,[UUID0,Charge]);
+    _-> void
+    end;
 handle_cdr_request(voip, {{Service_id,_UUID},Audit_info,Phone,{StartTime,EndTime,Quantity},Options})->
     % modify to rate from rate_server
     Type = voip,
@@ -95,7 +117,7 @@ handle_cdr_request(voip, {{Service_id,_UUID},Audit_info,Phone,{StartTime,EndTime
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR),
     KouFei =proplists:get_value(callback,Options),
-    io:format("voip koufei: ~p~n",[{KouFei,Charge}]),
+    io:format("voip koufei: ~p~n",[{_UUID,KouFei,Charge}]),
     case KouFei of
     {Node,Mod,Fun,UUID0}->
         rpc:call(Node,Mod,Fun,[UUID0,Charge]);

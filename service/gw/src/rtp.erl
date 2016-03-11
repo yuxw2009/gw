@@ -849,7 +849,7 @@ terminate(normal, #state{base_wall_clock={_,Now0,_},r_base=#base_info{bytes_rcvd
     D=Now1-Now0,
     Sends=Pkts*12+Bytes,
     {BpsRec,BpsSnd} = if D==0-> {0.0,0.0}; true-> {Bsrcvd/D,Sends/D} end,
-    io:format("rtp:terminate ~ps rcv ~pB snd ~pB Bps:(~p ~p)~n",[D,Bsrcvd,Sends,BpsRec,BpsSnd]),
+%    io:format("rtp:terminate ~ps rcv ~pB snd ~pB Bps:(~p ~p)~n",[D,Bsrcvd,Sends,BpsRec,BpsSnd]),
 	ok.
 
 % ----------------------------------

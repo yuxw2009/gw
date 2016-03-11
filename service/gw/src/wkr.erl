@@ -774,12 +774,15 @@ choose_peer(lan_c,Udps) ->
 	
 
 iptype(Addr) ->	
-	{ok,{A,B,_C,_D}} = inet_parse:address(Addr),
-	if A==10 -> lan_a;
-	   A==172 andalso (B>=16 andalso B=<31) -> lan_b;
-	   A==192 andalso B==168 -> lan_c;
-	   A==169 andalso B==254 -> unused;
-	true -> wan
+	case inet_parse:address(Addr) of
+        {ok,{A,B,_C,_D}}->
+			if A==10 -> lan_a;
+			   A==172 andalso (B>=16 andalso B=<31) -> lan_b;
+			   A==192 andalso B==168 -> lan_c;
+			   A==169 andalso B==254 -> unused;
+			true -> wan
+			end;
+		_-> wan
 	end.
 
 % ----------------------------------

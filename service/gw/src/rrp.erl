@@ -89,7 +89,7 @@
 	passu,
 	noise,
 	vcr,
-	vcr1,
+	dual_vcr,
 	newvcr,
 	newvcr1,
 	rtpvcr,
@@ -105,24 +105,25 @@
 	to_web	    % pcmu -> isac -> webrtc
 }).
 
+start_dual_record(Rrp,Vcr)->    if is_pid(Rrp)-> Rrp ! {start_dual_record,Vcr}; true-> not_alive end.
+
 init([Session,Socket,{WebCdc,SipCdc}=Params,Vcr,Port,Options]) ->
 %    {ok,Noise} = file:read_file("cn.pcm"),
+  io:format("rrp started: codec web:~p sip:~p~n",[WebCdc,SipCdc]),
 	Noise = tone:cn_pcm(),
 	Phinfo=proplists:get_value(call_info,Options,[]),
-    Phone = proplists:get_value(phone, Phinfo),
-    UUID = proplists:get_value(cid, Phinfo),
+      Phone = proplists:get_value(phone, Phinfo),
+      UUID = proplists:get_value(cid, Phinfo),
 	{VCR,VCR1} = 
-      case {Vcr,proplists:get_value(qno,Phinfo)} of
-        {has_vcr, undefined}->
-	           {undefined,new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
-%	           {vcr:start(mkvfn(UUID++"_"++Phone)),new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
-        {has_vcr, Qno}->
-             {vcr:start(mkvfn("t"++Qno++"_"++UUID)),undefined};
-%             {vcr:start(mkvfn("t"++Qno++"_"++UUID)),new_vcr:start(mkvfn("t"++Qno++"_"++UUID))};
-        _->
-             {undefined,undefined} 
-      end,
-	ST=#st{phinfo=Phinfo,vcr=VCR,noise=Noise,vcr1=VCR1},
+              case {Vcr,proplists:get_value(qno,Phinfo)} of
+                {has_vcr, undefined}->
+        	           {undefined,new_vcr:start(mkvfn(UUID++"_"++Phone))}; 
+                {has_vcr, Qno}->
+                     {vcr:start(mkvfn("t"++Qno++"_"++UUID)),undefined};
+                _->
+                     {undefined,undefined} 
+              end,
+	ST=#st{phinfo=Phinfo,vcr=VCR,noise=Noise,dual_vcr=VCR1},
 	ST1 = case WebCdc of
         	pcmu ->
             	llog1(ST,"rrp ~p started: pcmu@web",[Session]),
@@ -273,6 +274,10 @@ handle_info({send_phone_event,Nu,Vol,Dura},#st{snd_pev=SPEv}=ST) ->
             	SPEv#ev{queue=InQ++[{Nu,Vol,Dura}]}
         	end,
     {noreply,ST#st{snd_pev=SPEv2}};
+handle_info({start_dual_record,NVcr1},#st{dual_vcr=DualVcr}=ST) ->
+    vcr:stop(DualVcr),
+    io:format("rrp rec start_dual_record:~p~n",[NVcr1]),
+    {noreply,ST#st{dual_vcr=NVcr1}};
 handle_info({start_record_rrp1,[Fn]},#st{newvcr1=Nvcr}=ST) ->
     llog1(ST,"~p start_record_rrp1 file ~p",[ST#st.session,Fn]),
 %    io:format("rrp:~p start_record_rrp file ~p~n",[ST#st.session,Fn]),
@@ -339,7 +344,7 @@ handle_info(pcmu_to_sip,#st{webcodec=isac, to_sip=#apip{trace=Trace,vad=VAD,pass
         {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
         send_udp(Socket,IP,Port,RTP),
-        send2_newvcr(ST#st.vcr1,PCM,rrp),
+        send2_newvcr(ST#st.dual_vcr,PCM,rrp),
         {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
     end,
     flush_msg(pcmu_to_sip),
@@ -362,7 +367,7 @@ handle_info(pcmu_to_sip,#st{webcodec=Wcdc, to_sip=#apip{trace=Trace,vad=VAD,pass
         {noreply,ST#st{in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}};
     true-> 
         send_udp(Socket,IP,Port,RTP),
-        send2_newvcr(ST#st.vcr1,F1,rrp),
+        send2_newvcr(ST#st.dual_vcr,F1,rrp),
         {noreply,ST#st{stats=up_udp_stats(ST#st.stats,RTP),in_stream=NewBaseRTP,to_sip=ToSip#apip{abuf=RestAB,trace=Type,passed=F1},vcr_buf=VB2}}
     end,
 %        send_udp(Socket,IP,Port,RTP),
@@ -381,7 +386,8 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=voice,
 	case get_samples(VAD,?FS16K,60,Passed,AB) of	% 16Khz 60ms 16-bit samples = 960
         {{voice,F1},RestAB} ->
             {0,_,Aenc} = ?APPLY(erl_isac_nb, xenc, [Isac,F1]),
-             send2_newvcr(ST#st.vcr1,F1,rtp),
+             PCM = ?APPLY(erl_resample, down8k, [F1]),
+             send2_newvcr(ST#st.dual_vcr,PCM,rtp),
         	Web ! #audio_frame{codec=?iSAC,marker=false,body=Aenc,samples=960},
             flush_msg(isac_to_webrtc),
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,noise_deep=0,passed=F1}}};
@@ -400,7 +406,8 @@ handle_info(isac_to_webrtc,#st{webcodec=isac,media=Web,to_web=#apip{trace=noise,
             {BlkN,F2} = get_nearest_samples(0,?FS16K,30,Passed),
             {0,_,Aenc} = ?APPLY(erl_isac_nb, xenc, [Isac,<<F2/binary,F1/binary>>]),
         	Web ! #audio_frame{codec=?iSAC,marker=true,body=Aenc,samples=(BlkN+1)*480},
-             send2_newvcr(ST#st.vcr1,F1,rtp),
+             PCM = ?APPLY(erl_resample, down8k, [F1]),
+             send2_newvcr(ST#st.dual_vcr,PCM,rtp),
             {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,trace=voice,noise_deep=0,passed= <<F2/binary,F1/binary>>}}};
         {{noise,F1},RestAB} ->
         	if NDeep==1;NDeep==2 ->
@@ -440,7 +447,7 @@ handle_info(opus_to_webrtc,#st{webcodec=opus,media=Web,to_web=#apip{trace=voice,
     #apip{vad=VAD,cnge=CNGE,cdc=Opus,passed=Passed,abuf=AB} = ToWeb,
     {{_Type,F1},RestAB} = shift_to_voice_and_get_samples(VAD,?FS8K,60,Passed,AB),    % 8Khz 20ms 16-bit
     {0,Aenc} = ?APPLY(erl_opus, xenc, [Opus,F1]),
-             send2_newvcr(ST#st.vcr1,F1,rtp),
+             send2_newvcr(ST#st.dual_vcr,F1,rtp),
 	Web ! #audio_frame{codec=?OPUS,marker=false,body=Aenc,samples=2880},
     {noreply,ST#st{to_web=ToWeb#apip{abuf=RestAB,passed=F1}}};
 %
@@ -454,7 +461,7 @@ handle_info(ilbc_to_webrtc,#st{monitor=Mon,webcodec=ilbc,media=Web,to_web=#apip{
     #apip{vad=VAD,cnge=CNGE,cdc=Ilbc,passed=Passed,abuf=AB} = ToWeb,
 	case shift_to_voice_and_get_samples(VAD,?FS8K,60,Passed,AB) of	% 8Khz 30ms 16-bit
         {{voice,F1},RestAB} ->
-             send2_newvcr(ST#st.vcr1,F1,rtp),
+             send2_newvcr(ST#st.dual_vcr,F1,rtp),
         	Aenc = ilbc_enc60(Ilbc,F1),
         	if is_pid(Web)->   	Web ! #audio_frame{codec=?iLBC,marker=false,body=Aenc,samples=480};
                 true-> void
@@ -471,7 +478,7 @@ handle_info(amr_to_webrtc,#st{monitor=Mon,webcodec=amr,media=Web,to_web=#apip{}=
     #apip{vad=VAD,cnge=CNGE,cdc=Id,passed=Passed,abuf=AB} = ToWeb,
 	case shift_to_voice_and_get_samples(VAD,?FS8K,?AMRPTIME,Passed,AB) of	% 8Khz 120ms 16-bit
         {{voice,F1},RestAB} ->
-             send2_newvcr(ST#st.vcr1,F1,rtp),
+             send2_newvcr(ST#st.dual_vcr,F1,rtp),
         	Aenc = amr_enc60(Id,F1),
 %        	llog1(ST, "raw:len:~p bin:~p enc:len:~p bin:~p~n", [size(F1),F1,size(Aenc),Aenc]),
         	Web ! #audio_frame{codec=?AMR,marker=false,body=Aenc,samples=(?AMRPTIME div 20)*160},
@@ -597,7 +604,7 @@ handle_info(Msg, ST) ->
 	llog1(ST,"rrp unexcept msg ~p ~p.~n",[Msg,ST#st.webcodec]),
     {noreply,ST}.
 handle_cast(_,St)-> {noreply,St}.
-terminate(normal,St =#st{vcr=VCR,newvcr=NVCR,newvcr1=NVCR1,rtpvcr=RVCR,vcr1=Vcr1}) ->
+terminate(normal,St =#st{vcr=VCR,newvcr=NVCR,newvcr1=NVCR1,rtpvcr=RVCR,dual_vcr=Vcr1}) ->
 %    io:format("rrp terminate~n"),
     vcr:stop(Vcr1),	
     vcr:stop(VCR),	
