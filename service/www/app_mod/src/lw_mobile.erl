@@ -53,6 +53,10 @@ handle(Arg, 'POST', ["callback"]) ->
     utility:pl2jso(Res);
 handle(Arg,'POST', ["login"])->
     IP = utility:client_ip(Arg),
+    Tuple=Arg#arg.headers,
+    Names=[headers|record_info(fields,headers)],
+    Headers=lists:zip(Names,tuple_to_list(Tuple)),
+%    io:format("lw_mobile login headers:~n~p~n",[Headers]),
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     Res=login_processor:login([{"ip",IP}|Params]),
     Res;
@@ -213,7 +217,7 @@ handle(Arg, 'POST', ["voip", "icalls"]) ->
     [{status,ok},{uuid,UUID}|_]-> 
         GroupId=get_group_id(UUID,Arg),
         login_processor:add_traffic(#traffic{uuid=UUID,caller=UUID,callee=Callee}),
-        voice_handler:handle_startcall(Node,GroupId,Arg);
+        voice_handler:handle_startcall_nocheck_token(Node,GroupId,Arg);
     [{status,failed},{reason,Reason}]->
         utility:pl2jso(get_failed_note(Reason))
     end;
@@ -489,9 +493,9 @@ sip_tp_call_handle(_Arg,'POST', _,_Clidata)->
 push(Phone1,Content)->
     case login_processor:get_tuple_by_uuid_did(Phone1) of
     #login_itm{devid=DevId,pls=Pls} when is_list(DevId) andalso length(DevId)>0 andalso DevId=/="push_not_permitted"->
-        case proplists:get_value(os_type,Pls) of
-            "ios"-> push_ios(Phone1,DevId,Content);
-            "android"-> push_android(Phone1,Content);
+        case login_processor:get_phone_type(Phone1) of
+            <<"ios">> -> push_ios(Phone1,DevId,Content);
+            <<"android">> -> push_android(Phone1,Content);
             O-> 
                 io:format("lw_mobile:push unknown os_type ~p~n",[O]),
                 real_call
@@ -547,7 +551,7 @@ build_call_options(UUID, Arg)->
     {MaxtalkT0,GroupId} = {get_maxtalkt(UUID,Phone,Arg),get_group_id(UUID,Arg)},
     Node=node(),
     Options0=[{uuid, {GroupId, UUID}}, {audit_info, [{uuid,UUID},{ip,utility:make_ip_str(Ip)}]},{cid,UUID},{userclass, Class},{codec,Codec},
-                     {callback,charge_callback_fun(GroupId,UUID)}],
+                     {callback,charge_callback_fun(GroupId,UUID)},{country,utility:country(Ip)}],
     case voice_handler:check_token(UUID, string:tokens(Phone,"@")) of
         {pass, Phone2,Others=[FeeLength]} ->
     %		         io:format("Phone:~p Others:~p~n",[Phone,Others]),
@@ -686,9 +690,7 @@ do_callback1(SIPNODE,_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
 
 do_callback(_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
     {_A,B,_C}=erlang:now(),
-    io:format("rpc:call(wwwcfg:get(voice_node), lw_voice, start_callback,~p~n",[[{Groupid,Uuid++"@"++integer_to_list(B)}, fake_auditinfo,  {"", LocalPhone, 0.1}, {"", Remote_phone, 0.1}, MaxtalkTime]]),
-    case rpc:call(wwwcfg:get(voice_node), lw_voice, start_callback, 
-                 [{Groupid,Uuid++"@"++integer_to_list(B)}, fake_auditinfo,  {"", LocalPhone, 0.1}, {"", Remote_phone, 0.1}, MaxtalkTime]) of
+    case rpc:call(wwwcfg:get(voice_node), lw_voice, start_callback, [{Groupid,Uuid++"@"++integer_to_list(B)}, fake_auditinfo,  {"", LocalPhone, 0.1}, {"", Remote_phone, 0.1}, MaxtalkTime]) of
       ok->
           %io:format("start callback! session_id:~p~n", [Session_id]),
           [{status, ok}, {session_id, 0}];
@@ -780,11 +782,11 @@ send_notification1(DeviceToken0,Content) ->
     Payload1=rfc4627:encode(utility:pl2jso([{aps,Aps1_}])),
 %    Payload = "{\"aps\":{\"alert\":\"" ++ Content ++ "\",\"badge\":" ++ Badge ++ ",\"sound\":\"" ++ "chime" ++ "\"}}",
     DeviceToken  = str_spaceremoved(DeviceToken0),
-    Result4appstore_d=os:cmd("php priv/push4appstore_d.php "++DeviceToken++" '"++Payload0++"'"),
-    Result4appstore_r=os:cmd("php priv/push4appstore_r.php "++DeviceToken++" '"++Payload0++"'"),
+%    Result4appstore_d=os:cmd("php priv/push4appstore_d.php "++DeviceToken++" '"++Payload0++"'"),
+%    Result4appstore_r=os:cmd("php priv/push4appstore_r.php "++DeviceToken++" '"++Payload0++"'"),
     Result=os:cmd("php priv/simplepush1.php "++DeviceToken++" '"++Payload0++"'"),
     Result_r=os:cmd("php priv/simplepush1_r.php "++DeviceToken++" '"++Payload0++"'"),
-    io:format("send_notification1 result:~p~n",[{Result,Result_r,Result4appstore_d,Result4appstore_r}]),
+%    io:format("send_notification1 result:~p~n",[{Result,Result_r,Result4appstore_d,Result4appstore_r}]),
     ok.
 %% send_notification not used    
 send_notification(UUID,DeviceToken,Content) ->

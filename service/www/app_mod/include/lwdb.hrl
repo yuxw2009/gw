@@ -12,7 +12,7 @@
 -record(package_info,{period=month,cur_circle=0,from_date,circles=0,gifts=0,limits=0,cur_consumed=0,payid,raw_pkginfo}).
 -record(id_table, {key, value}).
 
-
+-record(openim_t,{uuid,userid= <<"">>,pwd= <<"">>,nickname= <<"">>,iconurl= <<"">>,mobile= <<"">>,pls=[]}).
 
 -define(UNACTIVED_STATUS,unactivated).
 -define(ACTIVED_STATUS,actived).

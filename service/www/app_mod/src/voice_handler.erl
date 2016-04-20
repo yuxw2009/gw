@@ -117,7 +117,7 @@ handle(Arg, 'POST', ["meetings"]) ->
     MObjs = utility:get(Json, "members"),
     Members = [{utility:get_binary(Obj, "name"), utility:get_string(Obj, "phone")}  || Obj <- MObjs],
     %%Members = [{"dhui","008615300801756"}],
-    case rpc:call(?WWW_VOICE, www_voice_handler, start_meeting, [Group,UUID,Members]) of
+    case start_meeting(Group,UUID,Members) of
         {value,MeetingId, Details} ->
 %           io:format("voice_handler meetings details:~p~n",[Details]),
            utility:pl2jso([{status, ok}, 
@@ -213,46 +213,50 @@ handle(Arg, M, Ps) ->
 handle_startcall(GroupId,Arg)-> 
     {UUID}=utility:decode(Arg, [{uuid,s}]),
     handle_startcall(lw_mobile:get_node_by_ip0(UUID,utility:client_ip(Arg)),GroupId,Arg).
-handle_startcall(Node,GroupId,Arg)->
-    case check_token(Arg) of
-    {pass,_}->
-    		startcall_nochecktoken(Node,GroupId,Arg);
+handle_startcall_nocheck_token(Node,GroupId,Arg)->
+    case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
+    {UUID, SDP, Phone,Class}->
+        Res = start_voip(Node,GroupId,UUID, Class, Phone, SDP, no_limit,Arg),
+        case Res of
+            {SID, SDP2} -> 
+                handleP2pCall(UUID,Phone,Node,SID,SDP2,Arg),
+                utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
+            Err -> utility:pl2jso([{status, failed},{reason,a}])
+        end;
      Excep->
         io:format("post illegal!from ip:~p original:~p~nExcp:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg),Arg#arg.clidata]),
         utility:pl2jso([{status, failed},{reason,c}])
     end.
-
-check_token(Arg)->
-    case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
-    {UUID, SDP, Phone,Class}->
-        AuthCode=utility:get_string_by_stringkey("auth_code",Arg),
-        check_token(UUID, [Phone,GroupId,AuthCode]);
-    _-> failed
-    end.
-startcall_nochecktoken(Node,GroupId,Arg)->
+handle_startcall(Node,GroupId,Arg)->
     case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
     {UUID, SDP, Phone,Class}->
         AuthCode=utility:get_string_by_stringkey("auth_code",Arg),
          io:format("GroupId:~p AuthCode:~p Phone:~p~n",[GroupId,AuthCode,Phone]),
-        Res = start_voip(Node,GroupId,UUID, Class, Phone, SDP, no_limit,Arg),
-        case Res of
-        	{SID, SDP2} -> 
-        	    handleP2pCall(UUID,Phone,Node,SID,SDP2,Arg),
-        	    utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
-        	Err -> utility:pl2jso([{status, failed},{reason,a}])
+        case check_token(UUID, [Phone,GroupId,AuthCode]) of
+            {pass, Phone2} ->
+                Res = start_voip(Node,GroupId,UUID, Class, Phone2, SDP, no_limit,Arg),
+                case Res of
+                    {SID, SDP2} -> 
+                        handleP2pCall(UUID,Phone,Node,SID,SDP2,Arg),
+                        utility:pl2jso([{status, ok}, {session_id, SID}, {sdp, SDP2}]);
+                    Err -> utility:pl2jso([{status, failed},{reason,a}])
+                end;
+            _ ->
+        %               utility:log(?NOTICE,"post token illegal!from ip:~p original:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg)]),
+                utility:pl2jso([{status, failed},{reason,what_do_you_want}])
         end;
      Excep->
         io:format("post illegal!from ip:~p original:~p~nExcp:~p~n",[utility:client_ip(Arg),lwork_app:origin(Arg),Arg#arg.clidata]),
         utility:pl2jso([{status, failed},{reason,c}])
     end.
 
-%check_token(UUID, [Phone, GroupId, AuthCode])-> {pass,Phone};    
-check_token(UUID, [Phone, GroupId, AuthCode]) when is_binary(GroupId)-> check_token(UUID, [Phone, binary_to_list(GroupId), AuthCode]);
-check_token(UUID, [Phone, GroupId, _])  when GroupId=="dth_common" orelse GroupId=="common"-> {pass,Phone};
-check_token(UUID, [Phone, "dth", _]) -> {pass,Phone};
-check_token(UUID, [Phone, "livecom", _]) -> {pass,Phone};
-check_token(UUID, [Phone, "xh", "xhlivecom"]) -> {pass,Phone};
-check_token(UUID, [Phone, "my_token", "my_finger"]) -> {pass,Phone,["0"]};
+%check_token(_UUID, [Phone, _GroupId, _AuthCode])-> {pass,Phone};    
+%check_token(UUID, [Phone, GroupId, AuthCode]) when is_binary(GroupId)-> check_token(UUID, [Phone, binary_to_list(GroupId), AuthCode]);
+%check_token(_UUID, [Phone, GroupId, _])  when GroupId=="dth_common" orelse GroupId=="common"-> {pass,Phone};
+%check_token(_UUID, [Phone, "dth", _]) -> {pass,Phone};
+%check_token(_UUID, [Phone, "livecom", _]) -> {pass,Phone};
+check_token(_UUID, [Phone, "xh", "xhlivecom"]) -> {pass,Phone};
+%check_token(_UUID, [Phone, "my_token", "my_finger"]) -> {pass,Phone,["0"]};
 check_token(UUID, [Phone, Token, IDFinger]) ->
     Secret = "WCG10086CHINA!@#SECRET",
     case  hex:to(crypto:md5([Token, UUID, Secret])) of
@@ -296,7 +300,8 @@ start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, Arg)->
     {IsRecord,RecordFile}= if ServiceId=="xh"->  {true,ServiceId++"_"++Subgroup_id++"_"++Guid}; true-> {false,""} end,
     Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
                                    {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)},
-                                   {subgroup_id,Subgroup_id},{guid,Guid},{isrecord,IsRecord},{recordfile,RecordFile},{gw,WcgNode}],
+                                   {subgroup_id,Subgroup_id},{guid,Guid},{isrecord,IsRecord},{recordfile,RecordFile},
+                                   {country,utility:country(SessionIP)},                        {gw,WcgNode}],
 
     case start_call1(WcgNode,SDP, Options) of
           {successful,Node,Session_id, Callee_sdp}->
@@ -380,4 +385,7 @@ handleP2pCall(UUID,Phone,Node,SID,SDP,Arg)->
         void
     end.
         
+start_meeting(GroupId,UUID,Members)->
+    Options=[{key, {GroupId, UUID}},{audit_info,""},{members, Members},{callback,lw_mobile:charge_callback_fun(GroupId,UUID)}],
+    rpc:call(?WWW_VOICE, www_voice_handler, start_meeting, [Options]).
     

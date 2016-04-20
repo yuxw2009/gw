@@ -20,7 +20,6 @@ init_db() ->
        io:format("7777777777**********************~n"),
 %    mnesia:start(),
        io:format("8888888888888888**********************nodes:~p~n",[nodes()]),
-       net_adm:ping('www_t@10.32.7.28'),
     case catch mnesia:change_config(extra_db_nodes, wwwcfg:cluster() -- [node()]) of  
     {ok, []} ->  
        io:format("*************************************************~n"),

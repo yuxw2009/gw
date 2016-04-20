@@ -112,7 +112,14 @@ atom(A) ->
 
 client_ip(Arg) ->
     {Ip, _Port} = Arg#arg.client_ip_port,
-    Ip.
+    Fun=fun()->
+        ForwardIps=Arg#arg.headers#headers.x_forwarded_for,
+        if is_list(ForwardIps) andalso length(ForwardIps)>0 ->    string:tokens(ForwardIps,","); true-> [] end
+    end,
+    case Fun() of
+    [H|_]-> list_to_tuple([list_to_integer(I)||I<-string:tokens(H,".")]);
+    _->    Ip
+    end.
     
 decode(Json) ->
     {ok, Notify, _} = rfc4627:decode(Json),
@@ -375,6 +382,7 @@ send_xg_httpc()->
     send_httpc(post,{"http://"++Url,NewParams},"application/x-www-form-urlencoded").
 %    NewParams.
 
+md5(A)-> list_to_binary(hex:to(crypto:hash(md5,A))).
 timestamp()->    
     {Mego,Sec,_}=erlang:now(),
     Mego*1000000+Sec.

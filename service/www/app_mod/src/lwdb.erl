@@ -4,6 +4,7 @@
 
 do_this_once() ->
     mnesia:start(),
+    mnesia:create_table(openim_t,[{attributes,record_info(fields,openim_t)},{disc_copies,[node()]}]),
     mnesia:create_table(devid_reg_t,[{attributes,record_info(fields,devid_reg_t)},{disc_copies,[node()]}]),
     mnesia:create_table(pay_types_record,[{attributes,record_info(fields,pay_types_record)},{disc_copies,[node()]}]),
     mnesia:create_table(third_reg_t,[{attributes,record_info(fields,third_reg_t)},{disc_copies,[node()]}]),

@@ -1,8 +1,7 @@
 -module(node_dist_mng).
 -compile(export_all).
 
-addNode(NewNode)-> addNode(NewNode,www_tables()).
-addNode(NewNode,TableList) ->  
+addNode(NewNode) ->  
     io:format("New Node = ~p~n", [NewNode]),  
     RunningNodeList = mnesia:system_info(running_db_nodes),  
     io:format("-----------Adding Extra Node---------~n"),  
@@ -44,4 +43,4 @@ addTableList(_TableList = [Table | T], NewNode,Type) ->
 
 www_tables()->
    lwdb:tables().
-add_www_node(Node)->    addNode(Node,www_tables()).
+add_www_node(Node)->    addNode(Node).

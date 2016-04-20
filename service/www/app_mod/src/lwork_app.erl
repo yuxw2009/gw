@@ -68,6 +68,12 @@ handle(Arg,Method, ["qvoice"|Params]) ->
     qvoice:handle(Arg, Method, Params);
 handle(Arg,Method, ["ft"|Params]) -> 
     www_ft:handle(Arg, Method, Params);
+handle(Arg, 'POST', ["lwork","media"| Params]) -> 
+    Ip=utility:client_ip(Arg),
+    io:format("media params:~p~n",[Params]),
+    Obj=media:handle(Arg,'POST',Params),
+    io:format("ack:~p~n",[Obj]),
+    utility:pl2jso_br(Obj);
 handle(Arg, 'POST', ["lwork","voices", ["fzdvoip"]]) -> 
     Ip=utility:client_ip(Arg),
     utility:pl2jso([{status,failed},{reason,overtime_cmd}]);
@@ -86,9 +92,9 @@ handle(Arg, Method, ["lwork","voices0"|Params]) ->   %% remove old inteface
     utility:pl2jso([{data_enc,Enc_bin}]);
 
 handle(Arg, Method, ["lwork","voices1"|Params]) -> 
-    io:format("lwork_app:voices1:path:~p~nclidata:~p~n",[Params,Arg#arg.clidata]),
+%    io:format("lwork_app:voices1:path:~p~nclidata:~p~n",[Params,Arg#arg.clidata]),
     Obj=voice_handler:handle(Arg, Method, Params),
-    io:format("lwork_app:ack:~p~n",[Obj]),
+%    io:format("lwork_app:ack:~p~n",[Obj]),
     Obj;
 %    Json_str=rfc4627:encode(Obj),
 %    Sep=[$a+random:uniform(9),$a+random:uniform(20)],

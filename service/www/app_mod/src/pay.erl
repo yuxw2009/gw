@@ -34,6 +34,7 @@ handle(Arg,'POST', ["package_pay","wx"])->
     io:format("~p~n",[Arg#arg.clidata]),
     Pairs=get_pairs(binary_to_list(Arg#arg.clidata)),
     io:format("pairs:~p~n",[Pairs]),
+    utility:log("./log/pay.log","wx package_pay:~p~n",[Pairs]),
     ReturnCode=proplists:get_value(return_code,Pairs),
     Sign0=proplists:get_value(sign,Pairs),
     PayId=proplists:get_value(out_trade_no,Pairs),
@@ -69,9 +70,14 @@ handle(Arg,'POST', ["package_pay"])->
         lw_register:add_pkg(UUID,PkgInfo),
         lw_register:add_payids(UUID, [PayId]),
         ?DB_WRITE(Item#pay_types_record{pls=Params,status=paid,paid_time=erlang:localtime()});
-    ["WAIT_BUYER_PAY",{atomic,[Item=#pay_record{}]}]->
+        
+    ["TRADE_CLOSED",{atomic,[Item=#pay_types_record{uuid=UUID}]}]->
+        lw_register:del_pkg(UUID,PayId),
+        delete_pay_by_id(PayId);
+        
+    ["WAIT_BUYER_PAY",{atomic,[Item=#pay_types_record{}]}]->
         ?DB_WRITE(Item#pay_types_record{pls=Params});
-    [Other]->
+    [Other,_]->
          io:format("zhifubao:other:~p~n",[Other])
     end,
     {html, "success"};
@@ -91,7 +97,7 @@ handle(Arg,'POST', [])->
         ?DB_WRITE(Item#pay_record{pls=Params,status=paid,paid_time=erlang:localtime()});
     ["WAIT_BUYER_PAY",{atomic,[Item=#pay_record{}]}]->
         ?DB_WRITE(Item#pay_record{pls=Params});
-    [Other]->
+    [Other,_]->
          io:format("zhifubao:other:~p~n",[Other])
     end,
     {html, "success"}.
@@ -111,6 +117,10 @@ gen_payment(Json)->
     end.
     
 gen_types_payid(Json)->  
+    UUID=utility:get_binary(Json,"uuid"),
+    Payid=payid(UUID),
+    gen_types_payid(Json,Payid).
+gen_types_payid(Json,Payid)->  
     MoneyStr=utility:get_string(Json,"money"),
     Money=element(1,string:to_integer(MoneyStr)),
     PayTypes=utility:get_atom(Json,"pay_type"),
@@ -119,7 +129,6 @@ gen_types_payid(Json)->
     Price=proplists:get_value(price,Package),
     case  lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[_LR]} when Money==trunc(Price) ->
-        Payid=payid(),
         PkgInfo=gen_pkg_info(GroupId,PayTypes,Payid),
         Payment=#pay_types_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
         ?DB_WRITE(Payment),
@@ -130,13 +139,18 @@ gen_types_payid(Json)->
         [{status,failed},{reason,error_params}]
     end.
 
+get_pay_by_id(Id)->
+    mnesia:dirty_read(pay_types_record,Id).
+delete_pay_by_id(Id)->
+    ?DB_DELETE(pay_types_record,Id).
+
 get_all_paidrecord()->
     {_,Res}=mnesia:transaction(fun()->(qlc:e(qlc:q([X||X<-mnesia:table(pay_types_record),element(4,X)==paid])))  end), 
     Res.
 gift_for_reg(UUID)->
     case lw_register:get_group_id(UUID) of
     <<"dth_common">> ->
-        PkgInfo=gen_pkg_info("dth_common",dth_temp2,"gift"),
+        PkgInfo=gen_pkg_info("dth_common",dth_temp1,"gift"),
         lw_register:add_pkg(UUID,PkgInfo);
     _-> void
     end.
@@ -154,10 +168,12 @@ get_package(_GroupId,PayType)->
     TItem=lists:keyfind({type,PayType},1,TS),
     tuple_to_list(TItem).
             
-payid()->
+payid()-> payid("").
+payid(UUID) when is_binary(UUID)->payid(binary_to_list(UUID));
+payid(UUID)->
     random:seed(erlang:now()),
     Base=random:uniform(10000),
-    integer_to_list(Base*1000000+mnesia:dirty_update_counter(id_table, payid, 1)).
+    integer_to_list(Base*1000000+mnesia:dirty_update_counter(id_table, payid, 1))++UUID.
 
 test_pay()->
     wx_pay_reqs("DeviceId","Abstract","Detail","45354545888","1","10.32.3.52","ocYhrwcNCtXq38EkcMHmUz4mpjaU").
@@ -194,4 +210,33 @@ wx_sign(Pls0)->
     KVStr=string:join(KVs,"&"),
     StringSignTemp=KVStr++"&key="++?WXAPI_KEY,
     string:to_upper(hex:to(crypto:hash(md5,StringSignTemp))).
+
+
+%-------------------------------------------- following is for testing -------------------------------------
+test_payid_op()->
+    DthTemp1=[{money,2},{pay_type,dth_temp1},{uuid,unittest:test_uuid()},{group_id,<<"livecom">>}],
+    {ok,Json,_}=rfc4627:decode(rfc4627:encode(utility:pl2jso(DthTemp1))),
+    Payid=payid("test"),
+    [{status,ok},{payid,Payid}|_]=gen_types_payid(Json,Payid),
+    io:format("gen_types_payid: ~p ok~n",[Payid]),
+    [_]=get_pay_by_id(Payid),
+    io:format("get_pay_by_id: ~p ok~n",[Payid]),
+    delete_pay_by_id(Payid),
+    []=get_pay_by_id(Payid),
+    io:format("delete_pay_by_id: ~p ok~n",[Payid]),
+    ok.
+
+test_add_del_pkg()->
+    UUID=unittest:test_uuid(),
+    Payid=payid("test"),
+    Pkgs0=lw_register:get_pkgs(UUID),
+    []=[I||I=#package_info{payid=PayId_}<-Pkgs0,PayId_==Payid],
+    PkgInfo=gen_pkg_info("dth_common",dth_temp1,Payid),
+    lw_register:add_pkg(UUID,PkgInfo),
+    Pkgs1=lw_register:get_pkgs(UUID),
+    [Pkg]=[I||I=#package_info{payid=PayId_}<-Pkgs1,PayId_==Payid],
+    lw_register:del_pkg(UUID,Payid),
+    Pkgs2=lw_register:get_pkgs(UUID),
+    []=[I||I=#package_info{payid=PayId_}<-Pkgs2,PayId_==Payid],
+    ok.
     

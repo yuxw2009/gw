@@ -17,6 +17,7 @@ do(Pls,undefined)->
     RegPls=LR#lw_register.pls,
     ?DB_WRITE(LR#lw_register{pls=[{auth_code,AuthCode}|RegPls]}),
     ?DB_WRITE(#devid_reg_t{devid=DvID,pls=Pls}),
+    add_openim_id(UUID),
     pay:gift_for_reg(UUID).
     
 uuid_key(UUID) -> list_to_binary(login_processor:push_trans_caller(UUID)).    
@@ -283,12 +284,29 @@ get_recharges(UUID)->
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
-    
+
+get_pkgs(UUID)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[#lw_register{pls=Pls}]}->  
+        proplists:get_value(pkgs,Pls,[]);
+    _-> []
+    end.
 add_pkg(UUID, Pkg)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls}]}->  
         Pkgs0=proplists:get_value(pkgs,Pls,[]),
         Npls=lists:keystore(pkgs,1, Pls, {pkgs,Pkgs0++[Pkg]}),
+        ?DB_WRITE(Item#lw_register{pls=Npls}),
+        [{status,ok}];
+    _->
+        [{status,failed},{reason,register_uuid_not_existed}]
+    end.
+del_pkg(UUID, PayId)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[Item=#lw_register{pls=Pls}]}->  
+        Pkgs0=proplists:get_value(pkgs,Pls,[]),
+        Pkgs=[I||I=#package_info{payid=PayId_}<-Pkgs0,PayId=/=PayId_],
+        Npls=lists:keystore(pkgs,1, Pls, {pkgs,Pkgs}),
         ?DB_WRITE(Item#lw_register{pls=Npls}),
         [{status,ok}];
     _->
@@ -320,9 +338,9 @@ package_consume([H=#package_info{circles=Circles0}|T], Mins) when (Circles0==und
 package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=FromDate,circles=Circles0,limits=Limits,cur_consumed=Consumed0}|T],
                                 Mins) when is_integer(Circles0)->
     CurCircle=circles(Period,FromDate),
-    if  CurCircle> Circles0-> package_consume(T,Mins);
+    if  CurCircle> Circles0 orelse (CurCircle==Circles0 andalso Consumed0+Mins>=Limits)-> package_consume(T,Mins);
         CurCircle>CurCircle0-> [H#package_info{cur_circle=CurCircle,cur_consumed=Mins}|T];
-        Consumed0+Mins>Limits-> [H#package_info{cur_consumed=Limits}|package_consume(T,Consumed0+Mins-Limits)];
+        Consumed0+Mins>=Limits-> [package_consume(T,Consumed0+Mins-Limits)]++[H#package_info{cur_consumed=Limits}];
         true-> [H#package_info{cur_consumed=Consumed0+Mins}|T]
     end.
 consume_minutes(UUID,Minutes)->
@@ -375,21 +393,24 @@ get_pkginfo(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pls=Pls}]}->  
         case package_consume(proplists:get_value(pkgs,Pls,[]),0) of
-        [Pkg=#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_] 
+        [#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_] 
                     when Limits>0->
             {Year,Mon,Day}=From,
             LeftMonths= Mon+Circles,
             NYear=Year+(LeftMonths div 13),
             NMon=(LeftMonths div 13)+(LeftMonths rem 13),
             Expire=integer_to_list(NYear)++"/"++integer_to_list(NMon)++"/"++integer_to_list(Day),
-            [{status,ok},{lefts,round(Limits-Consumed)},{cur_consumed,round(Consumed)},{gifts,Gifts},{expir_date,list_to_binary(Expire)}];
+            Lefts=if is_number(Limits)-> round(Limits-Consumed); Limits==unlimit-> 99999999; true-> Limits end,
+            [{status,ok},{lefts,Lefts},{cur_consumed,round(Consumed)},{gifts,Gifts},{expir_date,list_to_binary(Expire)}];
         []-> [{status,failed},{reason,no_packages}]
         end;
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
-
-check_balance(UUID)->
+check_balance(UUID)-> check_balance1(UUID,"0086").
+check_balance1(UUID,Callee="0086"++_)-> check_balance(UUID,Callee,national);
+check_balance1(UUID,Callee="00"++_)->check_balance(UUID,Callee,international).
+check_balance(UUID,_Callee,Type)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{group_id=GroupId,pls=Pls}]} when GroupId== <<"dth_common">> orelse GroupId== <<"common">> ->   % unit is minutes
         PkgInfos=get_pkginfo(UUID),
@@ -408,4 +429,26 @@ get_group_id(UUID)->
     {atomic,[#lw_register{group_id=GroupId}]} ->   GroupId;
     _-> unregistered
     end.
+
+add_openim_id(UserId,Nickname,PortraitUrl)->
+    F=fun()->
+        Pwd= hex:to(crypto:md5(<<"888888">>)),
+        Iolist= ["php /home/ubuntu/wcg/www/docroot/openim/adduser.php \"", UserId,"\" \"",Pwd,"\" \"",Nickname,"\" \"",PortraitUrl,"\" \"",<<>>,"\""," \" \""],
+        Cmd=binary_to_list(iolist_to_binary(Iolist)),
+        io:format("add_openim_id:~s~n",[Cmd]),
+        os:cmd( Cmd)
+    end,
+    timer:sleep(1000),
+    spawn(F).
+add_openim_id(UUID)->
+    [#lw_register{name=Nickname}] = mnesia:dirty_read(lw_register,UUID),
+    add_openim_id(UUID,Nickname,<<>>).
+add_openim_id()->
+      [add_openim_id(I)||I<-mnesia:dirty_all_keys(lw_register)].
+      
+%---------------------------------------- test -------------------------------------------------------------
+test_get_pay_usage()->
+    UUID=unittest:test_uuid(),
+%    {true,}= check_balance(UUID),
+    ok.
 
