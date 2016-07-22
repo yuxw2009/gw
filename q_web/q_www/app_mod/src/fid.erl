@@ -58,7 +58,22 @@ auto_restart(Fid)->
         end;
     _-> set_status(Fid,finished)
     end.
-    
+
+restart_gaimi(Fid)->  
+    case get_status(Fid) of
+    Status when Status==finished orelse Status==stop->
+        case get_gaimi_qnos(Fid) of
+        Lefts when length(Lefts)>0 -> 
+            do_start_call(Fid,Lefts),
+            file:delete(fullname(Fid++"_gaimi.txt")),
+            "ok, restart gaimi amount:"++integer_to_list(length(Lefts));
+        _-> 
+            set_status(Fid,finished),
+            "no more needed to proceed"
+        end;
+    _->
+        "still proceeding,please wait..."
+    end.
 restart_kajie(Fid)->
     case get_status(Fid) of
     Status when Status==finished orelse Status==stop->
@@ -73,6 +88,12 @@ restart_kajie(Fid)->
         end;
     _->
         "still proceeding,please wait..."
+    end.
+
+ahead(Fid)->
+    case rpc:call(get_node(Fid),qstart,ahead,[Fid]) of
+        "ok"-> "ok";
+        _-> "error"
     end.
 
 restart_redial1(Fid)->
@@ -235,7 +256,8 @@ filename(Fid)->
     _-> <<"">>
     end.
 get_node_by_EmpId("gw1")-> 'gw@119.29.62.190';
-get_node_by_EmpId("ddd")-> 'gw_yj@119.29.62.190';
+get_node_by_EmpId("ddd")-> 'gw@112.74.96.171';%'gw_yj@119.29.62.190';
+get_node_by_EmpId("yj")-> 'gw_yj@119.29.62.190';
 get_node_by_EmpId(_)-> ?DEFAULT_QNODE.
 get_node(Fid)->
     case fileinfo(Fid) of

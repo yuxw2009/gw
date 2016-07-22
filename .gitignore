@@ -17,3 +17,13 @@ data
 /q_web/q_query_python/result_save/2015-4-23查询缓存-短信解限-登录环境异常.txt
 /q_web/q_query_python/result_save/2015-4-24查询缓存-正常登录.txt
 /q_web/q_query_python/result_save/2015-4-25查询缓存-正常登录.txt
+/service/www/Mnesia.www@127.0.0.1/*.LOG
+/service/www/Mnesia.www@127.0.0.1/*.DCD
+/service/www/Mnesia.www@127.0.0.1/*.DAT
+/service/www/Mnesia.www@fc2fc.com/*.LOG
+/service/www/Mnesia.www@fc2fc.com/*.DCD
+/service/www/Mnesia.www@fc2fc.com/*.DAT
+Mnesia.www@fc2fc.com
+*.LOG
+*.DCD
+*.DAT
