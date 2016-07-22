@@ -1,0 +1,1 @@
+HVite_firstqq -H /yyy/yyy/qtest/applications/DialNumReco07/models/hmm8/hmmdefs -C /yyy/yyy/qtest/applications/DialNumReco07/fea_extract.cfg -O $1 -o ST -w /yyy/yyy/qtest/applications/DialNumReco07/net.txt /yyy/yyy/qtest/applications/DialNumReco07/word_to_syllable_sp.dic /yyy/yyy/qtest/applications/DialNumReco07/lists/hmmlist.txt

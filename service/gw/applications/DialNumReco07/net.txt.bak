@@ -1,0 +1,440 @@
+VERSION=1.0
+N=217  L=221  
+I=0    W=!NULL               
+I=1    W=!NULL               
+I=2    W=SILENCE             
+I=3    W=Q1                  
+I=4    W=Q2                  
+I=5    W=ZHA                 
+I=6    W=PIAN                
+I=7    W=JI2                 
+I=8    W=WEI1                
+I=9    W=GUI                 
+I=10   W=XIN                 
+I=11   W=XI                  
+I=12   W=JV1                 
+I=13   W=BAO2                
+I=14   W=QING                
+I=15   W=AN2                 
+I=16   W=YI1                 
+I=17   W=HAO                 
+I=18   W=MA                  
+I=19   W=BU                  
+I=20   W=NENG                
+I=21   W=DENG                
+I=22   W=LU                  
+I=23   W=JI2                 
+I=24   W=SHEN                
+I=25   W=SU                  
+I=26   W=WEN                 
+I=27   W=TI2                 
+I=28   W=QING                
+I=29   W=AN2                 
+I=30   W=ER                  
+I=31   W=CHONG2              
+I=32   W=TING                
+I=33   W=QING                
+I=34   W=AN2                 
+I=35   W=JING                
+I=36   W=HAO                 
+I=37   W=JIAN                
+I=38   W=JIE                 
+I=39   W=SHU2                
+I=40   W=QING                
+I=41   W=GUAI                
+I=42   W=JI1                 
+I=43   W=!NULL               
+I=44   W=NIN                 
+I=45   W=DE                  
+I=46   W=Q1                  
+I=47   W=Q2                  
+I=48   W=HAO                 
+I=49   W=MA                  
+I=50   W=SHE                 
+I=51   W=JI2                 
+I=52   W=WEI1                
+I=53   W=GUI                 
+I=54   W=CAO                 
+I=55   W=ZUO                 
+I=56   W=YING                
+I=57   W=XIANG               
+I=58   W=DAO                 
+I=59   W=ZHENG1              
+I=60   W=CHANG               
+I=61   W=YONG                
+I=62   W=HU2                 
+I=63   W=SHI0                
+I=64   W=YONG                
+I=65   W=XIAN2               
+I=66   W=WO                  
+I=67   W=SI1                 
+I=68   W=YI2                 
+I=69   W=DUI                 
+I=70   W=GAI1                
+I=71   W=HAO                 
+I=72   W=MA                  
+I=73   W=JIN                 
+I=74   W=XING                
+I=75   W=LE                  
+I=76   W=DONG                
+I=77   W=JIE                 
+I=78   W=CHU                 
+I=79   W=LI                  
+I=80   W=HU1                 
+I=81   W=LIAN                
+I=82   W=WANG                
+I=83   W=NIN                 
+I=84   W=DE                  
+I=85   W=Q1                  
+I=86   W=Q2                  
+I=87   W=HAO                 
+I=88   W=MA                  
+I=89   W=CUN                 
+I=90   W=ZAI                 
+I=91   W=AN1                 
+I=92   W=QUAN                
+I=93   W=FENG                
+I=94   W=XIAN1               
+I=95   W=ZHENG1              
+I=96   W=CHU                 
+I=97   W=YU1                 
+I=98   W=BAO1                
+I=99   W=HU3                 
+I=100  W=MO                  
+I=101  W=SHI2                
+I=102  W=ZHONG1              
+I=103  W=QING                
+I=104  W=NIN                 
+I=105  W=GEN                 
+I=106  W=JV3                 
+I=107  W=YU2                 
+I=108  W=YIN                 
+I=109  W=TI1                 
+I=110  W=SHI1                
+I=111  W=SHU1                
+I=112  W=RU                  
+I=113  W=SI2                 
+I=114  W=WEI2                
+I=115  W=SHU3                
+I=116  W=ZI                  
+I=117  W=YAN                 
+I=118  W=ZHENG2              
+I=119  W=MA                  
+I=120  W=HUI                 
+I=121  W=FU                  
+I=122  W=ZHANG               
+I=123  W=HAO                 
+I=124  W=ZHENG1              
+I=125  W=CHANG               
+I=126  W=NIN                 
+I=127  W=DE                  
+I=128  W=Q1                  
+I=129  W=Q2                  
+I=130  W=HAO                 
+I=131  W=MA                  
+I=132  W=CUN                 
+I=133  W=ZAI                 
+I=134  W=AN1                 
+I=135  W=QUAN                
+I=136  W=FENG                
+I=137  W=XIAN1               
+I=138  W=ZHENG1              
+I=139  W=CHU                 
+I=140  W=YU1                 
+I=141  W=BAO1                
+I=142  W=HU3                 
+I=143  W=MO                  
+I=144  W=SHI2                
+I=145  W=ZHONG1              
+I=146  W=QING                
+I=147  W=NIN                 
+I=148  W=DENG                
+I=149  W=LU                  
+I=150  W=A                   
+I=151  W=Q                   
+I=152  W=DIAN                
+I=153  W=Q1                  
+I=154  W=Q2                  
+I=155  W=DIAN                
+I=156  W=COM                 
+I=157  W=XIE                 
+I=158  W=GANG                
+I=159  W=LING                
+I=160  W=LING                
+I=161  W=QI                  
+I=162  W=NIN                 
+I=163  W=DE                  
+I=164  W=Q1                  
+I=165  W=Q2                  
+I=166  W=HAO                 
+I=167  W=MA                  
+I=168  W=CUN                 
+I=169  W=ZAI                 
+I=170  W=AN1                 
+I=171  W=QUAN                
+I=172  W=FENG                
+I=173  W=XIAN1               
+I=174  W=ZHENG1              
+I=175  W=CHU                 
+I=176  W=YU1                 
+I=177  W=BAO1                
+I=178  W=HU3                 
+I=179  W=MO                  
+I=180  W=SHI2                
+I=181  W=ZHONG1              
+I=182  W=QING                
+I=183  W=DENG                
+I=184  W=LU                  
+I=185  W=A                   
+I=186  W=Q                   
+I=187  W=DIAN                
+I=188  W=Q1                  
+I=189  W=Q2                  
+I=190  W=DIAN                
+I=191  W=COM                 
+I=192  W=TONG                
+I=193  W=GUO                 
+I=194  W=MI                  
+I=195  W=BAO1                
+I=196  W=GONG                
+I=197  W=JV2                 
+I=198  W=XIU                 
+I=199  W=GAI2                
+I=200  W=MI                  
+I=201  W=MA                  
+I=202  W=XIU                 
+I=203  W=GAI2                
+I=204  W=QING                
+I=205  W=SHU1                
+I=206  W=RU                  
+I=207  W=Q1                  
+I=208  W=Q2                  
+I=209  W=HAO                 
+I=210  W=MA                  
+I=211  W=YI3                 
+I=212  W=JING                
+I=213  W=HAO                 
+I=214  W=JIE                 
+I=215  W=SHU2                
+I=216  W=SILENCE             
+J=0     S=216  E=1    
+J=1     S=0    E=2    
+J=2     S=2    E=3    
+J=3     S=3    E=4    
+J=4     S=4    E=5    
+J=5     S=5    E=6    
+J=6     S=6    E=7    
+J=7     S=7    E=8    
+J=8     S=8    E=9    
+J=9     S=9    E=10   
+J=10    S=10   E=11   
+J=11    S=11   E=12   
+J=12    S=12   E=13   
+J=13    S=13   E=14   
+J=14    S=14   E=15   
+J=15    S=15   E=16   
+J=16    S=16   E=17   
+J=17    S=17   E=18   
+J=18    S=18   E=19   
+J=19    S=19   E=20   
+J=20    S=20   E=21   
+J=21    S=21   E=22   
+J=22    S=22   E=23   
+J=23    S=23   E=24   
+J=24    S=24   E=25   
+J=25    S=25   E=26   
+J=26    S=26   E=27   
+J=27    S=27   E=28   
+J=28    S=28   E=29   
+J=29    S=29   E=30   
+J=30    S=30   E=31   
+J=31    S=31   E=32   
+J=32    S=32   E=33   
+J=33    S=33   E=34   
+J=34    S=34   E=35   
+J=35    S=35   E=36   
+J=36    S=36   E=37   
+J=37    S=37   E=38   
+J=38    S=38   E=39   
+J=39    S=39   E=40   
+J=40    S=40   E=41   
+J=41    S=41   E=42   
+J=42    S=42   E=43   
+J=43    S=82   E=43   
+J=44    S=125  E=43   
+J=45    S=161  E=43   
+J=46    S=203  E=43   
+J=47    S=215  E=43   
+J=48    S=2    E=44   
+J=49    S=44   E=45   
+J=50    S=45   E=46   
+J=51    S=46   E=47   
+J=52    S=47   E=48   
+J=53    S=48   E=49   
+J=54    S=49   E=50   
+J=55    S=50   E=51   
+J=56    S=51   E=52   
+J=57    S=52   E=53   
+J=58    S=53   E=54   
+J=59    S=54   E=55   
+J=60    S=55   E=56   
+J=61    S=56   E=57   
+J=62    S=57   E=58   
+J=63    S=58   E=59   
+J=64    S=59   E=60   
+J=65    S=60   E=61   
+J=66    S=61   E=62   
+J=67    S=62   E=63   
+J=68    S=63   E=64   
+J=69    S=64   E=65   
+J=70    S=65   E=66   
+J=71    S=66   E=67   
+J=72    S=67   E=68   
+J=73    S=68   E=69   
+J=74    S=69   E=70   
+J=75    S=70   E=71   
+J=76    S=71   E=72   
+J=77    S=72   E=73   
+J=78    S=73   E=74   
+J=79    S=74   E=75   
+J=80    S=75   E=76   
+J=81    S=76   E=77   
+J=82    S=77   E=78   
+J=83    S=78   E=79   
+J=84    S=79   E=80   
+J=85    S=80   E=81   
+J=86    S=81   E=82   
+J=87    S=2    E=83   
+J=88    S=83   E=84   
+J=89    S=84   E=85   
+J=90    S=85   E=86   
+J=91    S=86   E=87   
+J=92    S=87   E=88   
+J=93    S=88   E=89   
+J=94    S=89   E=90   
+J=95    S=90   E=91   
+J=96    S=91   E=92   
+J=97    S=92   E=93   
+J=98    S=93   E=94   
+J=99    S=94   E=95   
+J=100   S=95   E=96   
+J=101   S=96   E=97   
+J=102   S=97   E=98   
+J=103   S=98   E=99   
+J=104   S=99   E=100  
+J=105   S=100  E=101  
+J=106   S=101  E=102  
+J=107   S=102  E=103  
+J=108   S=103  E=104  
+J=109   S=104  E=105  
+J=110   S=105  E=106  
+J=111   S=106  E=107  
+J=112   S=107  E=108  
+J=113   S=108  E=109  
+J=114   S=109  E=110  
+J=115   S=110  E=111  
+J=116   S=111  E=112  
+J=117   S=112  E=113  
+J=118   S=113  E=114  
+J=119   S=114  E=115  
+J=120   S=115  E=116  
+J=121   S=116  E=117  
+J=122   S=117  E=118  
+J=123   S=118  E=119  
+J=124   S=119  E=120  
+J=125   S=120  E=121  
+J=126   S=121  E=122  
+J=127   S=122  E=123  
+J=128   S=123  E=124  
+J=129   S=124  E=125  
+J=130   S=2    E=126  
+J=131   S=126  E=127  
+J=132   S=127  E=128  
+J=133   S=128  E=129  
+J=134   S=129  E=130  
+J=135   S=130  E=131  
+J=136   S=131  E=132  
+J=137   S=132  E=133  
+J=138   S=133  E=134  
+J=139   S=134  E=135  
+J=140   S=135  E=136  
+J=141   S=136  E=137  
+J=142   S=137  E=138  
+J=143   S=138  E=139  
+J=144   S=139  E=140  
+J=145   S=140  E=141  
+J=146   S=141  E=142  
+J=147   S=142  E=143  
+J=148   S=143  E=144  
+J=149   S=144  E=145  
+J=150   S=145  E=146  
+J=151   S=146  E=147  
+J=152   S=147  E=148  
+J=153   S=148  E=149  
+J=154   S=149  E=150  
+J=155   S=150  E=151  
+J=156   S=151  E=152  
+J=157   S=152  E=153  
+J=158   S=153  E=154  
+J=159   S=154  E=155  
+J=160   S=155  E=156  
+J=161   S=156  E=157  
+J=162   S=157  E=158  
+J=163   S=158  E=159  
+J=164   S=159  E=160  
+J=165   S=160  E=161  
+J=166   S=2    E=162  
+J=167   S=162  E=163  
+J=168   S=163  E=164  
+J=169   S=164  E=165  
+J=170   S=165  E=166  
+J=171   S=166  E=167  
+J=172   S=167  E=168  
+J=173   S=168  E=169  
+J=174   S=169  E=170  
+J=175   S=170  E=171  
+J=176   S=171  E=172  
+J=177   S=172  E=173  
+J=178   S=173  E=174  
+J=179   S=174  E=175  
+J=180   S=175  E=176  
+J=181   S=176  E=177  
+J=182   S=177  E=178  
+J=183   S=178  E=179  
+J=184   S=179  E=180  
+J=185   S=180  E=181  
+J=186   S=181  E=182  
+J=187   S=182  E=183  
+J=188   S=183  E=184  
+J=189   S=184  E=185  
+J=190   S=185  E=186  
+J=191   S=186  E=187  
+J=192   S=187  E=188  
+J=193   S=188  E=189  
+J=194   S=189  E=190  
+J=195   S=190  E=191  
+J=196   S=191  E=192  
+J=197   S=192  E=193  
+J=198   S=193  E=194  
+J=199   S=194  E=195  
+J=200   S=195  E=196  
+J=201   S=196  E=197  
+J=202   S=197  E=198  
+J=203   S=198  E=199  
+J=204   S=199  E=200  
+J=205   S=200  E=201  
+J=206   S=201  E=202  
+J=207   S=202  E=203  
+J=208   S=2    E=204  
+J=209   S=204  E=205  
+J=210   S=205  E=206  
+J=211   S=206  E=207  
+J=212   S=207  E=208  
+J=213   S=208  E=209  
+J=214   S=209  E=210  
+J=215   S=210  E=211  
+J=216   S=211  E=212  
+J=217   S=212  E=213  
+J=218   S=213  E=214  
+J=219   S=214  E=215  
+J=220   S=43   E=216  
