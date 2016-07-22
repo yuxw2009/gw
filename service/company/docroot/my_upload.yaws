@@ -1,0 +1,135 @@
+<erl>
+
+-include("db.hrl").
+-include("jsonerl.hrl").
+
+-record(employer_load_xls,{repeat,err}).
+-record(upload, {
+          fd,
+          filename,
+          last,
+          comid = "",
+          depid = "",
+          inputname}).
+
+-define(DIR,"./tmp/").
+
+out(A) when A#arg.state == undefined ->
+    State = #upload{},
+    multipart(A, State);
+out(A) ->
+    multipart(A, A#arg.state).
+
+err() ->
+    R = #employer_load_xls{repeat = <<"">>,err = <<"upload_err">>},
+    {content,"application/json",?record_to_json(employer_load_xls,R)}.
+
+multipart(A, State) ->
+    Parse = yaws_api:parse_multipart_post(A),
+    case Parse of
+        [] ->
+		    ok;
+        {cont, Cont, Res} ->
+            case addFileChunk(A, Res, State) of
+                {done, Result} ->
+                    Result;
+                {cont, NewState} ->
+                    {get_more, Cont, NewState}
+            end;
+        {result, Res} ->
+            case addFileChunk(A, Res, State#upload{last=true}) of
+                {done, Result} ->
+                    Result;
+                {cont, _} ->
+                    file:close(State#upload.fd),
+                    file:delete([?DIR,State#upload.filename]),
+                    err()
+            end
+    end.
+
+
+addFileChunk(A, [{part_body, Data}|Res], State) ->
+    addFileChunk(A, [{body, Data}|Res], State);
+
+addFileChunk(_A, [], State) when State#upload.last      == true,
+                                 State#upload.filename  /= undefined,
+                                 State#upload.fd        /= undefined,
+                                 State#upload.comid     /= "",
+                                 State#upload.depid     /= "",
+                                 State#upload.inputname /= undefined ->
+    file:close(State#upload.fd),
+    CompanyID    = list_to_integer(State#upload.comid),
+    DepartmentID = [list_to_integer(X)||X<-string:tokens(State#upload.depid,"-")],
+    %%{done, {html,"ok"}};
+    Res = parse_xls:run(CompanyID,DepartmentID,?DIR,State#upload.filename),
+    {done,{content,"application/json",?record_to_json(employer_load_xls,Res)}};
+
+addFileChunk(A, [], State) when State#upload.last == true ->
+    file:close(State#upload.fd),
+    file:delete([?DIR,State#upload.filename]),
+    {done, err()};
+
+addFileChunk(_A, [], State) ->
+    {cont, State};
+
+addFileChunk(A, [{head, {"file",Opts}}|Res], State) ->
+    case lists:keysearch(filename,1,Opts) of
+        {value, {_, Fname0}} ->
+            Fname = yaws_api:sanitize_file_name(basename(Fname0)),
+            %% we must not put the file in the
+            %% docroot, it may execute uploade code if the
+            %% file is a .yaws file !!!!!
+    	    file:make_dir(?DIR),
+            case file:open([?DIR, Fname] ,[write]) of
+        		{ok, Fd} ->
+        		    S2 = State#upload{
+                              filename = Fname,
+        				      fd = Fd,
+                              inputname = "file"},
+        		    addFileChunk(A, Res, S2);
+        		Err ->
+        		    {done, err()}
+            end;
+	    false ->
+            addFileChunk(A,Res,State)
+    end;
+
+addFileChunk(A, [{head, {"companyid",_}}|Res], State) ->
+    S2 = State#upload{inputname = "companyid"},
+    addFileChunk(A, Res, S2);
+
+addFileChunk(A, [{head, {"departmentid",_}}|Res], State) ->
+    S2 = State#upload{inputname = "departmentid"},
+    addFileChunk(A, Res, S2);
+
+addFileChunk(A, [{body, Data}|Res], State) when State#upload.inputname == "companyid" ->
+    Old = State#upload.comid,
+    S2  = State#upload{comid = (Old ++ Data)},
+    addFileChunk(A, Res, S2);
+
+addFileChunk(A, [{body, Data}|Res], State) when State#upload.inputname == "departmentid" ->
+    Old = State#upload.depid,
+    S2  = State#upload{depid = (Old ++ Data)},
+    addFileChunk(A, Res, S2);
+
+addFileChunk(A, [{body, Data}|Res], State) when State#upload.inputname == "file" andalso State#upload.filename /= undefined ->
+    case file:write(State#upload.fd, Data) of
+        ok ->
+            addFileChunk(A, Res, State);
+        Err ->
+            file:close(State#upload.fd),
+            file:delete([?DIR,State#upload.filename]),
+            {done, err()}
+    end.
+
+basename(FilePath) ->
+    case string:rchr(FilePath, $\\) of
+        0 ->
+            %% probably not a DOS name
+            filename:basename(FilePath);
+        N ->
+            %% probably a DOS name, remove everything after last \
+            basename(string:substr(FilePath, N+1))
+    end.
+
+</erl>

@@ -4,6 +4,7 @@
 -include("lwdb.hrl").
 -include("yaws_api.hrl").
 -include("xmerl-1.3.6/include/xmerl.hrl").
+-define(APPLE_BUNDLE_ID,<<"com.livecom.ltalk2">>).
 -define(WXMCH_ID, "1267076901").    
 -define(WXAPI_KEY,"d23c79a91ef124a600762e82ce91112d").
 -define(WXAPPID, "wxd9404da72b24431f").
@@ -22,6 +23,7 @@
 											"pvlyATMHd2tFm6BXCwOP/+vEcW4hw8RO0l/mbRPdYqr22ECIIi/BAkA0Rn0g0qS3"
 											"qlWRKnuawY8Dc/icQFz9beAtI++Yn0QK36ZrnPlNHkfe95CtxjJzJbO8amXoy8z7"
 											"B5mTa27Oyseh")).
+-define(GIFT_PAYTYPE,dth_temp1_20160622).
 
 get_pairs(XmlStr)->
     {#xmlElement{content=Contents},_}=xmerl_scan:string(XmlStr),
@@ -30,6 +32,41 @@ handle(Arg,'GET', [])->
 %    {ok, Json={obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     io:format("GET paytest:req:~n",[]),
     {html, "success"};
+handle(Arg,'POST', ["package_pay","apple"])->
+    Clidata=Arg#arg.clidata,
+   {PayId, Receipt} = utility:decode(Arg,[{payid, s},{receipt, b}]),
+    utility:log("./log/pay.log","apple pay request:~p~n",[Clidata]),
+    io:format("apple pay req:~p~n",[Clidata]),
+    Res_pls=
+    case ?DB_READ(pay_types_record,PayId) of
+        {atomic,[Item=#pay_types_record{status=paid}]}->
+            io:format("apple_pay notify repeated~n"),
+            [{status,failed},{reason,duplicated_payid}];
+        {atomic,[Item=#pay_types_record{uuid=UUID,pkg_info=PkgInfo,money=Fee,status=to_pay}]}->
+            case lib_verifying_store_receipts:send(Receipt) of
+            {ok,Rsp_pls}->  % %quantity,product_id,transaction_id,purchase_date,app_item_id,bid,bvrs
+                 utility:log("./log/pay.log","apple pay authen result:~p~n",[Rsp_pls]),
+                 io:format("apple pay ack:~p~n",[Rsp_pls]),
+                 Bundle_id=proplists:get_value("bundle_id",Rsp_pls),
+%                 Quality=binary_to_integer(proplists:get_value("quantity",Rsp_pls)),  % 
+                 if Bundle_id== ?APPLE_BUNDLE_ID-> 
+                     lw_register:add_pkg(UUID,PkgInfo),
+                     lw_register:add_payids(UUID, [PayId]),
+                     ?DB_WRITE(Item#pay_types_record{pls=Rsp_pls,status=paid,paid_time=erlang:localtime()}),
+                     [{status,ok}]; 
+                 true-> 
+                     io:format("apple pay invalid bundle id! ~p~n",[Bundle_id]),
+                     [{status,failed},{reason,money_not_matched}]
+                 end;
+            {failed,Reason}->
+                io:format("apple pay:authen error:~p~n",[Reason]),
+                ?DB_WRITE(Item#pay_types_record{status=apple_to_auth,paid_time=erlang:localtime()}),
+                [{status,failed},{reason,Reason}]
+            end;
+        _Other->    [{status,failed},{reason,invalid_payid}]
+        end,
+        utility:pl2jso_br(Res_pls);
+
 handle(Arg,'POST', ["package_pay","wx"])->
     io:format("~p~n",[Arg#arg.clidata]),
     Pairs=get_pairs(binary_to_list(Arg#arg.clidata)),
@@ -150,7 +187,7 @@ get_all_paidrecord()->
 gift_for_reg(UUID)->
     case lw_register:get_group_id(UUID) of
     <<"dth_common">> ->
-        PkgInfo=gen_pkg_info("dth_common",dth_temp1,"gift"),
+        PkgInfo=gen_pkg_info("dth_common",?GIFT_PAYTYPE,"gift"),
         lw_register:add_pkg(UUID,PkgInfo);
     _-> void
     end.
@@ -214,7 +251,7 @@ wx_sign(Pls0)->
 
 %-------------------------------------------- following is for testing -------------------------------------
 test_payid_op()->
-    DthTemp1=[{money,2},{pay_type,dth_temp1},{uuid,unittest:test_uuid()},{group_id,<<"livecom">>}],
+    DthTemp1=[{money,2},{pay_type,?GIFT_PAYTYPE},{uuid,unittest:test_uuid()},{group_id,<<"livecom">>}],
     {ok,Json,_}=rfc4627:decode(rfc4627:encode(utility:pl2jso(DthTemp1))),
     Payid=payid("test"),
     [{status,ok},{payid,Payid}|_]=gen_types_payid(Json,Payid),
@@ -231,7 +268,7 @@ test_add_del_pkg()->
     Payid=payid("test"),
     Pkgs0=lw_register:get_pkgs(UUID),
     []=[I||I=#package_info{payid=PayId_}<-Pkgs0,PayId_==Payid],
-    PkgInfo=gen_pkg_info("dth_common",dth_temp1,Payid),
+    PkgInfo=gen_pkg_info("dth_common",?GIFT_PAYTYPE,Payid),
     lw_register:add_pkg(UUID,PkgInfo),
     Pkgs1=lw_register:get_pkgs(UUID),
     [Pkg]=[I||I=#package_info{payid=PayId_}<-Pkgs1,PayId_==Payid],

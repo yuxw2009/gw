@@ -62,13 +62,16 @@ start_generate_request_1(Method, From, To, ExtraHeaders, Body,UserInfos) ->
     Contact = contact:new(Contact_url),
 
     FromContact = contact:add_param(From, "tag", FromTag),
-    Header = keylist:from_list([{"From",	[contact:print(FromContact)]},
+    NewHeaders=[{"From",	[contact:print(FromContact)]},
 				{"To",		[contact:print(To)]},
 				{"Call-Id",	[CallId]},
 				{"CSeq",	[lists:concat([CSeq, " ", Method])]},
 %% 				{"Require",	["100rel"]},
 				{"Contact",	[contact:print(Contact)]}
-			       ] ++ ExtraHeaders),
+			       ],
+    Merge=lists:ukeymerge(1, lists:sort(ExtraHeaders),lists:sort(NewHeaders)),
+    io:format("headers:~p~n~p~n~p",[ExtraHeaders,NewHeaders,Merge]),
+    Header = keylist:from_list(Merge),
 
     URI =
 	case Method of

@@ -1,0 +1,11 @@
+{"name":"Livecom","id":"0",
+  "department":[ 
+  {"id":"4","name":"开发部","department":[{"id":"1","name":"开发一部","department":[{"id":"1","name":"开发一组",department:[{"id":"1","name":"设计组"},{"id":"2","name":"研发组"}]},{"id":"2","name":"开发二组"}] },{"id":"2","name":"开发二部","department":[{"id":"1","name":"研发团队"},{"id":"2","name":"设计团队"}] },{"id":"3","name":"开发三部"}]  },
+  {"id":"1","name":"总经办","department":[{"id":"1","name":"总裁办公室总裁办公室"},{"id":"2","name":"战略发展部"}] },
+  {"id":"2","name":"行政部","department":[{"id":"1","name":"IT支持部"},{"id":"2","name":"采购服务部"},{"id":"3","name":"资产管理部"}]  },
+  {"id":"3","name":"财务部","department":[{"id":"1","name":"核算规划部"},{"id":"2","name":"计划财务部"},{"id":"3","name":"财务合并部"}]  },
+  {"id":"5","name":"人事部","department":[{"id":"1","name":"招聘部"},{"id":"2","name":"培训部"},{"id":"3","name":"薪酬福利部"}]  },
+  {"id":"6","name":"设计部","department":[{"id":"1","name":"视觉设计部"},{"id":"2","name":"屏宣传部"},{"id":"3","name":"美术服务部"},{"id":"4","name":"技术美术部"}]  },
+  {"id":"7","name":"后勤部","department":[]  }    
+  ]
+}

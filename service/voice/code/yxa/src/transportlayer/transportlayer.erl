@@ -40,6 +40,7 @@
 %%--------------------------------------------------------------------
 -include("siprecords.hrl").
 -include("sipsocket.hrl").
+-include("debug.hrl").
 
 %%====================================================================
 %% External functions
@@ -74,6 +75,7 @@ send_proxy_response(Socket, Response)
 	[_Self] ->
 	    logger:log(error, "Transport layer: Can't proxy response ~p ~s because it contains just one or less Via "
 		       "and that should be mine!", [Response#response.status, Response#response.reason]),
+           ?ERROR_INFO("~p",[Response]),
 	    {error, invalid_Via};
 	[_Self | Via] ->
 	    %% Remove Via matching me (XXX should check that it does match me)

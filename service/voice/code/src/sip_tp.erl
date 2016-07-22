@@ -56,15 +56,17 @@ init(Peer,Options) ->
     init(Peer,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
     
 init(Peer,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
+    Cidname = proplists:get_value(callername, Options,none),
     Cid = session:trans_caller_phone(Phone0,Cid0),
-    From=session:caller_addr(Cid ),
+    From=session:caller_addr(Cidname,Cid ),
+    Calleename = proplists:get_value(calleename, Options,none),
     Phone = session:trans_callee_phone0(Phone0,UUID),
     process_flag(trap_exit,true),
-    To=session:callee_addr(Phone),
+    To=session:callee_addr(Calleename,Phone),
     if
         is_integer(Maxtime)-> void;
         true->
-            uid_manager:start_call(Cid, [{sip_pid, self()}, {peerpid,Peer}])
+            void %uid_manager:start_call(Cid, [{sip_pid, self()}, {peerpid,Peer}])
     end,
     _Ref = erlang:monitor(process,Peer),
     loop(idle, #state{peerpid=Peer,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone0,sip_phone=Phone,max_time=Maxtime, cid=Cid0,
@@ -118,8 +120,10 @@ on_message(stop,StateName,State) when StateName==trying;StateName==ring->
 on_message(stop,_,_State) ->
     stop;
 
-on_message({invite, Body},idle,State) ->
-    {ok, Request} = build_invite(State#state.from, State#state.to, Body),
+on_message({invite, Body},idle,State=#state{options=Options}) ->
+    ExtraHeaders=proplists:get_value(extraheaders,Options,[]),
+    io:format("##########################################~n~p~n",[ExtraHeaders]),
+    {ok, Request} = build_invite(State#state.from, State#state.to, Body,ExtraHeaders),
     status_change(trying,State),
     {ok,TRef} =  timer:send_after(6000*10,trying_detecting_timeout),
     State2 = State#state{timer_ref=TRef},
@@ -348,10 +352,14 @@ build_register(User,Passwd)  ->
     {ok, Request, _CallId, _FromTag, _CSeqNo} =
 	siphelper:start_generate_request_1("REGISTER",register_from(User),register_to(User),[{"Expires", ["7200"]}], <<>>, [{user,User},{pass,Passwd}]),
     {ok, Request}.
-build_invite(From, To, Body) when is_record(From, contact),is_record(To, contact),is_binary(Body) ->
+build_invite(From, To, Body,ExtraHeaders) when is_record(From, contact),is_record(To, contact),is_binary(Body) ->
+    Headers=case ExtraHeaders of
+                 {keylist,KeyElems}->  [{Key,Value}||{_,_,Key,Value}<-KeyElems];
+                 _->[]
+                 end,
     {ok, Request, _CallId, _FromTag, _CSeqNo} =
     siphelper:start_generate_request("INVITE",From,To,
-                                     [{"Content-Type", ["application/sdp"]}],
+                                     [{"Content-Type", ["application/sdp"]}|Headers],
                                      Body),
     {ok, Request}.
     
@@ -438,9 +446,8 @@ maxtalk_judge(State0=#state{max_time=Maxtime})->
 
 traffic(_St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
     Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
-      {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
+      {callee_sip,sipcfg:ssip(Phone)},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
     rpc:call('traffic@lwork.hk',traffic,add,[Trf]).
-    
     
 %%%%%%%%%%%%%%%%%%%%%%%%  for test
 start_alarmpro()->

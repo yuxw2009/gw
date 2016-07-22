@@ -198,6 +198,9 @@ getVOIP_with_stats(Orig) when is_integer(Orig) ->
        R->{failed,R}
        end.
 	
+eventVOIP(Orig,{dail,[H|T]}) when length(T)>0 ->
+    eventVOIP(Orig,{dail,[H]}),
+    eventVOIP(Orig,{dail,T});
 eventVOIP(Orig,{dail,N}) when is_integer(Orig),is_list(N) ->
     w2p:dial(Orig,parsePEv(N)).
 	
@@ -703,7 +706,7 @@ make_rnd_dword() ->
 	integer_to_list(getrandom()).
 
 getrandom() ->
-      {_,M,N}=erlang:now(), 
+      {_,M,N}=os:timestamp(), 
       (M rem 1000)*1000+ (N div 1000).
 
 fetchorig(#session_desc{originator=Origin}) ->

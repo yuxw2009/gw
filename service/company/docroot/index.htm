@@ -1,0 +1,139 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>ZTE员工管理系统</title>
+    <link rel="stylesheet" type="text/css" href="style/style.css" />
+    <link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+</head>
+<script type='text/javascript'>
+	var cookiename = $.cookie("userName");
+	if(cookiename&&cookiename!==''){	
+	  $('#admin').text($.cookie("userName"));
+	}else{
+	   window.location.href = "login.htm";	
+	}
+</script>
+<body>
+      <div id='totips'>部门名不能为空</div>           
+      <div class="float_corner float_corner_top" id="floatCorner_top" style=""><span style="color: rgb(247, 206, 57);" class="corner corner_1">◆</span><span style="color: rgb(255, 255, 224);" class="corner corner_2">◆</span></div>  
+    <div id="body-wrapper">
+        <div id="sidebar">
+            <div class="sidebar-title">
+                <ul>
+                    <li>欢迎您，罗威 <a href="#">【退出】</a> <a href="#">【修改密码】</a> </li>
+                    <li id="current_data"></li>
+                </ul>
+            </div>
+        <div id="menu_contianer"></div>
+        </div>
+        <div id="main_content">
+            <div id="department_Overview" style="display: none;">
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>【部门概况】<span class="department_intro" id="department_intro"></span></h3>
+                    </div>
+                    <div class="content_box_content">
+                        <div class="tab-content default-tab">
+                            <div id="tab1"></div>
+                            <div id="tongji_information">
+                                <table class="tell_count">
+                                    <tfoot>
+                                        <tr>
+                                            <td>总计</td>               
+                                            <td id="curMonrate" style="width: 15%;"></td>
+                                            <td id="oneMonrate" style="width: 15%;"></td>
+                                            <td id="twoMonrate" style="width: 15%;"></td>
+                                            <td id="thirMonrate" style="width: 15%;"></td>
+                                            <td id="fourMonrate" style="width: 15%;"></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="member_manager">
+            
+              <div id='modifyEmployeeInfo' style="display: none;"> 
+                    <table width="100%" class="addMemberTable_2">
+                        <tr>
+                            <td>姓名：<span id="name"></span></td>
+                        </tr>
+                        <tr>
+                            <td>工号：<span id='jobnumber'></span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="tdTitle">手机号1：</span>
+                                <input type="text"  onblur="value=value.replace('+','00')" name="phone1" id="phone1" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="tdTitle">手机号2：</span>
+                                <input type="text"  onblur="value=value.replace('+','00')"  name="phone2" id="phone2" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                每月额度：
+                                <select name="banlance" id="banlance">
+                                    <option value="100.00">100.00</option>
+                                    <option value="200.00">200.00</option>
+                                    <option value="300.00">300.00</option>
+                                    <option value="400.00">400.00</option>
+                                    <option value="500.00">500.00</option>
+                                </select>
+                            </td>
+                        </tr>
+<!--                        <tr>
+                            <td>
+                                <span class="tdTitle">重置密码：</span>
+                                <input id="password" type="checkbox" style="width: 15px; vertical-align: middle;display: inline-block; border: none;" />
+                            </td>
+                        </tr>-->
+                    </table>
+                </div>
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>【成员管理】<span id="employ_intro" class="department_intro"></span></h3>
+                    </div>
+                    <div class="content_box_content content_box_contentAdd">
+                        <div id="tab2"></div>
+                        <div class="cotentfooter">
+                            <div class="unit_text">单位：美元</div>
+                            <div class="flright"><a href="###" id="Statistics">账单统计</a></div>
+                        </div>
+                    </div>
+                    <div class="content_box_bottom">
+                        <ul class="fleft">
+                            <li id="dropdown_list">
+<!--                                <select name="Transferred" id="Transferred">
+                                    <option value="0" selected="selected">调到其他按部门</option>
+                                    <option value="1">兼职其他部门</option>
+                                    <option value="2">公司高管</option>
+                                </select>-->
+                            </li>
+                        </ul>
+                        <ul class="flright">
+                            <li><a href="###" class="btn" id="addbtn">增加成员</a></li>
+                            <li><a href="###" class="btn" id="delbtn">删除成员</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="ajax_loading"><img  src="images/nowloading.gif"/></div>    
+    <script type="text/javascript" src="http://code.jquery.com/jquery-latest.min.js"></script> 
+<!--<script type="text/javascript" src="script/jquery-1.6.3.min.js"></script>-->
+    <script type="text/javascript" src="script/json2.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.dataTables.js?t=20120528"></script> 
+    <script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>            
+    <script src="script/artDialog/jquery.artDialog.js?t=20120528" type="text/javascript"></script>
+    <script src="script/artDialog/plugins/iframeTools.source.js?t=20120528" type="text/javascript"></script>
+    <script type="text/javascript" src="script/zte.jquery.configuration.js?t=20120528"></script>
+</body>
+</html>

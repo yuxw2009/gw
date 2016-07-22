@@ -4,6 +4,7 @@
 
 do_this_once() ->
     mnesia:start(),
+    create_mail_t(),
     mnesia:create_table(openim_t,[{attributes,record_info(fields,openim_t)},{disc_copies,[node()]}]),
     mnesia:create_table(devid_reg_t,[{attributes,record_info(fields,devid_reg_t)},{disc_copies,[node()]}]),
     mnesia:create_table(pay_types_record,[{attributes,record_info(fields,pay_types_record)},{disc_copies,[node()]}]),
@@ -16,8 +17,15 @@ do_this_once() ->
     mnesia:create_table(lw_register,[{attributes,record_info(fields,lw_register)},{disc_copies,[node()]}]),
     ok.
 
-test()->mnesia:create_table(lw_register,[{attributes,record_info(fields,lw_register)},{disc_copies,[node()]}]).
+transform_table()->
+    F=fun(Mail_t={mail_t,Account,Mail_infos,Uuid,Pls,Max_uid})-> 
+                 #mail_t{account=Account,mail_infos=Mail_infos,uuid=Uuid,pls=Pls}
+            end,
+    mnesia:transform_table(mail_t,F,record_info(fields,mail_t)).
 
+test()->mnesia:create_table(lw_register,[{attributes,record_info(fields,lw_register)},{disc_copies,[node()]}]).
+create_mail_t()->
+    mnesia:create_table(mail_t0,[{attributes,record_info(fields,mail_t0)},{disc_copies,[node()]}]).
 
 start() ->
     mnesia:start(),

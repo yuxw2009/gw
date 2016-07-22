@@ -4,7 +4,7 @@
 -define(PCMU,0).
 -define(LINEAR,99).
 -define(VP8, 100).
--define(DIR, "/data/new_vcr/").
+-define(DIR, "./new_vcr/").
 
 -define(MIX_PERIOD, 20).
 -define(MIX_SR, 8000).

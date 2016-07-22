@@ -14,20 +14,22 @@ handle(Arg, 'POST', ["auth_code"]) ->
     {ok, Json, _} = rfc4627:decode(Arg#arg.clidata),
         io:format("888888888888888888888888~p~n",[Json]),
     UUID    = utility:get_string(Json, "uuid"),
-    case {lw_register:get_register_info_by_uuid(UUID), utility:get_string(Json,"type")} of
-    {{atomic,[#lw_register{}]},"register"}->  
+    Phone    = utility:get_string(Json, "phone"),
+    case {lw_register:get_register_info_by_uuid(UUID), lw_register:get_register_info_by_phone(Phone)}  of
+    {{atomic,[_]},[_|_]} when Phone=/="13788927293",Phone=/="18296131759"->  
         io:format("888888888888888888888888~n"),
-        utility:pl2jso_br([{status,failed},{reason, account_already_exist}]);
-    _->
+        utility:pl2jso_br([{status,failed},{reason, phone_already_bind}]);
+    {{atomic,[#lw_register{name=Name,group_id=GroupId}]},[]}->
         DID    = utility:get_string(Json, "device_id"),
         Code_bin=auth_code(UUID++DID),
         SerID  = wwwcfg:get_serid(),
         UUID_BIN= list_to_binary(UUID),
-        Phones = [trans_phone(UUID)],
-        AuditInfo = utility:pl2jso([{uuid,UUID_BIN},{company,<<"ml">>},{name,<<"ml">>},{account,UUID_BIN},{orgid,<<"ml">>}]),
+        Phones = [trans_phone(Phone)],
+        AuditInfo = utility:pl2jso([{uuid,UUID_BIN},{company,GroupId},{name,Name},{account,UUID_BIN},{orgid,<<"ml">>}]),
         Para = [{service_id,SerID},{audit_info,AuditInfo},{content,Code_bin},{members,Phones}],
         io:format("sms handle! Para:~p~n", [Para]),
-        utility:pl2jso(send_sms(Para))
+        utility:pl2jso_br(send_sms(Para));
+     {_,_}-> utility:pl2jso_br([{status,failed},{reason, account_not_exist}])
     end;
 
 handle(Arg, 'GET', []) ->

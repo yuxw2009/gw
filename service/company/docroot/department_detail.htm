@@ -1,0 +1,157 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="style/addMember.css" />
+    <title>Lwork-添加成员</title>
+</head>
+<body>
+    <div id='container'>
+    <div id="export">
+        <table class="addMemberTable_1">
+            <tr>
+                <th>姓名工号</th>
+                <th style="width: 140px">当月实时</th>
+                <th id="prevMonth" style="width:140px"></th>
+                <th id="twoMonth" style="width:140px"></th>
+                <th id="threeMonth" style="width:140px"></th>
+                <th id="fourMonth" style="width:140px"></th>
+            </tr>
+        </table>
+        <div id="tab1">
+        </div>
+        <div id="tongji_information" style="margin-top:15px;">
+         <table class="tell_count">
+            <tfoot>
+              <tr>
+                <td style="width:auto;">总计</td>
+                <td id="curMonrate"></td>
+                <td id="oneMonrate"></td>
+                <td id="twoMonrate"></td>
+                <td id="thirMonrate"></td>
+                <td id="fourMonrate"></td>
+              </tr>
+             </tfoot>
+          </table>
+        </div> 
+        </div>
+            
+        <div class="button">
+            <div class="btn" style="*float: right; margin-left: 10px;" id="addSubmit" onclick="print();">
+                打印此页</div>
+<!--            <div class="btn" style="*float: right; margin-left: 10px;" id="export_excel">
+                导出账单</div>-->
+            <div class="btn" style="*float: right; margin-left: 10px;" id="cancel">
+                关闭</div>
+        </div>
+    </div>
+<!--<script src="http://code.jquery.com/jquery-latest.min.js"></script>-->
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>  
+    <script type="text/javascript">	
+        $('#cancel').click(function () {
+            parent.$.dialog({ id: "departmentDetail" }).close();
+        });	
+        var loaddepartmentDeatails = function () {
+			$.ajax({
+                type: "post",
+                url: 'service.yaws',
+                dataType: "json",
+                data: {'command': 'load_department_employer_detail', 'companyid': parent.companyid,'departmentid': parent.departmentid, 't': new Date().getTime()},
+                contentType: "application/json; charset=utf-8",
+                success: function (data) {
+					
+				
+                   var html = '',obj = data,count = obj.length, curMonrate=0, oneMonrate=0, twoMonrate=0, thirMonrate=0, fourMonrate=0;	
+				   var first, tw, th, foru;	
+				   				   		   				   
+//				   var excelPrint = function(objStr){
+//					  var tempStr = document.getElementById('export').outerHTML;
+//					  var newWin = window.open();
+//					  newWin.document.write(tempStr);
+//					  newWin.document.close();
+//					  newWin.document.execCommand('Saveas',false,objStr+'.xls');
+//					  newWin.window.close();
+//				   }	
+
+ 
+                 if(count>0){
+                   html += ['<table class="addMemberTable" id="tab"><tbody>'].join("");
+                   $('#department_intro').attr('currentID', data.id);
+                   for (var i = 0; i < count; i++) {					   
+					  var str =  obj[i].stat.split(';');
+					  var str_0 , str_1, str_2, str_3, str_4, curM, oneM, twoM, thirM, fourM;
+					  for(var j=0; j<str.length;j++){
+						  switch (j) {
+							  case 0: str_0=str[0].split(':');
+							  		  curM = str_0[1];
+									  break;
+								case 1: str_1=str[1].split(':');
+										oneM = str_1[1];
+										first = str_1[0];
+										break;
+								case 2: str_2=str[2].split(':');
+										twoM = str_2[1];
+										tw = str_2[0];
+										break;
+								case 3: str_3=str[3].split(':');
+										thirM = str_3[1];
+										th = str_3[0];
+										break;
+								case 4: str_4=str[4].split(':');
+										fourM = str_4[1];
+										foru = str_4[0];								
+										break;				
+							}
+						 }				 
+						curM=parseFloat(curM); oneM=parseFloat(oneM); twoM=parseFloat(twoM);thirM=parseFloat(thirM);fourM=parseFloat(fourM);
+			        	typeof(first) == 'undefined'?first='NAN':first=first;							
+						typeof(tw) == 'undefined'?tw='NAN':tw=tw;
+						typeof(th) == 'undefined'?th='NAN':th=th;	
+						typeof(foru) == 'undefined'?foru='NAN':foru=foru;	
+																	   
+					   if(!isNaN(curM))curMonrate = curMonrate + parseFloat(curM);
+					   if(!isNaN(oneM))oneMonrate = oneMonrate + parseFloat(oneM);
+					   if(!isNaN(twoM))twoMonrate = twoMonrate + parseFloat(twoM);
+					   if(!isNaN(thirM))thirMonrate = thirMonrate + parseFloat(thirM);				   
+					   if(!isNaN(fourM))fourMonrate = fourMonrate + parseFloat(fourM);		
+					   
+                        html += [
+								'<tr><th>' + obj[i].name + '' + obj[i].employerid + '</th>',
+								'<td style="width:140px">' + curM + '</td>',
+								'<td style="width:140px">' + oneM + '</td>',
+								'<td style="width:140px">' + twoM + '</td>',
+								'<td style="width:140px">' + thirM + '</td>',
+								'<td style="width:140px">' + fourM + '</td>'
+							  ].join("");
+                    }				
+						html += ['</tbody></table>'].join("");						
+					   $('#prevMonth').text(first);
+					   $('#twoMonth').text(tw);
+					   $('#threeMonth').text(th);	
+					   $('#fourMonth').text(foru);					   
+						$("#tab1").html(html);								
+						$('#curMonrate').text(Math.round(curMonrate*100)/100);
+						$('#oneMonrate').text(Math.round(oneMonrate*100)/100);
+						$('#twoMonrate').text(Math.round(twoMonrate*100)/100);
+						$('#thirMonrate').text(Math.round(thirMonrate*100)/100);
+						$('#fourMonrate').text(Math.round(fourMonrate*100)/100);						
+	//					$('#export_excel').click(function(){						
+	//						excelPrint(parent.companyid);
+	//				    })
+	
+                }else{
+					$('.addMemberTable_1').hide();
+					$('#tongji_information').hide();
+					$("#tab1").html('<div style="text-align:center;padding-top:30px;">该部门员工暂时没有消费记录。</div>');
+			    }
+								
+				}
+            });
+        }
+        loaddepartmentDeatails();
+
+	    $('#tab1').height(parent.tabheight-50)	
+		
+</script>
+</body>
+</html>

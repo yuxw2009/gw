@@ -1,0 +1,101 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="style/addMember.css" />
+    <title>Lwork-添加成员</title>
+</head>
+<body>
+    <div id='container'>
+        <table class="addMemberTable_1">
+            <tr>
+                <th style="width:196px;">
+                    <span class="necessarilyItem">*</span>姓名
+                </th>
+                <th style="width: 196px"><span class="necessarilyItem">*</span>工号</th>
+                <th style="width: 196px">每月额度</th>
+                <th style="width: 196px">
+                    <span class="necessarilyItem"></span>手机号码1
+                </th>
+                <th style="width: 196px">
+                    手机号码2
+                </th>
+            </tr>
+        </table>
+        <div id="tab1">
+            <table class="addMemberTable">
+                <tr class='no_validate'>
+                    <td>
+                        <input name=""  add_data="personsName" class="personsName" type="text" value="" />
+                    </td>
+                    <td>
+                        <input name=""  add_data="jobNumber" class="jobNumber" type="text" value="" />
+                    </td>
+                    <td class="monthLimit">
+                        <select name="" class="amount" add_data="monthLimit">
+                         <option value="30.00" selected="selected">30.00</option>   
+                         <option value="50.00">50.00</option>   
+                         <option value="70.00">70.00</option>   
+                         <option value="100.00">100.00</option>   
+                          <option value="120.00">120.00</option>
+                          <option value="180.00">180.00</option>
+                          <option value="200.00">200.00</option>
+                          <option value="300.00">300.00</option>
+                          <option value="400.00">400.00</option>     
+                          <option value="500.00">500.00</option>   
+                        </select>
+                    </td>
+                    <td>
+                        <input name=""  add_data="mobileNumber1" class="mobileNumber"   onblur="value=value.replace('+','00')"  type="text" value="" />
+                    </td>
+                    <td>
+                        <input name="" class="mobileNumber" add_data="mobileNumber1"   onblur="value=value.replace('+','00')" type="text" value="" />
+                    </td>
+                </tr>
+                <tr class='no_validate'>
+                    <td>
+                        <input name="" add_data="personsName" class="personsName" type="text" value="" />
+                    </td>
+                    <td>
+                        <input name=""  add_data="jobNumber" class="jobNumber" type="text"
+                            value="" />
+                    </td>
+                    <td class="monthLimit">
+                        <select name="" add_data="monthLimit" class="amount">
+                         <option value="30.00" selected="selected">30.00</option>   
+                         <option value="50.00">50.00</option>   
+                         <option value="70.00">70.00</option>   
+                         <option value="100.00">100.00</option>   
+                          <option value="120.00">120.00</option>
+                          <option value="180.00">180.00</option>
+                          <option value="200.00">200.00</option>
+                          <option value="300.00">300.00</option>
+                          <option value="400.00">400.00</option>     
+                          <option value="500.00">500.00</option>    
+                        </select>
+                    </td>
+                    <td>
+                      <input name="" add_data="mobileNumber1" class="mobileNumber"  onblur="value=value.replace('+','00')" type="text" value="" />
+                    </td>
+                    <td>
+                      <input name="" class="mobileNumber" add_data="mobileNumber1"  onblur="value=value.replace('+','00')" type="text" value="" />
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="button">
+            <div class="btn" id="cancel" style="*float:right;*margin-left:15px;">取 消</div>
+            <div class="btn" id="addSubmit" style="*float:right;margin-left:15px;">确 认</div>
+        </div>
+    </div>    
+    <div id='totips'></div>    
+    <div class="float_corner float_corner_top" id="floatCorner_top" style=""><span style="color: rgb(247, 206, 57);" class="corner corner_1">◆</span><span style="color: rgb(255, 255, 224);" class="corner corner_2">◆</span></div>
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20130107"></script> 
+    <script type="text/javascript" src="script/json2.js?t=20120528"></script>
+    <script type="text/javascript" src="script/zte.memberManger.js?t=20120528"></script>
+    <script type="text/javascript">
+        $("#tab1").addMember();
+
+    </script>
+</body>
+</html>

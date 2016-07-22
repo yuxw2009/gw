@@ -311,6 +311,7 @@ start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, Arg)->
    end.
     
 fzd_stop_voip(_UUID, Session_id, _SessionIP) ->
+    io:format("fzd_stop_voip:Session_id:~p~n",[Session_id]),
     {Node, Sid} = dec_sid(Session_id),
     rpc:call(Node, wkr, stopVOIP, [Sid]).
 
@@ -371,7 +372,7 @@ handleP2pCall(UUID,Phone,Node,SID,SDP,Arg)->
     case Type of
     <<"p2p">> ->
         R=utility:pl2jso([{caller,list_to_binary(UUID)},{callee,list_to_binary(Phone)},{session_id, SID}]),
-        CustomContent=[{alert,UUID},{badge,1},{'content-available',1},{sound,"lk_softcall_ringring.mp3"},{event,<<"p2p_inform_called">>},
+        CustomContent=[{alert,list_to_binary(UUID)},{badge,1},{'content-available',1},{sound,<<"lk_softcall_ringring.mp3">>},{event,<<"p2p_inform_called">>},
                                  {caller,list_to_binary(UUID)},{opdata,R}],
         case lw_mobile:p2p_push(Node,Phone,CustomContent) of
         ios_webcall-> 

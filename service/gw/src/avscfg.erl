@@ -12,8 +12,8 @@ get(web_socket_ip) -> "112.74.96.171";
 get(sip_socket_ip) -> "112.74.96.171";
 
 
-get(sip_app_node) -> {voip_ua, 'qvoice@112.74.96.171'};%{voip_ua, 'voicezte@127.74.96.171'};  %{voip_ua, 'voice@14.17.107.196'};%{voip_ua, 'qvoice1@127.74.96.171'};%
-get(max_calls) -> 30;
+get(sip_app_node) -> {voip_ua, 'voicezte@119.29.62.190'};%{voip_ua, 'qvoice@112.74.96.171'};%
+get(max_calls) -> 10;
 
 
 get(webrtc_web_codec) -> ilbc; 
@@ -38,7 +38,8 @@ get(mweb_udp_range) -> {55000,57000};
 get(wconf_udp_range) -> {55010,55110};
 get(room_udp_used) -> 7;
 get(custom) -> yj;
-get(_) -> undefined.
+get(qq_interval)->"1.175";  %  1.53
+get(_) -> "".
 
 get_vcr()->no_vcr.
 get_root()-> "/home/ubuntu/ttt/gw/applications/".

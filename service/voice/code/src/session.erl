@@ -98,10 +98,7 @@ loop(State) ->
     
 start_uas(Phone1,Phone2,UUID) ->
     Session = self(),
-    CallerCid = case sipcfg:service_id() of
-                   "fzd"-> "18888888888";
-                   _-> trans_caller_phone(Phone1,Phone2)
-                   end,
+    CallerCid =  trans_caller_phone(Phone1,Phone2),
     CalleeUUID={element(1,UUID),Phone2},
     {Caller,_} = sipua:start_monitor(Session,caller,caller_addr(CallerCid),callee_addr(trans_callee_phone0(Phone1,CalleeUUID))),   
     CallerUUID={element(1,UUID),Phone1},
@@ -217,19 +214,18 @@ can_continue_talking(State) ->
 time_diff(T1,T2) ->
     calendar:datetime_to_gregorian_seconds(T2)-calendar:datetime_to_gregorian_seconds(T1).
     
-ssip() ->  sipcfg:ssip().
+ssip(Callee) ->  sipcfg:ssip(Callee).
 myip() -> siphost:myip().    
 
 trans_caller_phone(Callee, "+"++Caller)->trans_caller_phone(Callee, "00"++Caller);
 trans_caller_phone("+"++Callee, Caller)->trans_caller_phone("00"++Callee, Caller);
 trans_caller_phone(Callee, Caller)->  trans_caller_phone(Callee,Caller,sipcfg:service_id()).
-trans_caller_phone(Callee,Caller,"fzd")->  Caller;
 trans_caller_phone(Callee,Caller,_)->  trans_caller_phone1(Callee, Caller).
 
 % new for wangfu  charge all callers are 86+xxxxxx
 trans_caller_phone1(_Callee, "+"++Caller)->trans_caller_phone1(_Callee, "00"++Caller);
 trans_caller_phone1(_Callee, "00"++Caller)->filter_phone(Caller);
-trans_caller_phone1(_Callee, "0"++Caller)->filter_phone("86"++Caller);
+trans_caller_phone1(_Callee, "0"++Caller)->filter_phone("860"++Caller);
 trans_caller_phone1(_Callee, Caller="86"++_)->filter_phone(Caller);
 trans_caller_phone1(_Callee, Caller)->filter_phone("86"++Caller).
 
@@ -265,11 +261,21 @@ national_call_trans_caller(Caller)->  filter_phone(Caller).
 
 filter_phone(Phone)->  [I||I<-Phone, lists:member(I, "0123456789*#")].
 
-caller_addr(Phone) -> 
+caller_addr(Phone) ->  caller_addr(none,Phone).
+callee_addr(Phone) ->callee_addr(none,Phone).
+
+caller_addr(none,Phone) -> 
     [Addr] = contact:parse(["<sip:"++Phone++"@"++myip()++">"]),
+    Addr;
+caller_addr(Name,Phone) -> 
+    [Addr] = contact:parse(["\""++Name++"\""++"<sip:"++Phone++"@"++myip()++">"]),
     Addr.
-callee_addr(Phone) ->
-    [Addr] = contact:parse(["<sip:"++Phone++"@"++ssip()++">"]),
+    
+callee_addr(none,Phone) ->
+    [Addr] = contact:parse(["<sip:"++Phone++"@"++ssip(Phone)++">"]),
+    Addr;
+callee_addr(Name,Phone) ->
+    [Addr] = contact:parse(["\""++Name++"\""++"<sip:"++Phone++"@"++ssip(Phone)++">"]),
     Addr.
 
 callee_phone_prefix("008610"++_, "0086"++_) -> "11";

@@ -32,8 +32,8 @@ show()->
     gen_server:call(nmsi,{act,Fun}).
 
 handle_cmd("CREATE_SDN",Para) ->
-    io:format("~p~n",["CREATE_SDN"]),
-    io:format("~p~n",[Para]),
+    io:format("****************nmsi:~p~n",["CREATE_SDN"]),
+    io:format("**********~p~n",[Para]),
     lw_agent_oss:create_sdn(Para);
 
 handle_cmd("CREATE_SIPREG_USER",Para) ->

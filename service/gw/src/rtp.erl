@@ -1656,6 +1656,7 @@ try_port(Begin, End, From, Port) ->
 			try_port(Begin, End, From, Port+1)
 	end.
 
+try_port_pair(Begin, End)->try_port_pair1(Begin, End);
 try_port_pair(Begin, End)->
 	case gen_udp:open(443, [binary, {active, true}, {recbuf, 4096}]) of
 		{ok,Sock1} ->
@@ -1680,14 +1681,14 @@ try_port_pair(Begin, End, From, Port) when Port>End ->
 try_port_pair(Begin, End, From, Port) ->
 	case gen_udp:open(Port, [binary, {active, true}, {recbuf, 4096}]) of
 		{ok,Sock1} ->
-			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
-				{ok,Sock2} ->
-				       app_manager:set_last_used_webport(Port+1),
-					{ok,Port,Sock1,Sock2};
-				{error, _} ->
-					gen_udp:close(Sock1),
-					try_port_pair(Begin, End, From, Port+2)
-			end;
+%			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
+%				{ok,Sock2} ->
+				       app_manager:set_last_used_webport(Port),
+					{ok,Port,Sock1,Sock1};
+%				{error, _} ->
+%					gen_udp:close(Sock1),
+%					try_port_pair(Begin, End, From, Port+2)
+%			end;
 		{error, _} ->
 			try_port_pair(Begin, End, From, Port+2)
 	end.

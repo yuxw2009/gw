@@ -1230,7 +1230,8 @@ send_response(Response, SendReliably, State) when is_record(Response, response),
     LogTag = State#state.logtag,
     SendResponse =
 	if
-	    Method == "INVITE", Status >= 300 ->
+%	    Method == "INVITE", Status >= 300 ->
+	    Method == "INVITE", Status >= 200 ->   % modified by yxw
 		send_response_process_to_tag(Response, State);
 	    true ->
 		Response

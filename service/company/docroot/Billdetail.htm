@@ -1,0 +1,98 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="style/addMember.css" />
+    <title>Lwork-添加成员</title>
+</head>
+<body>
+    <div id='container'>
+    <div id='export'>    
+        <table class="addMemberTable_1">
+            <tr>
+                <th>
+                    日期
+                </th>
+                <th style="width: 120px">
+                    本端号码
+                </th>
+                <th style="width: 120px">
+                    对端号码
+                </th>
+                <th style="width: 120px">
+                    开始时间
+                </th>
+                <th style="width: 120px">
+                    结束时间
+                </th>
+                <th style="width: 120px">
+                    费用
+                </th>
+                 <th style="width: 100px">
+                    录音文件
+                </th> 
+
+            </tr>
+        </table>
+        <div id="tab1">        
+        </div>
+        </div>
+        
+        <div class="button">
+            <div class="btn" style="*float: right; margin-left: 10px;" onclick="print();">
+                打印此页</div>
+<!--            <div class="btn" style="*float: right; margin-left: 10px;"" id="exportExcel">
+                导出账单</div>-->
+            <div class="btn" style="*float: right; margin-left: 10px;" id="cancel">
+                关闭</div>
+        </div>
+    </div>
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>  
+    <script type="text/javascript">
+        $('#cancel').click(function () {
+            parent.$.dialog({ id: "Billdetail" }).close();
+        });
+        var loaddepartmentDeatails = function () {
+            $.ajax({
+                type: "post",
+                url: 'service.yaws',	
+                dataType: "json",
+                data:{'command': 'load_employer_detail', 'companyid': parent.companyid,'employerid': parent.employid, 't': new Date().getTime()},
+                contentType: "application/json; charset=utf-8",
+                success: function (data) {
+                   var html = '',
+				   obj = data,
+				   count = obj.length;
+                   html += ['<table class="addMemberTable"><tbody>'].join("");				
+//				   function excelPrint(objStr){
+//					  var tempStr = document.getElementById('export').outerHTML;
+//					  var newWin = window.open();
+//					  newWin.document.write(tempStr);
+//					  newWin.document.close();
+//					  newWin.document.execCommand('Saveas',false,objStr+'.xls');
+//					  newWin.window.close();
+//				   }					   			   
+                    $('#department_intro').attr('currentID', data.id);
+                    for (var i = 0; i < count; i++) {			
+					 var temp = obj[i].start_time.split('-');			
+					 var temp2 = obj[i].end_time.split('-');						
+                        html += [
+								'<tr><th>' + temp[0] + '-' + temp[1] + '-' + temp[2] + '</th>',
+								'<td style="width: 120px; color:#2da600;">' + obj[i].called + '</td>',
+								'<td style="width: 120px; color:#2da600;">' + obj[i].caller + '</td>',
+								'<td style="width: 120px; color:#2da600;">' +  temp[3] + ':' + temp[4] + ':' + temp[5] + '</td>',
+								'<td style="width: 120px; color:#2da600;">' + temp2[3] + ':' + temp2[4] + ':' + temp2[5] + '</td>',
+								'<td style="width: 120px; color:#2da600;">' + obj[i].cost + '</td>',
+                                '<td style="width: 120px; color:#2da600;"><img style="margin-right:5px;" src="images/amr.gif"></img>下载</td>'				
+							  ].join("");
+                    }
+                    html += ['</tbody></table>'].join("");
+                    $("#tab1").height(parent.tabheight-50).html(html);
+                }				
+            });
+        }	  		
+      loaddepartmentDeatails();
+		
+    </script>
+</body>
+</html>

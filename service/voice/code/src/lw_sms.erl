@@ -16,7 +16,7 @@ send_sms(Plist)->
      Audit_info =proplists:get_value(audit_info, Plist),
      Members =proplists:get_value(members, Plist),
      Content =proplists:get_value(content, Plist),
-     FailPhones = send_to_members1(Members, Content),
+     FailPhones = send_to_members(Members, Content),
      SucPhones = Members--FailPhones,
      case SucPhones of
         []-> void;
@@ -24,6 +24,16 @@ send_sms(Plist)->
             cdrserver:new_cdr(sms, [{service_id, Service_id}, {audit_info, Audit_info}, {members, SucPhones}, {time_stamps, calendar:local_time()}])
      end,
      {ok, FailPhones}.
+
+send_to_members2(Members,Content0) ->   % for Ö£ÖÝµçÐÅ
+    Content = urlenc:escape_uri(Content0),
+    io:format("send_to_members2:~p~p~n",[Members,Content]),
+    URL="http://10.32.7.46/msg/HttpBatchSendSM?account=ltalk&pswd=livecom2016!&mobile="++
+                              string:join(Members,",")++
+                             "&msg="++Content0,
+    R=http_send(post,{URL,[]}),
+    io:format("send_to_members2 ack:~p~n",[R]),
+    R.
 
 send_to_members1(Members,Content0) ->
     Content = urlenc:escape_uri(Content0),
@@ -40,8 +50,10 @@ send1(Phone,Content)->
 http_send(Meth,{URL,Body})->
     inets:start(),
     {ok,{_,_,Ack}}=httpc:request(Meth, {URL,[],"application/json",Body},[{timeout,10 * 1000}],[]),
-    {ok,Json,_} = rfc4627:decode(Ack),
-    Json.
+    case rfc4627:decode(Ack) of
+    {ok,Json,_} ->    Json;
+    _-> 0
+    end.
     
 send_to_members(Members, Content) ->
     Res = [send(Phone, Content) || Phone <- Members],

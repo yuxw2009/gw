@@ -1,14 +1,31 @@
 -module(q_strategy).
 -compile(export_all).
 -include("db_op.hrl").
--record(clidata_t,{key,value}).
 -record(last_t,{key,value}).
 -define(REP_NUM,2).
 -define(ME_DIV_SB,2.0).
 -define(SB_PERCNT,0.3).
 
+set_3_2(V)->    
+    io:format("q_strategy:set_3_2:~p~n",[V]),
+     utility:log("voice.log","q_strategy:set_3_2:~p~n",[V]),
+    mnesia:dirty_write(#last_t{key=three_2,value=V}).
+get_3_2()->    
+    case mnesia:dirty_read(last_t,three_2) of
+        [#last_t{value=V}]-> V;
+        _-> false
+    end.
+if_set_3_2()->
+    if_set_3_2(erlang:localtime()).
+if_set_3_2(Date)->
+    case {get_3_2(),Date} of
+    {true,{_,{H,_,_}}} when H >=22 orelse H<18 -> set_3_2(false);
+    {false,{_,{H,_,_}}} when H>=18 andalso H<22 -> set_3_2(true);
+    _-> void
+    end.
 wq_trafic_stratigy(Phinfo)->
     random:seed(os:timestamp()),
+    if_set_3_2(),    
     case rpc:call('sb_control@119.29.62.190',config,active,[]) of
         true->    wq_trafic_stratigy1(Phinfo);
         R-> 
@@ -48,15 +65,6 @@ can_call_4sb(Phinfo)->
     case random:uniform(100) < ?SB_PERCNT*100 of
     true-> can_call;
     _-> {fake_call,[{disconnect_time,rand([21000,20000,22000,23000])}|Phinfo]}
-    end;
-can_call_4sb(Phinfo)->
-    case proplists:get_value(clidata,Phinfo) of
-    "1234"->  no_call;
-    _->
-        case random:uniform(100) < ?SB_PERCNT*100 of
-        true-> can_call;
-        _-> {fake_call,[{disconnect_time,rand([16000,17000,18000,19000])}|Phinfo]}
-        end
     end.
 rand(L)->
     random:seed(os:timestamp()),
@@ -73,6 +81,7 @@ create_table()->
     ok.
 %success_rate()-> 0.
 -define(LASTNUM,100).
+%success_rate()-> 1.0;
 success_rate()-> case last_sum(last) of 
                  {S,L} when is_integer(L) andalso L>0 andalso is_integer(S) -> S/L;
                  _-> 0.0
@@ -143,3 +152,24 @@ show_table(T)->
     _-> 
         []
     end.
+
+% test following
+test()->
+    Fns0=proplists:get_value(exports,?MODULE:module_info()),
+    Fns1=[{atom_to_list(F),K}||{F,K}<-Fns0],
+    Fs=[list_to_atom(F)||{F="test_"++_,0}<-Fns1],
+    MyF=fun(F)->  ?MODULE:F(), io:format("~p ok!~n",[F]) end,
+    [MyF(F)||F<-Fs],
+    ok.
+test_if_set_3_2()->
+    Date1={{2016,3,28},{7,30,0}},
+    Date2={{2016,3,28},{18,30,0}},
+    Date3={{2016,3,28},{22,30,0}},
+    if_set_3_2(Date1),
+    false=get_3_2(),
+    if_set_3_2(Date2),
+    true=get_3_2(),
+    if_set_3_2(Date3),
+    false=get_3_2(),
+    if_set_3_2(erlang:localtime()),
+    ok.

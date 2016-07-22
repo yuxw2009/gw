@@ -1,0 +1,303 @@
+<erl>
+-include("db.hrl").
+-include("jsonerl.hrl").
+-define(DBNODE,'company@lwork.hk').
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+my_postvar(Request,CommandID) ->
+    case yaws_api:postvar(Request,CommandID) of
+    {ok,Value}->    Value;
+    _-> undefined
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+handle_load_org(A) ->
+    io:format("~p~n",[yaws_load_org]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    case rpc:call(?DBNODE,db,load_org,[CompanyID]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        Orgs ->
+            {content,"application/json",jsonerl:nest_record_to_json(org,Orgs)}
+    end.
+
+handle_load_sub_org_stat(A) ->
+    io:format("~p~n",[yaws_load_sub_org_stat]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call(?DBNODE,db,load_sub_org_stat,[CompanyID,DepartmentID]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        SubOrgStats ->
+            {content,"application/json",?list_records_to_json(department_load,SubOrgStats)}
+    end.
+
+handle_add_org(A) ->
+    io:format("~p~n",[yaws_add_org]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    DepartmentName = list_to_bitstring(my_postvar(A,"departmentname")),
+    case rpc:call(?DBNODE,db,add_org,[CompanyID,DepartmentID,DepartmentName]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_non_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_non_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist_employer ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist_employer))},
+            {content,"application/json",?record_to_json(message,Message)};
+        AddID ->
+            RtnID = #id{id=list_to_binary(my_postvar(A,"departmentid") ++ "-" ++ integer_to_list(AddID))},
+            {content,"application/json",?record_to_json(id,RtnID)}
+    end.
+
+handle_del_org(A) ->
+    io:format("~p~n",[yaws_del_org]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call(?DBNODE,db,del_org,[CompanyID,DepartmentID]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_non_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_non_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist_sub_department ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist_sub_department))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_exist_employer ->
+            Message = #message{message=list_to_binary(atom_to_list(error_exist_employer))},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_modify_org(A) ->
+    io:format("~p~n",[yaws_modify_org]),
+    CompanyID      = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    DepartmentName = list_to_bitstring(my_postvar(A,"departmentname")),
+    case rpc:call(?DBNODE,db,modify_org,[CompanyID,DepartmentID,DepartmentName]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        error_non_exist ->
+            Message = #message{message=list_to_binary(atom_to_list(error_non_exist))},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+handle_add_employ(A) ->
+    io:format("~p~n",[yaws_add_employer]),
+    CompanyID    = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    EmployerAddRecordList = ?json_to_list_records(employer_add,my_postvar(A,"employerlist")),
+    case rpc:call(?DBNODE,db,add_employer,[CompanyID,DepartmentID,EmployerAddRecordList]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        Rtn ->
+            Message = #message{message=Rtn},
+            {content,"application/json",?record_to_json(message,Message)}
+            %%{content,"application/json","{\"message\":\"\"}"}.
+    end.
+
+handle_del_employ(A) ->
+    io:format("~p~n",[yaws_del_employer]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    EmployerDelIDList = string:tokens(my_postvar(A,"employeridlist"),","),
+    case rpc:call(?DBNODE,db,del_employer,[CompanyID,EmployerDelIDList]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_load_employer(A) ->
+    io:format("~p~n",[yaws_load_employer]),
+    CompanyID    = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call(?DBNODE,db,load_employer,[CompanyID,DepartmentID]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        EmployerList ->
+            {content,"application/json",?list_records_to_json(employer_load,EmployerList)}
+    end.
+
+handle_get_a_cdr(A) ->
+    io:format("~p~n",[handle_get_a_cdr]),
+    Subgroup_id = my_postvar(A,"subgroup_id"),
+    Guid = my_postvar(A,"guid"),
+    case rpc:call(?DBNODE,db,get_a_cdr,[Subgroup_id,Guid]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        EmployerDetailList ->
+            {content,"application/json",?list_records_to_json(employer_load_detail,EmployerDetailList)}
+    end.
+
+handle_load_department_calldetails(A)-> 
+    io:format("~p~n",[handle_load_department_calldetails]),
+    ComName = list_to_binary(my_postvar(A,"group_id")),
+    Depname = list_to_binary(my_postvar(A,"subgroup_id")),
+    Year = list_to_integer(my_postvar(A,"year")),
+    Month = list_to_integer(my_postvar(A,"month")),
+    case rpc:call(?DBNODE,db,get_department_calldetails,[ComName,Depname,Year,Month]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        EmployerDetailList ->
+            {content,"application/json",?list_records_to_json(employer_load_detail,EmployerDetailList)}
+    end.
+
+
+handle_load_employer_detail(A) ->
+    io:format("~p~n",[yaws_load_employer_detail]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    JobNumber = my_postvar(A,"employerid"),
+    case rpc:call(?DBNODE,db,load_employer_detail,[CompanyID,JobNumber]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        EmployerDetailList ->
+            {content,"application/json",?list_records_to_json(employer_load_detail,EmployerDetailList)}
+    end.
+
+handle_load_department_employer_detail(A) ->
+    io:format("~p~n",[yaws_load_department_employer_detail]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    DepartmentID   = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"departmentid"),"-")],
+    case rpc:call(?DBNODE,db,get_all_employer_stat_in_department,[CompanyID,DepartmentID]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        DepEmployerStats ->
+            {content,"application/json",?list_records_to_json(department_employer_load,DepEmployerStats)}
+    end.
+
+handle_modify_employer(A) ->
+    io:format("~p~n",[yaws_modify_employer]),
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    JobNumber = my_postvar(A,"employerid"),
+    EmployerModify = ?json_to_record(employer_modify,my_postvar(A,"employermodify")),
+    case rpc:call(?DBNODE,db,modify_employer,[CompanyID,JobNumber,EmployerModify]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            case rpc:call(?DBNODE,tmp,charge,[{CompanyID,JobNumber}]) of
+                {badrpc, Reason} ->
+                    Message = #message{message=list_to_binary(atom_to_list(Reason))},
+                    {content,"application/json",?record_to_json(message,Message)};
+                {atomic,_} ->
+                    Message = #message{message=list_to_binary(atom_to_list(ok))},
+                    {content,"application/json",?record_to_json(message,Message)}
+            end
+    end.
+
+handle_login(A) ->
+    Username = list_to_binary(my_postvar(A,"username")),
+    Password = list_to_binary(my_postvar(A,"password")),
+    Company=list_to_binary(my_postvar(A,"company")),
+    io:format("login company:~p~n",[Company]),
+    CompanyID=
+    case rpc:call(?DBNODE,db,login_by_name,[Company,Username,Password]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        Ack ->
+            Message = #message{message=list_to_binary(Ack)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_modify_password(A) ->
+    io:format("~p~n",[yaws_modify_password]),
+    Username    = list_to_binary(my_postvar(A,"username")),
+    OldPassword = list_to_binary(my_postvar(A,"oldpassword")),
+    NewPassword = list_to_binary(my_postvar(A,"newpassword")),
+%    NewPassword = list_to_binary(my_postvar(A,"newpassword")),
+    case rpc:call(?DBNODE,db,modify_password,[2,Username,OldPassword,NewPassword]) of
+        {badrpc, Reason} ->
+            Message = #message{message=list_to_binary(atom_to_list(Reason))},
+            {content,"application/json",?record_to_json(message,Message)};
+        Ack ->
+            Message = #message{message=list_to_binary(Ack)},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+handle_trans_dep(A) ->
+    CompanyID = list_to_integer(my_postvar(A,"companyid")),
+    New  = [list_to_integer(X)||X<-string:tokens(my_postvar(A,"new"),"-")],
+    EIDs = string:tokens(my_postvar(A,"eid"),","),
+    case rpc:call(?DBNODE,db,trans_dep,[CompanyID,New,EIDs]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        ok ->
+            Message = #message{message=list_to_binary(atom_to_list(ok))},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+out(A) ->
+%%    io:format("A is:~p~n",[A]),
+    Json=case catch handle_cmd(A) of 
+               {'EXIT', Reason}-> Reason;
+               R_-> R_
+               end,
+%    io:format("res is:~p~n",[Json]),
+    [{header, "Access-Control-Allow-Origin: *"}, Json].
+
+
+
+handle_cmd(A)->    
+    io:format("Command is:~p~n",[yaws_api:parse_post(A)]),
+    Command = my_postvar(A,"command"),
+    case Command of
+        "load_a_detail" ->
+                handle_get_a_cdr(A);
+        "load_department_calldetails" ->
+            handle_load_department_calldetails(A);
+        "load_org" ->
+    	    handle_load_org(A);
+        "load_sub_org_stat" ->
+            handle_load_sub_org_stat(A);
+        "add_org" ->
+            handle_add_org(A);
+        "del_org" ->
+            handle_del_org(A);
+        "modify_org" ->
+            handle_modify_org(A);
+        "add_employer" ->
+            handle_add_employ(A);
+        "load_employer" ->
+            handle_load_employer(A);
+        "load_employer_detail" ->
+            handle_load_employer_detail(A);
+        "load_department_employer_detail" ->
+            handle_load_department_employer_detail(A);
+        "del_employer" ->
+            handle_del_employ(A);
+        "modify_employer" ->
+            handle_modify_employer(A);
+        "login" ->
+            handle_login(A);
+        "modify_password" ->
+            handle_modify_password(A);
+        "trans_dep" ->
+            handle_trans_dep(A)
+    end.
+</erl>

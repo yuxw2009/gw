@@ -1,0 +1,234 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>ZTE员工管理系统</title>
+    <link rel="stylesheet" type="text/css" href="style/style.css" />
+    <link href="script/artDialog/skins/default.css" rel="stylesheet" type="text/css" />
+    <script type="text/javascript" src="script/jquery-1.6.3.min.js?t=20120528"></script>    
+    <script type="text/javascript" src="script/jquery.cookie.js?t=20120528"></script>
+</head>
+<body>
+    <div id='totips'>
+        部门名不能为空</div>
+    <div class="float_corner float_corner_top" id="floatCorner_top" style="">
+        <span style="color: rgb(247, 206, 57);" class="corner corner_1">◆</span><span style="color: rgb(255, 255, 224);"
+            class="corner corner_2">◆</span></div>
+    <div id="body-wrapper">
+        <div id="sidebar">
+            <div class="sidebar-title">
+                <ul>
+                    <li>欢迎您，<span id="admin"></span> <a href="#" id="goback">【退出】</a> <a href="#" id="modifypassword">
+                        【修改密码】</a> </li>
+                    <li><span id="current_data"></span><a href="###" class="btn_2" id="export_xls">导出月份账单</a> </li>
+              
+                </ul>
+            </div>
+            <div id='modifyPswInfo' style="display: none;">
+                <table width="100%" class="addMemberTable_2">
+                    <tr>
+                        <td>
+                            <span class="tdTitle">*原密码：</span>
+                            <input type="password" name="oldpsw" id="oldpsw" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="tdTitle">*新密码：</span>
+                            <input type="password" name="newpsw1" id="newpsw1" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span class="tdTitle">*重复新密码：</span>
+                            <input type="password" name="newpsw2" id="newpsw2" />
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div id="menu_contianer">
+            </div>
+        </div>
+        <div id="main_content">
+            <div id="department_Overview" style="display: none;">
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>
+                            【部门概况】<span class="department_intro" id="department_intro"></span>                    
+                            </h3>                            
+                    </div>
+                    <div class="content_box_content">
+                        <div class="tab-content default-tab">
+                            <div id="tab1">
+                            </div>
+                            <div id="tongji_information">
+                                <table class="tell_count">
+                                    <tfoot>
+                                        <tr>
+                                            <td>
+                                                总计
+                                            </td>
+                                            <td id="curMonrate" style="width: 15%;">
+                                            </td>
+                                            <td id="oneMonrate" style="width: 15%;">
+                                            </td>
+                                            <td id="twoMonrate" style="width: 15%;">
+                                            </td>
+                                            <td id="thirMonrate" style="width: 15%;">
+                                            </td>
+                                            <td id="fourMonrate" style="width: 15%;">
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="member_manager">
+                <div id='modifyEmployeeInfo' style="display: none;">
+                    <table width="100%" class="addMemberTable_2">
+                        <tr>
+                            <td>
+                                姓名：<span id="name"></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                工号：<span id='jobnumber'></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="tdTitle">手机号1：</span>
+                                <input type="text" onblur="value=value.replace('+','00')" name="phone1" id="phone1" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="tdTitle">手机号2：</span>
+                                <input type="text" onblur="value=value.replace('+','00')" name="phone2" id="phone2" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                每月额度：
+                                <select name="banlance" id="banlance">
+                                     <option value="30.00">30.00</option>   
+                                     <option value="50.00">50.00</option>   
+                                     <option value="70.00">70.00</option>   
+                                     <option value="100.00">100.00</option>   
+                                      <option value="120.00">120.00</option>
+                                      <option value="180.00">180.00</option>
+                                      <option value="200.00">200.00</option>
+                                      <option value="300.00">300.00</option>
+                                      <option value="400.00">400.00</option>     
+                                      <option value="500.00">500.00</option>   
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
+                </div>                
+                <div id='importexcel' style="display: none;">                 
+                 <form enctype="multipart/form-data" method="post" action="/my_upload.yaws">              
+                    <table width="100%" class="addMemberTable_2">
+                        <tr>
+                            <td>
+                                  <input id="file" type="file" size="25" name="file" class="inputexcel" /> 
+                                  <div style="float: left; margin-top: 5px; width: 15px;">
+                                  <img style="display: none;" id="loading" src="images/loading.gif" /></div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-left: 80px;">
+                                <div class="cancle">
+                                    <a href="###" id="cancel" onclick="return cancel_btn();" class="btn">取消</a></div>
+                                <!--<input type="submit"  class="btn" value="上传"  onClick="return ajaxFileUpload();" /></td>
+                                    <input type="submit" value="Upload"></input>-->
+                                    <input type="submit" id="uploadfile" class="btn" value="上传" />
+                            </td>
+                        </tr>
+                    </table>
+                    </form>
+                </div>                
+                <div class="content_box">
+                    <div class="content_box_header">
+                        <h3>
+                            <div style="float: left;">
+                                【成员管理】<span id="employ_intro" class="department_intro"></span>
+                            </div>
+                            <div class="import">
+                                <a href="###" class="btn" id="importExcel_btn">批量导入</a>
+                            </div>
+                        </h3>
+                    </div>
+                    <div class="content_box_content content_box_contentAdd">
+                        <div id="tab2">
+                        </div>
+                        <div class="cotentfooter">
+                            <div class="unit_text">
+                                单位：美元</div>
+                            <div class="flright">
+                                <a href="###" id="Statistics">账单统计</a></div>
+                        </div>
+                    </div>
+                    <div class="content_box_bottom">
+                        <ul class="fleft">
+                            <li id="dropdown_list">
+                                <!-- <select name="Transferred" id="Transferred">
+                                       <option value="0" selected="selected">调到其他按部门</option>
+                                       <option value="1">兼职其他部门</option>
+                                       <option value="2">公司高管</option>
+                                     </select>-->
+                            </li>
+                        </ul>
+                        <ul class="flright">
+                            <li><a href="###" class="btn" id="switchdepartment">转换部门</a></li>
+                            <li><a href="###" class="btn" id="addbtn">增加成员</a></li>
+                            <li><a href="###" class="btn" id="delbtn">删除成员</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="ajax_loading"><img src="images/nowloading.gif" /></div>
+    
+     <div id='exportexcel' style=" display:none;text-align:center;"> 
+        <table width="100%" class="addMemberTable_2">
+            <tr>
+                <td>选择月份：    
+                  <select name="" class="amount"  id="export_year" add_data="year">          
+                  </select>
+                  <select name="" class="amount" id="export_month"  add_data="month">
+                  </select>
+                  <span style="color:red; display:block;"> 注：只能导出当前三个月的数据</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding-left: 80px;">
+                    <div class="cancle">
+                        <a href="###" onclick="return cancel_export();" class="btn">取消</a>
+                        </div>
+    
+                        <input type="submit" id="export_excel_btn" class="btn" value="导出" />
+                </td>
+            </tr>
+        </table>
+    </div>   
+    
+    <div class="deparementList">
+    
+    </div>
+    
+    
+    
+    <script type="text/javascript" src="script/json2.js?t=20120528"></script>
+    <script type="text/javascript" src="script/jquery.dataTables.js?t=20120528"></script>
+    <script src="script/artDialog/jquery.artDialog.js?t=20120528" type="text/javascript"></script>
+    <script src="script/artDialog/plugins/iframeTools.source.js?t=20120528" type="text/javascript"></script>
+    <script type="text/javascript" src="script/ajaxfileupload.js"></script>
+    <script type="text/javascript" src="script/zte.jquery.configuration.js?t=20120528"></script>
+</body>
+</html>

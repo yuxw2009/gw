@@ -88,25 +88,6 @@ handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR);
 
-handle_cdr_request(voip, {{Service_id="xh",_UUID},Audit_info,Phone,{StartTime,EndTime,Quantity},Options})->
-    % modify to rate from rate_server
-    BillId=proplists:get_value(guid,Options,www_xengine:bill_id(Service_id)),
-    
-    Type = voip,
-    [{_, Rate}] = get_rates(Service_id, Type, [Phone]),
-    Charge = Rate*to_minute(Quantity),
-    Cdr_details=#voip_detail{phone=Phone,rate=Rate, start_time=StartTime, end_time=EndTime},
-    Key={BillId, Service_id}, 
-    CDR = #cdr{key=Key, type=Type, quantity=Quantity,
-                        charge=Charge, audit_info=Audit_info, details=Cdr_details},
-    callstat:save(Service_id,CDR),
-    KouFei =proplists:get_value(callback,Options),
-    io:format("voip koufei: ~p~n",[{_UUID,KouFei,Charge}]),
-    case KouFei of
-    {Node,Mod,Fun,UUID0}->
-        rpc:call(Node,Mod,Fun,[UUID0,Charge]);
-    _-> void
-    end;
 handle_cdr_request(voip, {{Service_id,_UUID},Audit_info,Phone,{StartTime,EndTime,Quantity},Options})->
     % modify to rate from rate_server
     Type = voip,
@@ -116,15 +97,10 @@ handle_cdr_request(voip, {{Service_id,_UUID},Audit_info,Phone,{StartTime,EndTime
     Key={www_xengine:bill_id(Service_id), Service_id}, CDR = #cdr{key=Key, type=Type, quantity=Quantity,
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR),
-    KouFei =proplists:get_value(callback,Options),
-    io:format("voip koufei: ~p~n",[{_UUID,KouFei,Charge}]),
-    case KouFei of
-    {Node,Mod,Fun,UUID0}->
-        rpc:call(Node,Mod,Fun,[UUID0,Charge]);
+    case proplists:get_value(callback,Options) of
+    {Node,Mod,Fun,UUID0}->    rpc:call(Node,Mod,Fun,[UUID0,Charge]);
     _-> void
     end;
-%    Callback=proplists:get_value(callback,Options,fun(_)-> void end),
- %   Callback(Charge);
 handle_cdr_request(sms, Plist)->
      Service_id =proplists:get_value(service_id, Plist),
      Audit_info =proplists:get_value(audit_info, Plist),
@@ -148,14 +124,13 @@ service_id({Service_id, _UUID})-> Service_id;
 service_id(S)-> S.
 
 get_rate(GroupId,Type,Phone) when is_binary(GroupId)-> get_rate(binary_to_list(GroupId),Type,Phone);
-get_rate("dth_common", voip,Phone)-> {Phone,1};
+get_rate("dth_common", _,Phone)-> {Phone,1};
 get_rate("common", voip,Phone= "*"++_)-> {Phone,1};
 get_rate("common", voip,Phone)-> {Phone,3};
 get_rate("common", callback,Phone= "*"++_)-> {Phone,0};
 get_rate("common", callback,Phone)-> {Phone,2.5};
-get_rate("ml", sms,Phone)-> {Phone,0.07};
-get_rate("ml", voip,Phone= "*"++_)-> {Phone,0.0};
-get_rate("ml", voip,Phone)-> {Phone,0.04};
 get_rate(_, _,Phone)-> {Phone,0.1}.
 
-get_rates(Service_id,Type, Phones)-> [get_rate(Service_id, Type,P)||P<-Phones].
+get_rates(Service_id,Type, Phones)-> 
+    io:format("get_rates(Service_id,Type, Phones):~p~n",[{Service_id,Type, Phones}]),
+    [get_rate(Service_id, Type,P)||P<-Phones].

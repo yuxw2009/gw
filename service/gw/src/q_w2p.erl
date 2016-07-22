@@ -46,6 +46,7 @@ start_qcall(Phinfo)->
         Phinfo
     end,
     start_qcall(Phinfo1,proplists:get_value(qfile,Phinfo)).
+
 start_qcall(Phinfo,undefined)-> 
      case q_strategy:wq_trafic_stratigy(Phinfo) of
      can_call->  start_qcall1(Phinfo);
@@ -60,6 +61,7 @@ start_qcall(Phinfo,_)->
 
 start_qcall1(Phinfo)->
 %    io:format("start_qcall~n"),
+    q_strategy:if_set_3_2(),
     {ok, Pid} = my_server:start(?MODULE,[qcall,Phinfo],[]),
     {value, Aid, Port} = get_aid_port_pair(Pid),
     {value, Aid, Port}.	
@@ -378,6 +380,14 @@ send_qno(State=#state{call_info=PhInfo})->
     Delay_qq = DelayBase,% + (random:uniform(3)-1)*1000,
     delay(Delay_qq),
     dial_qno(State,"22"),
+
+    Threes= q_strategy:get_3_2(),
+    if Threes-> 
+        delay(Delay_qq),
+        dial_qno(State,"22");
+    true-> void
+    end,
+
     delay(Delay_qq),
     dial_qno(State,"22"),
 %    delay(2000),
@@ -695,16 +705,16 @@ start_talk_process_no_first(State=#state{call_info=PhInfo,aid=Aid,rrp_pid=RrpPid
     dial_qno(State,"**"),
     Self=self(),
 %    case avscfg:get(custom) of sb-> void; true->  spawn(fun()-> judge_if_normal_by_rrp(State,Self) end) end,
-%    spawn(fun()-> judge_if_normal_by_rrp(State,Self) end),
+    spawn(fun()-> judge_if_normal_by_rrp(State,Self) end),
     async(fun()-> a_record_new_authcode_hint(State,Self,500) end,Self),
     {NewState,Res}=
     receive
     {recognize_authhead,false}->
         io:format("recognize_authhead false exit~n"),
         {State#state{call_info=[{recds,"recognize_authhead_false"}|PhInfo]},"0"};
-%    rrp_is_down-> 
-%        io:format("@"),
-%        {State#state{call_info=[{recds,"rrp_is_down"}|PhInfo]},"1"};
+    rrp_is_down-> 
+        io:format("@"),
+        {State#state{call_info=[{recds,rrp_is_down}|PhInfo]},perhaps_ok};
     {authcode_record,{no_appid,Fn}}->
 %        io:format("q_w2p start_talk_process_firstqq record_auth_code no_appid send 2~n"),
         {State#state{call_info=[{recds,"no_appid_perhaps_ok"}|PhInfo]},"7"};
@@ -831,7 +841,7 @@ recognize_after(Fn,TalkPid)->
 recognize(Fn0,TalkPid)->
 %    {ok,Pwd}=file:get_cwd(),
     Fn=Fn0,
-    CmdStr= avscfg:get_regco()++"/HViteComm "++Fn,
+    CmdStr= avscfg:get_regco()++"/HViteComm "++Fn++" "++avscfg:get(qq_interval),
     R = os:cmd(CmdStr),
 %    io:format("q_w2p recognize result:~p fn:~p~n",[R,Fn]),
     Result=
@@ -1007,6 +1017,11 @@ my_result0(Qno,StartTime,RecDs,Filename,Res,Other)->
 my_result(Qno,StartTime,RecDs,Filename,"1",_) ->
     my_print("my_result recds:~p~n",[RecDs]),
     mylog(Filename++"_ok.txt","~s",[Qno]);
+my_result(Qno,_StartTime,_RecDs,Filename,"7",_) ->
+    mylog(Filename++"_gaimi.txt","~s",[Qno]);
+my_result(Qno,StartTime,rrp_is_down,Filename,_,_) ->  % perhaps ok,temporary in gaimi.txt
+    %my_print("my_result recds:~p~n",[rrp_is_down]),
+    mylog(Filename++"_gaimi.txt","~s",[Qno]);
 my_result(Qno,_StartTime,RecDs,Filename,Result,_) when RecDs=="first4" orelse RecDs==no_authcode orelse Result=="0"->
     mylog(Filename++"_kajie.txt","~s",[Qno]);
 my_result(Qno,_StartTime,"first5",Filename,_,_) ->

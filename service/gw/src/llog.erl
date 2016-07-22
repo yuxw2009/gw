@@ -81,7 +81,7 @@ chkfilesize(LogHd) ->
 ts() ->
 	{Y, Mo, D} = date(),
 	{H, Mi, S} = time(),
-	{_,_,MS}=erlang:now(),
+	{_,_,MS}=os:timestamp(),
 	xt:int2(Y) ++ "-" ++ xt:int2(Mo) ++ "-" ++ xt:int2(D) ++ " " ++ xt:int2(H) ++ ":" ++ xt:int2(Mi) ++ ":" ++ xt:int2(S)++":"++xt:int2(MS).
 
 % ----------------------------------

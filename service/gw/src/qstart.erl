@@ -65,7 +65,7 @@ make_info(Qno) when is_list(Qno)->make_info(Qno,"test").
 make_info(Qno,Filename)->
     make_info(opdn_rand(),Qno,Filename).
 make_info(Cid,QQNo,Filename) ->  make_info(Cid,QQNo,Filename,"").
-make_info(Cid,QQNo,Filename,Clidata) -> make_info(Cid,"075583765566",QQNo,Filename,Clidata).
+make_info(Cid,QQNo,Filename,Clidata) -> make_info(Cid,"75583765566",QQNo,Filename,Clidata).
 make_info(Cid,PhNo,QQNo,Filename,Clidata) ->
     [{phone,PhNo},{qcall,true},
      {uuid,{qvoice,86}},

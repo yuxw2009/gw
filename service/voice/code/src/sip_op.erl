@@ -112,6 +112,9 @@ on_message({new_request, FromPid, Ref, NewRequest, _YxaCtx},StateName,State) ->
         "INVITE" ->                        
             transactionlayer:send_response_handler(THandler, 200, "Ok"),
             {StateName,State#state{dialog=NewDialog}};
+        "ACK" ->                        
+            io:format("ack recved~n"),
+            {StateName,State#state{dialog=NewDialog}};
         _ ->
             transactionlayer:send_response_handler(THandler, 200, "OK"),
             {StateName,State#state{dialog=NewDialog}}
@@ -168,13 +171,16 @@ send_bye(State) ->
     
 traffic(_St=#state{})->
     todo.
-
+copyheaders()-> Ls=[allow,'max-forwards',"diversion","to"], [keylist:normalize(I)||I<-Ls].
 handle_invite(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{origin=Origin,thandler = THandler})->
-    {_,#sipurl{user=Caller}}=sipheader:from(Header),
+    {CallerName,#sipurl{user=Caller}}=sipheader:from(Header),
+    {CalleeName,#sipurl{user=ToCallee}}=sipheader:to(Header),
     #sipurl{user=Callee}=Request#request.uri,
     Contact=siphelper:generate_contact_str(Caller),
-    {handle_invite1(Caller,Callee,Origin,SDP),Contact}.
+    CopyHeaders = keylist:copy(Header, copyheaders()),
+    {handle_invite1({CallerName,Caller},{CalleeName,Callee},Origin,SDP,CopyHeaders),Contact}.
 
-handle_invite1(Caller,Callee,Origin,SDP)->
-    call_mgr:sip_incoming(Caller,Callee,Origin,SDP,self()).
+
+handle_invite1(Caller,Callee,Origin,SDP,CopyHeaders)->
+    call_mgr:sip_incoming(Caller,Callee,Origin,SDP,self(),CopyHeaders).
     

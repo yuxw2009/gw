@@ -310,7 +310,7 @@ make_rnd_dword() ->
 	integer_to_list(getrandom()).
 
 getrandom() ->
-      {_,M,N}=erlang:now(), 
+      {_,M,N}=os:timestamp(), 
       (M rem 1000)*1000+ (N div 1000).
 %	my_server:call(rtp_sup,random32).
 

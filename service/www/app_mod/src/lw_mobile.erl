@@ -22,6 +22,10 @@ handle(Arg,'POST', ["register"])->
     end,
     io:format("register:req:~p ack:~p~n",[Json,Res]),
     utility:pl2jso(Res);
+handle(Arg,'POST', ["bind"])->
+    {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
+    Res=lw_register:bind_phone(Json),
+    utility:pl2jso(Res);
 handle(Arg,'POST', ["self_register"])->
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     Res=
@@ -51,6 +55,19 @@ handle(Arg, 'POST', ["callback"]) ->
     Res = start_callback({GroupId, UUID}, Local, Remote,utility:client_ip(Arg)),
     io:format("start callback :~p res:~p~n", [{Local, Remote}, Res]),
     utility:pl2jso(Res);
+handle(Arg, 'DELETE', ["callback"]) ->
+    SIDStr = (utility:query_string(Arg, "session_id")),
+    [UUID|_]=string:tokens(SIDStr,"_"),
+    SID=list_to_binary(SIDStr),
+    GroupId=get_group_id(UUID,Arg),    
+    utility:pl2jso(stop_callback({GroupId,SID}, utility:client_ip(Arg)));    
+%% handle get callback status request
+handle(Arg, 'GET', ["calls", "status"]) ->
+    SIDStr = (utility:query_string(Arg, "session_id")),
+    [UUID|_]=string:tokens(SIDStr,"_"),
+    SID=list_to_binary(SIDStr),
+    GroupId=get_group_id(UUID,Arg),    
+    utility:pl2jso(get_callback_status({GroupId,SID}, utility:client_ip(Arg)));    
 handle(Arg,'POST', ["login"])->
     IP = utility:client_ip(Arg),
     Tuple=Arg#arg.headers,
@@ -108,7 +125,7 @@ handle(Arg,'POST', ["get_coin"])->
 handle(Arg,'POST', ["package_usage"])->
     {UUID}= utility:decode(Arg, [{uuid, s}]),
     Res=lw_register:get_pkginfo(UUID),
-    io:format("package_usage:ack:~p~n",[Res]),
+    %io:format("package_usage:ack:~p~n",[Res]),
     utility:pl2jso(Res);
     
 handle(Arg,'POST', ["get_recharges"])->
@@ -120,18 +137,11 @@ handle(Arg,'POST', ["query_status"])->
     IP = utility:client_ip(Arg),
     {AccPhonePairs}= utility:decode(Arg, [{users, ao,[{acc,s},{phone,s}]}]),
 %    io:format("query_status:~p~n",[AccPhonePairs]),
-    F = fun(Phone)->
-             case {login_processor:get_account_tuple(Phone),login_processor:is_logined(Phone)} of
-             {_,true}-> online;
-             {undefined,_} -> unregistered;
-             {_,_}-> offline
-          end end,
-    Data=[utility:pl2jso_br([{acc,A},{phone,P},{state,F(P)}])||{A,P}<-AccPhonePairs],
-    utility:pl2jso([{status,ok},{data,Data}]);
+    do_query_status(AccPhonePairs);    
 handle(Arg,Meth, Url=["p2p_"++_])->
     {{obj, Clidatas}}= utility:decode(Arg, [{opdata,r}]),
     Evt = proplists:get_value("event",Clidatas),
-    io:format("lw_mobile p2pmsg:~p~n",[{Meth,Url,Clidatas}]),
+    %io:format("lw_mobile p2pmsg:~p~n",[{Meth,Url,Clidatas}]),
     handle_tp_call_msg(Arg,Meth,Url,Evt);
 handle(Arg,'POST', ["login1"])->
     IP = utility:client_ip(Arg),
@@ -151,9 +161,8 @@ handle(Arg, 'POST', ["voip", "calls"]) ->
 handle(Arg, 'DELETE', [ "voip", "calls"]) ->
     SessionID = utility:query_string(Arg, "session_id"),
     {Node, Sid} = voice_handler:dec_sid(SessionID),
-     io:format("lw_mobile: stop0~n~p~n", [Sid]),
     rpc:call(Node, avanda, stopNATIVE, [Sid]),
-     io:format("lw_mobile: stop~n~p~n", [Sid]),
+    io:format("lw_mobile: stop~n~p~n", [Sid]),
     utility:pl2jso([{status, ok}]);
 
 handle(Arg, 'GET', ["version_no"]) ->
@@ -192,7 +201,7 @@ handle(Arg, 'GET', ["voip", "calls"]) ->
                         {failed, Reason}-> [{status, failed}, {reason, Reason}]
                     end
                 end,
-%     io:format("lw_mobile: get ~p~n~p~n", [SessionID,Result]),
+    % io:format("lw_mobile: get ~p~n~p~n", [SessionID,Result]),
     utility:pl2jso_br(Result);
 
 handle(Arg, Method, ["paytest"|Params]) ->
@@ -276,6 +285,7 @@ handle_tp_call_msg(Arg,'POST', ["p2p_ios_ringing"],_)->
 handle_tp_call_msg(Arg,'POST', ["p2p_ios_reject"],_)->
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
+    io:format("p2p_ios_reject sid_str:~p~n", [Sid_str]),
     rpc:call(Node, wkr, stopVOIP, [Sid]),
     utility:pl2jso([{status,ok}]);
 handle_tp_call_msg(Arg,'POST', ["p2p_ios_poll"],O)-> handle_tp_call_msg(Arg,'POST', ["p2p_poll"],O);
@@ -308,13 +318,13 @@ handle_tp_call_msg(Arg,'POST', ["p2p_ringing"],_)->
     utility:pl2jso(R);
 handle_tp_call_msg(Arg,'POST', ["p2p_poll"],_)->
     {{SessionID}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
-    io:format("p2p_poll sid_str:~p~n", [SessionID]),
+   % io:format("p2p_poll sid_str:~p~n", [SessionID]),
      Result = case voice_handler:dec_sid(SessionID) of
                 {invalid_node,0}->   [{status, failed}, {reason, invalide_sid}];
                 {Node, Sid}->
                     case rpc:call(Node, wkr, getVOIP_with_stats, [Sid]) of
                          {ok, Status,Stats0}->
-                            io:format("stats:~p~n",[Stats0]),
+                            io:format("p2p_ios_poll:Status:~p Sid:~p~n",[Status,Sid]),
                             Stats=proplists:delete(ip,Stats0),
                             [{status, ok}, {peer_status, Status},{stats,utility:pl2jso(Stats)}];
                          {badrpc, Reason}-> 
@@ -339,6 +349,7 @@ handle_tp_call_msg(Arg,'POST', ["p2p_answer"],_)->
     end;
 handle_tp_call_msg(Arg,'POST', ["p2p_reject"],_)->
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
+    io:format("p2p_reject sid_str:~p~n", [Sid_str]),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
     rpc:call(Node, avanda, stopNATIVE, [Sid]),
     utility:pl2jso([{status, ok}]);
@@ -400,7 +411,7 @@ sip_tp_call_handle(Arg,'POST', ["p2p_ios_poll"],_Opdata={obj,_Pls})->
                 {Node, Sid}->
                     case rpc:call(Node, p2w, get_call_status, [Sid]) of
                          {value, Status, Stats0}->
-                            io:format("stats:~p~n",[Stats0]),
+                            io:format("p2p_ios_poll:Status:~p stats:~p~n",[Status,Stats0]),
                             Stats=proplists:delete(ip,Stats0),
                             [{status, ok}, {peer_status, Status},{stats,utility:pl2jso(Stats)}];
                          {badrpc, Reason}-> 
@@ -414,7 +425,7 @@ sip_tp_call_handle(Arg,'POST', ["p2p_ios_poll1"],_Opdata={obj,_Pls})->
     {{Sid_str}}= utility:decode(Arg, [{opdata, o, [{session_id,s}]}]),
     {Node, Sid}=voice_handler:dec_sid(Sid_str),
     R=rpc:call(Node, voip_sup, get_rtp_stat, [Sid]),
-    io:format("p2p_ios_poll:~p res:~p~n",[Sid,R]),
+    io:format("p2p_ios_poll1:~p res:~p~n",[Sid,R]),
     utility:pl2jso(R);
     
 sip_tp_call_handle(Arg,'POST', ["p2p_ios_ringing"],_Opdata={obj,_Pls})->    
@@ -614,7 +625,7 @@ start_call(UUID, Arg, XgAct) ->
         	    {_, nodedown}-> utility:pl2jso([{status, failed},{reason,nodedown}]);
         	    {failed, Reason}-> utility:pl2jso([{status, failed},{reason,Reason}])
         	end,
-        	io:format("lw_mobile startcall res:~p~n", [Res]),
+%        	io:format("lw_mobile startcall res:~p~n", [Res]),
         	Res
        end.
 
@@ -651,8 +662,8 @@ get_internal_node_by_ip("862180246528",_Ip)-> 'gw@10.32.2.4';
 get_internal_node_by_ip(UUID,Ip)-> 
     wwwcfg:get_internal_wcgnode(utility:c2s(utility:country(Ip))).
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
-%get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
-%    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
+get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
+    'gw1@112.74.96.171'; %'gw1@10.31.203.1';%    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
 get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31231028" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 %get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
@@ -668,8 +679,9 @@ get_node_by_ip(UUID,Ip)->
 start_callback(UUID={_,UserId}, LocalPhone, Phone, SessionIP) ->    % remove fzd
     case login_processor:autheticated(UserId,Phone) of
     [{status,ok},{uuid,_}|_]-> 
-        WcgNode=get_node_by_ip(LocalPhone,SessionIP),
-        {_,SIPNODE} = rpc:call(WcgNode,avscfg,get,[sip_app_node]),
+%        WcgNode=get_node_by_ip(LocalPhone,SessionIP),
+%        {_,SIPNODE} = rpc:call(WcgNode,avscfg,get,[sip_app_node]),
+        SIPNODE=wwwcfg:get(voice_node),
         do_callback1(SIPNODE,UUID,LocalPhone,Phone,no_limit);
     R->
          utility:pl2jso(R)
@@ -677,25 +689,32 @@ start_callback(UUID={_,UserId}, LocalPhone, Phone, SessionIP) ->    % remove fzd
 
 do_callback1(SIPNODE,_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
     {_A,B,_C}=erlang:now(),
-    io:format("do_callback1,~p~n",[[{Groupid,Uuid++"@"++integer_to_list(B)}, fake_auditinfo,  {"", LocalPhone, 0.1}, {"", Remote_phone, 0.1}, MaxtalkTime]]),
+    Session_id=list_to_binary(Uuid++"_"++integer_to_list(B)),
+    Plist=[{Groupid,Session_id}, [{groupid,fake_auditinfo},{caller,{"", LocalPhone, 1}},
+                 {callee,{"", Remote_phone, 1}},{max_time,MaxtalkTime},{callback,charge_callback_fun(Groupid,Uuid)}]],
+    io:format("do_callback1,~p~n",[Plist]),
     
-    case rpc:call(SIPNODE, lw_voice, start_callback, 
-                 [{Groupid,Uuid++"@"++integer_to_list(B)}, [{groupid,fake_auditinfo},{caller,{"", LocalPhone, 0.1}},
-                 {callee,{"", Remote_phone, 0.1}},{max_time,MaxtalkTime},{callback,{node(),lw_register,consume_coins,Uuid}}]]) of
+    case rpc:call(SIPNODE, lw_voice, start_callback, Plist) of
       ok->
-          %io:format("start callback! session_id:~p~n", [Session_id]),
-          [{status, ok}, {session_id, 0}];
+          io:format("start callback! session_id:~p~n", [Session_id]),
+          [{status, ok}, {session_id, Session_id}];
       {failed, session_already_exist}-> [{status, failed}, {reason,session_already_exist}]
     end.
 
-do_callback(_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
-    {_A,B,_C}=erlang:now(),
-    case rpc:call(wwwcfg:get(voice_node), lw_voice, start_callback, [{Groupid,Uuid++"@"++integer_to_list(B)}, fake_auditinfo,  {"", LocalPhone, 0.1}, {"", Remote_phone, 0.1}, MaxtalkTime]) of
-      ok->
-          %io:format("start callback! session_id:~p~n", [Session_id]),
-          [{status, ok}, {session_id, 0}];
-      {failed, session_already_exist}-> [{status, failed}, {reason,session_already_exist}]
+get_callback_status(SID, _SessionIP) ->
+    Node = wwwcfg:get(voice_node),
+    catch case rpc:call(Node,lw_voice,get_callback_status,[SID]) of
+    {status,{Caller,CallerStatus},{Callee,CalleeStatus}}->
+        [{status,ok}, {local,CallerStatus},{remote,CalleeStatus}];
+    Other-> 
+        io:format("get_callback_status:~p~n",[Other]),
+        [{status,ok},{local,released},{remote,released}]
     end.
+
+stop_callback(SID, _SessionIP) ->
+    Node = wwwcfg:get(voice_node),
+    rpc:call(Node,lw_voice,stop_callback,[SID]),
+    [{status,ok}].
 
 sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid)->
     login_processor:add_traffic(#traffic{uuid=Callee,caller=Caller,callee=Callee,direction=incoming}),
@@ -776,17 +795,20 @@ sip_p2p_tp_call(Caller,Callee,SipSdp,SipPid,_)->
 send_notification1(DeviceToken0,Content) ->
     Aps0=Content,
     Aps1=[{'content-available',1}]++Content,
-    Aps0_=utility:pl2jso_br(Aps0),
-    Aps1_=utility:pl2jso_br(Aps1),
+    Aps0_=utility:pl2jso(Aps0),
+    Aps1_=utility:pl2jso(Aps1),
     Payload0=rfc4627:encode(utility:pl2jso([{aps,Aps0_}])),
     Payload1=rfc4627:encode(utility:pl2jso([{aps,Aps1_}])),
 %    Payload = "{\"aps\":{\"alert\":\"" ++ Content ++ "\",\"badge\":" ++ Badge ++ ",\"sound\":\"" ++ "chime" ++ "\"}}",
-    DeviceToken  = str_spaceremoved(DeviceToken0),
-%    Result4appstore_d=os:cmd("php priv/push4appstore_d.php "++DeviceToken++" '"++Payload0++"'"),
-%    Result4appstore_r=os:cmd("php priv/push4appstore_r.php "++DeviceToken++" '"++Payload0++"'"),
-    Result=os:cmd("php priv/simplepush1.php "++DeviceToken++" '"++Payload0++"'"),
+    DeviceToken  = lw_mobile:str_spaceremoved(DeviceToken0),
+    Cmd_appstore_d="php priv/push4appstore_d.php "++DeviceToken++" '"++Payload0++"'",
+    _Result4appstore_d=os:cmd(Cmd_appstore_d),
+    _Result4appstore_r=os:cmd("php priv/push4appstore_r.php "++DeviceToken++" '"++Payload0++"'"),
+    Cmd_push_d="php priv/simplepush1_d.php "++DeviceToken++" '"++Payload0++"'",
+    io:format("send_notification1:Cmd:~p~n",[Cmd_push_d]),
+    Result=os:cmd(Cmd_push_d),
     Result_r=os:cmd("php priv/simplepush1_r.php "++DeviceToken++" '"++Payload0++"'"),
-%    io:format("send_notification1 result:~p~n",[{Result,Result_r,Result4appstore_d,Result4appstore_r}]),
+%    io:format("send_notification1 result:~p~n",[{Result,Result_r,_Result4appstore_d,_Result4appstore_r}]),
     ok.
 %% send_notification not used    
 send_notification(UUID,DeviceToken,Content) ->
@@ -799,7 +821,7 @@ send_notification(UUID,DeviceToken,Content) ->
     PayLoadBin  = list_to_binary(Payload),
     PayloadSize = byte_size(PayLoadBin),
     Packet = [<<0:8, DeviceTokenSize:16/big, DeviceTokenBin/binary, PayloadSize:16/big, PayLoadBin/binary>>],
-    io:format("send_notification~p,~p,~p,~p~n",[DeviceTokenSize,DeviceTokenBin,PayloadSize,PayLoadBin]),
+%    io:format("send_notification~p,~p,~p,~p~n",[DeviceTokenSize,DeviceTokenBin,PayloadSize,PayLoadBin]),
     send_noti(Packet),
     Packet.
 
@@ -832,7 +854,21 @@ test()->
     send_noti(Packet),
     Packet.
 
-    
+do_query_status(AccPhonePairs)->
+    AccF=fun(P)->
+                case login_processor:get_account_tuple(P) of
+                #login_itm{acc=Acc,group_id=Groupid} when Groupid=/="dth_common" -> Acc;
+                _-> lw_register:uuid_key(P)
+                end end,
+    StatusF=fun(P)->
+                case {login_processor:is_logined(P),lw_register:get_group_id(P)} of
+                {true,_}-> online;
+                {false,_}-> offline;
+                {_,unregistered}-> unregistered;
+                _-> offline
+                end end,
+    Data=[utility:pl2jso_br([{acc,A},{phone,P},{state,StatusF(P)},{im_id,AccF(P)}])||{A,P}<-AccPhonePairs],
+    utility:pl2jso([{status,ok},{data,Data}]).
 %%---------------------------------------------------------------------------------------------
 str_spaceremoved(S)->str_spaceremoved(S,[]).
 str_spaceremoved([$ |T],Acc)-> str_spaceremoved(T, Acc);

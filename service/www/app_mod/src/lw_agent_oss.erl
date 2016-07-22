@@ -25,12 +25,17 @@ bind_sipdn(Pls)->
     {undefined, _}->  [{"RETN","1"},{"DESC","sdn empty"}];
     {_,{atomic,[Item]}}-> 
         ?DB_WRITE(Item#agent_oss_item{authcode=AuthCode}),
+        delegate_register(Sdn,AuthCode),
         [{"RETN","0"}];
     _->
         SipItem=#agent_oss_item{sipdn=Sdn,authcode=AuthCode},
         ?DB_WRITE(SipItem),
+        delegate_register(Sdn,AuthCode),
         [{"RETN","0"}]
     end.
+delegate_register(Sdn,AuthCode)->
+    Json=utility:pl2jso_br([{"uuid",Sdn},{"auth_code",AuthCode},{"pwd",hex:to(crypto:hash(md5,AuthCode))},{"group_id",ott}]),
+    lw_register:delegate_register(Json).
 test_bind(Phone,Pass)-> bind_sipdn([{sdn,Phone},{password,Pass}]).
 unbind_sipdn(Pls)->
     Sdn = proplists:get_value(sdn1,Pls),

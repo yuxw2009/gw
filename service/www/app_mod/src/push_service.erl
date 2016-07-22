@@ -14,7 +14,7 @@ handle(Arg,_Params)->
         Pid0=whereis(list_to_atom(Did)),
         Pid =
             case Pid0 of
-            undefined-> login_processor:start_poll(Did);
+            undefined-> login_processor:start_poll(Did,SelfPhone);
             P-> P
             end,
         xhr_poll:attrs(Pid,Params),

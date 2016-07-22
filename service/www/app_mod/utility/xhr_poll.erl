@@ -3,7 +3,9 @@
 -define(SHAKE_TIME_LEN, 60*1000).
 -define(DETECT_NUM, 10).
 -define(DISCONNECT_NUM,10).
--record(state, {report_to, queue=[], pid, shake_timer,timeout_num=0, attrs=[],status=unpushable}).
+-define(ANDROID, <<"android">>).
+-define(IS_ANDROID(OsType),  (OsType == ?ANDROID)).
+-record(state, {report_to, queue=[], pid, shake_timer,timeout_num=0, attrs=[],status=unpushable,act,os_type= ?ANDROID}).
 
 start(Options)->
     spawn(fun()-> loop0(Options) end).
@@ -14,11 +16,22 @@ stop_opr(Room)->
 stop(undefined)-> void;
 stop(Name) when is_list(Name)-> stop(list_to_atom(Name));
 stop(Name) when is_atom(Name)-> stop(whereis(Name));
-stop(Pid)->    Pid ! stop.
+stop(Pid)-> 
+    Self=self(),   
+    Act=fun(#state{pid=PushPid})->
+            Self ! {ack,ok},
+            exit(normal)
+        end,
+    exe_cmd(Pid,Act),
+    exit(Pid,kill).  %make sure xhr_poll is killed
 tickout(undefined)-> void;
 tickout(Name) when is_list(Name)-> tickout(list_to_atom(Name));
 tickout(Name) when is_atom(Name)-> tickout(whereis(Name));
 tickout(Pid)->    Pid ! tickout.
+set_act(Pid,undefined)->    void;
+set_act(Pid,Fun)->    
+    io:format("xhr_poll:set_act:~p~n",[{Pid,Fun}]),
+    Pid ! {set_act,Fun}.
 down_clt(Room, Msg)->
     down(room_clt(Room), Msg).
 down_opr(Room, Msg)->
@@ -28,18 +41,38 @@ show_all(Room)->
     Opr=show(room_opr(Room)),
     Clt=show(room_clt(Room)),
     [Opr,Clt].
-show(Name)->
-    case whereis(Name) of
-    undefined-> void;
-    Pid-> 
+show(Pid) when is_pid(Pid)->
+    case is_process_alive(Pid) of
+    true->    
         Pid !{show,self()},
         receive
             M-> M
         after 1000->
             timeout
-        end
+        end;
+     _-> not_aliveed
+     end;
+show(Name)->
+    case whereis(Name) of
+    undefined-> void;
+    Pid-> 
+        show(Pid)
     end.
-    
+
+exe_cmd(Pid,Act)->
+    case is_process_alive(Pid) of
+    true->     
+	    Pid !{act,Act,self()},
+	    receive
+	    {ack,Res}->
+	        io:format("xhr_poll:exe_cmd res get~n"),
+	        Res
+	    after 2000->
+	        io:format("xhr_poll:exe_cmd timeout~n"),
+	        timeout
+	    end;
+    _-> void
+    end.
 up()-> up(?MODULE).
 up(ConnId) when is_list(ConnId)-> up(list_to_atom(ConnId));
 up(undefined)-> void;
@@ -69,7 +102,7 @@ send(P, Msg)->
 loop0(Options)->
     Report_to = proplists:get_value(report_to, Options),
     timer:send_interval(?SHAKE_TIME_LEN, shake_time),
-    loop(#state{report_to=Report_to}).
+    loop(#state{report_to=Report_to,os_type=proplists:get_value(os_type,Options)}).
 loop(State=#state{shake_timer=Tr,attrs=Attrs})->
     NewState = receive
                         {down, Msg}->
@@ -77,6 +110,13 @@ loop(State=#state{shake_timer=Tr,attrs=Attrs})->
                             on_down_msg(Msg, State);
                         {attrs, NewAttrs}->
                             State#state{attrs=NewAttrs};
+                        {set_act,Fun}->  
+                             Fun(),
+                             State#state{act=Fun};
+                        {act,Act,From} ->
+                            {R,NS}=Act(State),
+                            From ! {ack,R},
+                            NS;
                         {get_attrs,From}->
                             From ! {get_attrs, Attrs},
                             State;
@@ -123,16 +163,9 @@ on_up_msg({fetch_msg, From}, State=#state{queue=Queue})->
     From ! Queue,
     log("xhr_poll:fetch_msg:~p and send:~p~n",[From,Queue]),
     State#state{pid=undefined, queue=[]}.
-on_shake_time(State=#state{timeout_num=TN}) when TN<?DETECT_NUM->
+on_shake_time(State=#state{timeout_num=TN,act=Act,os_type=OsType}) when TN<?DETECT_NUM orelse not ?IS_ANDROID(OsType)->
+    if Act =/=undefined-> Act(); true-> void end,
     State#state{timeout_num=TN+1};
-%on_shake_time(State=#state{queue=Queue, pid=Pid, timeout_num=TN}) when TN<?DISCONNECT_NUM->
-%    case is_alive(Pid) of
-%        true-> 
-%            Pid ! Queue,
-%            State#state{queue=[],pid=undefined,timeout_num=TN+1,status=unpushable};
-%        _->
-%            State#state{pid=undefined,timeout_num=TN+1,status=unpushable}
-%    end;
 on_shake_time(#state{attrs=Attrs,pid=Pid,report_to=Report_to}) ->
 %    room:log("xhr_poll:on_shake_time out, attrs:~p~n",[Attrs]),
     log("xhr_poll:on_shake_time out, attrs:~p~n",[Attrs]),
@@ -146,7 +179,6 @@ show(From, State=#state{})->
 stop_chan(#state{pid=Pid,queue=Queue,attrs=_Attrs})->
     case is_alive(Pid) of
         true-> 
-%            Pid ! Queue++[[{reason,xhr_poll_stop_chan},{event, server_disc},{status,failed}]];
             Pid ! {failed,overtime};
         _-> void
     end,
@@ -215,4 +247,19 @@ log( Str, CmdList) ->
     %io:format("~s: "++Str++"~n",[utility:d2s(erlang:localtime())|CmdList]).
     utility:log("./log/xhr_poll.log",Str,CmdList),
     ok.
-    
+
+test_push_mail()->
+    to_do.
+test_act()->
+    P=start([{report_to,undefined}]),
+    F=fun()-> io:format("~p test_act execute act~n",[self()]),put(test_act,ok) end,
+    set_act(P,F),
+    ok=get(test_act),
+    show(P).
+
+test_stop_pid()->
+    P=start([{report_to,undefined}]),
+    true=is_process_alive(P),
+    stop(P),
+    false=is_process_alive(P),
+    ok.

@@ -112,8 +112,8 @@ atom(A) ->
 
 client_ip(Arg) ->
     {Ip, _Port} = Arg#arg.client_ip_port,
+    ForwardIps=Arg#arg.headers#headers.x_forwarded_for,
     Fun=fun()->
-        ForwardIps=Arg#arg.headers#headers.x_forwarded_for,
         if is_list(ForwardIps) andalso length(ForwardIps)>0 ->    string:tokens(ForwardIps,","); true-> [] end
     end,
     case Fun() of
@@ -335,9 +335,14 @@ delay(T)->
 httpc_call(Method,Url,Params) ->
     ssl:start(),
     inets:start(),
-    {ok,{_,_,Ack}} = send_httpc(Method,{Url,Params}),
-    {ok,Json,_} = rfc4627:decode(Ack),
-    Json.
+    case  send_httpc(Method,{Url,Params}) of
+    {ok,{_,_,Ack}}->
+        case catch rfc4627:decode(Ack) of
+        {ok,Json,_}-> Json;
+        R-> R
+        end;
+    R-> R
+    end.
 
 send_httpc(get,{URL,Params}) ->
     httpc:request(get,{build_url(URL,Params),[]},[{timeout,10 * 1000}],[]);
@@ -391,6 +396,8 @@ to_list(Url) when is_atom(Url)-> atom_to_list(Url);
 to_list(Url)-> Url.
 
 country(undefined)-> default;
+country({172,16,1,1})-> "CN";
+country({10,31,203,1})-> "CN";
 country({203,222,195,122})-> "HK";
 country(Ip={_A,_B,_C,_D})->  i2c:findLocal(ip2uint(Ip)).
 continent(Ip)-> c2s(country(Ip)).    

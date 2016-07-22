@@ -277,6 +277,6 @@ generator_cdr(State)->
 
 traffic(St=#state{uuid=UUID,cid=Cid,phone=Phone,start_time=Starttime})->
     Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
-      {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{direction,incoming}],
+      {callee_sip,sipcfg:ssip(Phone)},{socket_ip,sipcfg:get(sip_socket_ip)},{direction,incoming}],
     rpc:call('traffic@lwork.hk',traffic,add,[Trf]).
 

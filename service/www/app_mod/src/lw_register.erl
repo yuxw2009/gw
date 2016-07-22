@@ -106,6 +106,29 @@ sms_register(Json)->
             [{status,failed},{reason,invalid_auth_code}]
         end
     end.
+
+get_register_info_by_phone("")-> [];
+get_register_info_by_phone(Phone) -> mnesia:dirty_index_read(lw_register,uuid_key(Phone),phone).
+    
+bind_phone(Json)->
+    AuthCode=utility:get_string(Json, "auth_code"),
+    UUID=utility:get_string(Json, "uuid"),
+    Phone=utility:get_string(Json, "phone"),
+    DevId=utility:get_string(Json, "device_id"),
+    case {lw_register:get_register_info_by_uuid(UUID), lw_register:get_register_info_by_phone(Phone)} of
+    {{atomic,[_]},[_|_]} when Phone=/="13788927293",Phone=/="18296131759"->  
+        utility:pl2jso_br([{status,failed},{reason, phone_already_bind}]);
+    {{atomic,[RegItem=#lw_register{}]},_} ->  
+        case sms_handler:auth_code(UUID++DevId) of
+        AuthCode->
+            mnesia:dirty_write(RegItem#lw_register{phone=uuid_key(Phone)}),
+            [{status,ok}];
+        _->
+            [{status,failed},{reason,invalid_auth_code}]
+        end;    
+    _->
+        [{status,failed},{reason,account_not_exist}]
+    end.
 delegate_register(Json)->
     AuthCode=utility:get_string(Json, "auth_code"),
     UUID=utility:get_string(Json, "uuid"),
@@ -333,6 +356,7 @@ circles(month,FromDate,ToDate)->
     {Y,M,D}=ToDate,
     (Y-Y0)*12+M-M0+ if D>=D0-> 1; true-> 0 end.
 package_consume([],_)-> [];
+package_consume([[]|T],Mins)-> package_consume(T,Mins);
 package_consume([H=#package_info{circles=Circles0}|T], Mins) when (Circles0==undefined)->
     package_consume(T,Mins);
 package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=FromDate,circles=Circles0,limits=Limits,cur_consumed=Consumed0}|T],
@@ -343,6 +367,9 @@ package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=F
         Consumed0+Mins>=Limits-> [package_consume(T,Consumed0+Mins-Limits)]++[H#package_info{cur_consumed=Limits}];
         true-> [H#package_info{cur_consumed=Consumed0+Mins}|T]
     end.
+consume_callback(UUID,Minutes)-> 
+    io:format("consume_callback:~p~n",[{UUID,Minutes}]),
+    consume_minutes(UUID,2*Minutes).
 consume_minutes(UUID,Minutes)->
     io:format("consume_minutes called:~p~n",[{UUID,Minutes}]),
     case get_register_info_by_uuid(UUID) of
@@ -445,10 +472,14 @@ add_openim_id(UUID)->
     add_openim_id(UUID,Nickname,<<>>).
 add_openim_id()->
       [add_openim_id(I)||I<-mnesia:dirty_all_keys(lw_register)].
-      
+
+transform_table()->
+    F=fun({lw_register,Uuid,Device_id,Name, Pwd,Group_id,  Pls})-> 
+                 #lw_register{uuid=Uuid,device_id=Device_id,name=Name,pwd=Pwd,group_id=Group_id,pls=Pls}
+            end,
+    mnesia:transform_table(lw_register,F,record_info(fields,lw_register)).
 %---------------------------------------- test -------------------------------------------------------------
 test_get_pay_usage()->
     UUID=unittest:test_uuid(),
 %    {true,}= check_balance(UUID),
     ok.
-

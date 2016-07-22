@@ -6,8 +6,11 @@
 -compile(export_all).
 
 init([IP,Port]) when is_tuple(IP) and is_integer(Port) ->
-    utility:log("~p init~n",[?MODULE]),
-    case gen_tcp:listen(Port,[binary,{ip,IP},{packet,raw},{active,once},{keepalive,true}]) of
+    io:format("~p init~n",[?MODULE]),
+    Options= if is_tuple(IP)-> [binary,{ip,IP},{packet,raw},{active,once},{keepalive,true}];
+                true-> [binary,{packet,raw},{active,once},{keepalive,true}]
+             end,
+    case gen_tcp:listen(Port,Options) of
         {ok,Listen} ->
             {ok,{listened,Listen,[]}};
         {error,Reason} ->
@@ -17,7 +20,7 @@ init([IP,Port]) when is_tuple(IP) and is_integer(Port) ->
 terminate(Reason,{listened,Listen,Pids}) ->
     utility:log("nmsi_server terminated reason:~p",[Reason]),
     gen_tcp:close(Listen),
-    [exit(Pid,kill)||Pid<-Pids],
+    [exit(Pid,kill)||{Pid,_}<-Pids],
     ok.
 
 
@@ -51,7 +54,7 @@ handle_info({'DOWN', _Ref, process, Pid, _Reason},{listened,Listen,Pids})->
     _->
         utility:log("nmsi_server pid ~p down reason:~p unknown peer",[Pid,_Reason])
     end,
-    {noreply,{listened,Listen,lists:delete(Pid,Pids)}};
+    {noreply,{listened,Listen,lists:delete(Pid,lists:keydelete(Pid,1,Pids))}};
 handle_info(_Msg,State) ->
     {noreply,State}.
 
@@ -70,7 +73,7 @@ waiting_for_accept(Listen,Parent) ->
     end.
 
 handle_cmd(2100,[{1,Account},{2,Pwd}],nmsi_login) when is_list(Account) and is_list(Pwd)->
-    case (Account =:= nmsi_configure:ss_account()) and (Pwd =:= nmsi_configure:ss_pwd()) of
+    case (Account =:= nmsi_configure:ss_account()) and (Pwd =:= nmsi_configure:ss_pwd() orelse Pwd =:= nmsi_configure:ss_pwd1()) of
         true ->
             {[{"RETN","0"},{"DESC","Success."}],ss_login};
         false ->
@@ -94,6 +97,7 @@ handle_cmd(90000,[{1,Account},{2,Pwd}],socket_connected) when is_list(Account) a
             {[{"RETN","90004"}],socket_connected}
     end;
 handle_cmd(90000,[{1,_Account},{2,_Pwd}],State) ->
+    io:format("90000 state is ~p~n",[State]),
     {[{"RETN","90002"}],State};
 
 handle_cmd(90001,[],nmsi_login) ->
@@ -121,6 +125,7 @@ handle_msg({?MSG_HEAD,?MSG_MML_TYPE,?MSG_VERSION,_,_,_,_,_,_,Act,State}) ->
                 Cmd
         end, 
     {Ack,NewState} = handle_cmd(NewCmd,Para,State),
+    utility:log("log/nmsi.log","st:~p =>~p para:~p~nack:~p~n",[State,NewCmd,Para,Ack]),
     {Cmd,Ack,NewState};
 handle_msg({?MSG_HEAD,?MSG_MML_TYPE,_,_,_,_,_,_,_,Act,State}) ->
     {Cmd,_} = parse_act(Act),
@@ -133,7 +138,7 @@ handle_msg({_,_,_,_,_,_,_,_,_,Act,State}) ->
     {Cmd,[{"RETN","90024"}],State}.
 
 ack_msg(Cmd,[{"RETN",Ack}|_] = CmdAck,EID,TID) ->
-    AckStr = string:join([ack_date(),Cmd,string:join([A++"="++B||{A,B}<-CmdAck],",")]," : "),
+    AckStr = string:join(["ACK",ack_date(),Cmd,string:join([A++"="++B||{A,B}<-CmdAck],",")]," : "),
     list_to_binary([?MSG_HEAD,?MSG_ACK_TYPE,<<(39+length(AckStr)):32>>,?MSG_VERSION,EID,TID,<<(list_to_integer(Ack)):32>>,<<0:8>>,<<1:16>>,<<0:16/integer-unit:8>>,list_to_binary(AckStr)]).
 
 ack_date() ->

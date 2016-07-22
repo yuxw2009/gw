@@ -7,6 +7,11 @@ post lwork/mobile/voip/dtmf
 req: {session_id:s,num:s}
 ack: {status:ok}
 
+3 phone event接口
+post lwork/mobile/voip/dtmf_with_seq
+req: {session_id:s,num:s,seq:seq}  //seq从收到session_id的时候，从1开始
+ack: {status:ok}
+
 
 3 logout接口
 post lwork/mobile/logout
@@ -54,14 +59,18 @@ get lwork/mobile/version_commont_no
 ack: [{status,ok}...]
 
 10 start callback
-post lwork/mobile/callback
+post lwork/mobile1/callback
 req: [{uuid,i},{local,s},{remote,s}]
 ack: [{status, ok}, {session_id, SID}]
 
 11 stop callback
-delete lwork/mobile/callback
+delete lwork/mobile1/callback
 req: [{session_id, SID}]
 ack: [{status,ok}]
+
+11 get callback status
+get lwork/mobile/calls/status?uuid=u
+ack: [{status,ok}, {local,CallerStatus},{remote,CalleeStatus}]  released表示都释放
 
 12 长连接推送接口
 post channel/push_service
@@ -78,8 +87,29 @@ ack: {status:ok, data:push_data}  or {status:failed, reason:reason}
 13 sip呼叫终端app消息，推送
 push:  [{event,"p2p_inform_called"},{caller, Caller},{opdata,[{event,"sip_call_in"},{caller, Caller}, {callee,Callee},{session_id, sid}, {ip,ip}, {port, PeerPort},{codec_name, cn},{payload_mode, pm},{rssrc, rs}] ]
 
+14 设置邮箱密码
+post lwork/mail/set_account
+     params: [{uuid,u},{account,i},{mail_acc,s},{mail_pwd,s},{mail_addr,a}]
+     ack:  {result:ok} or {result:failed,reason:pwd_not_matched}
+15 获取邮件列表 (H5页面)http://10.32.7.28:8188/livecommail/index.html?uuid=136
+16 新邮件提醒 推送
+push:  {event:"new_email_arrived",mail_acc:m,uids:uids,alert:d,badge:1,'content-available':1}
+16 对于android推送，由于推送不可靠,所以需要确认机制，收到一条推送立即回确认消息，如下
+post lwork/mail/new_email_arrived_ack
+req: {account:account,uids:uids}
+ack:  [{status, ok}]
 
-
+17 新oa提醒 推送 和新邮件类似 event不同而已
+push:  {event:"new_oa_arrived",mail_acc:m,uids:uids,alert:d,badge:1,'content-available':1}
+18 对于android推送，由于推送不可靠,所以需要确认机制，收到一条推送立即回确认消息，如下
+post lwork/mail/new_oa_arrived_ack
+req: {account:account,uids:uids}
+ack:  [{status, ok}]
+    
+18 根据uids获取oa提醒内容
+post fc2fc.com:8188/mail/get_oa_summary 
+params:  {account:"0131000032@livecom",page_num:n,page_index:i}
+ack: {status:ok,mails:[{uid:u,Subject:sub,oa_link:link}]}
 
 
 //以下不要
@@ -219,7 +249,15 @@ packages如下内容数组
 登录：      使用username登录，username/pwd
 修改密码：  account/oldpwd/newpwd
 
-
+绑定号码相关接口
+1 绑定号码验证码请求：
+post lwork/sms/auth_code
+   req:  {uuid:u,phone:p,device_id:d,type:"bind"}
+   ack:  [{status,failed}, {reason,Reason}] or  {status:ok}
+2 绑定号码
+post lwork/mobile/bind
+    req: {uuid:u,phone:p,device_id:d,auth_code:a}
+    ack: [{status,failed},{reason,invalid_auth_code}] or [{status,ok}]
 加密接口
 1 原有的json字符串，进行base64编码，前面加7个字符，作为新的json的value
 req: {data_enc:NewJson}
@@ -264,3 +302,7 @@ http://119.29.62.190:8080/lwork/mobile1/paytest/package_pay
 
 [{id,Id},{caller,Caller},{callee,Callee},{lasttime,LastTime},{times,length(All)},
  {details,[[{starttime,TimeStr},{duration,Dura},{direction,Direction}]]}]
+5 apple pay(iap) 终端付费通知
+post /lwork/mobile1/paytest/package_pay/apple
+req: {uuid:u,payid:payid,device_id:dvid,money:m,receipt:base64ed}
+ack: {status:ok}  {status:failed,reason:reason}

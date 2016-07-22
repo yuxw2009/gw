@@ -1,0 +1,31 @@
+<erl>
+
+-include("db.hrl").
+-include("jsonerl.hrl").
+
+-define(NODE,'company@10.32.3.38').
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+my_postvar(Request,CommandID) ->
+    {ok,Value} = yaws_api:postvar(Request,CommandID),
+    Value.
+	
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+out(A) ->
+    Year  = list_to_integer(my_postvar(A,"year")),
+	Month = list_to_integer(my_postvar(A,"month")),
+    case rpc:call(?NODE,excel,outfile,[1,Year,Month]) of
+        {badrpc, _} ->
+            Message = #message{message=list_to_binary("db_err")},
+            {content,"application/json",?record_to_json(message,Message)};
+        {ok,FileName} ->
+		    Message = #message{message=list_to_binary("tmp/" ++ FileName)},
+            {content,"application/json",?record_to_json(message,Message)};
+		error ->
+		    Message = #message{message=list_to_binary("excel_err")},
+            {content,"application/json",?record_to_json(message,Message)}
+    end.
+
+</erl>

@@ -109,6 +109,7 @@ handle(Arg, Method, ["lwork", "mobile1","paytest","package_pay"|Ps]) ->
     lw_mobile:handle(Arg, Method, ["paytest","package_pay"|Ps]);
 handle(Arg, Method, ["lwork", "mobile1"|Ps]) -> 
     Obj=lw_mobile:handle(Arg, Method, Ps),
+    io:format("lwork_app:handle mobile1 res:~p~n",[Obj]),
     Json_str=rfc4627:encode(Obj),
     Sep=[$a+random:uniform(9),$a+random:uniform(20)],
     Sep_bin = list_to_binary(Sep),
@@ -121,6 +122,7 @@ handle(Arg, Method, ["lwork", "mobile"|Ps]) ->
 %    io:format("ack:~p~n", [R]),
     R;
 handle(Arg, Method, ["lwork","sms"|Params])    -> sms_handler:handle(Arg, Method, Params);
+handle(Arg, Method, ["lwork","mail"|Params])    -> mail_handler:handle(Arg, Method, Params);
 
 %% handle unknown request
 handle(_Arg, _Method, _Params) -> 
