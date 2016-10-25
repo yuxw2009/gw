@@ -6,7 +6,7 @@
 
 handle(Arg,_Params)->
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
-    Ip=utility:client_ip(Arg),
+    Ip1=utility:client_ip(Arg),
     {SelfPhone,Acc, Did,Clidata} = utility:decode(Arg,[{self_phone, s},{acc, s},{device_id, s},{clidata,r}]),
     utility:log("./log/xhr_poll.log","push_service:~p did:~p acc:~p~n clidata:~p~n",[SelfPhone,Did,Acc,Clidata]),
     case login_processor:get_account_tuple(SelfPhone) of
@@ -20,7 +20,8 @@ handle(Arg,_Params)->
         xhr_poll:attrs(Pid,Params),
         xhr_poll:up(Pid),
 %        io:format("android_push:~p~n",[{SelfPhone,Pid0,Pid}]),
-        if Ip =/=Ip0 orelse Pid0=/=Pid -> 
+        if Ip1 =/=Ip0 orelse Pid0=/=Pid -> 
+            Ip=login_processor:get_wan_ip(Ip1,Ip0),
             login_processor:update_itm(Itm#login_itm{ip=Ip,pls=lists:keystore(push_pid,1,Pls,{push_pid,Pid})}); true-> void end,
         erlang:monitor(process,Pid),
         receive

@@ -113,6 +113,7 @@ handle(Arg, 'POST', ["meetings"]) ->
     UUID = utility:get_string(Json, "uuid"),
 %    Group = utility:get_binary(Json, "group_id"),
     Group = login_processor:get_group_id(UUID),
+    io:format("meeting UUID ~p Group: ~p~n",[UUID,Group]),
     Subject = utility:get_binary(Json, "subject"),
     MObjs = utility:get(Json, "members"),
     Members = [{utility:get_binary(Obj, "name"), utility:get_string(Obj, "phone")}  || Obj <- MObjs],
@@ -182,7 +183,8 @@ handle(Arg, 'POST', ["meetings",MeetingId, "members"]) ->
     	            	                        MemberInfo)}
     	            ]);
 %% handle redial or hangup a member request
-handle(Arg, 'POST', ["meetings",MeetingId, "members", MemberId]) ->
+handle(Arg, 'POST', ["meetings",MeetingId, "members", MemberId0]) ->
+    MemberId=list_to_integer(MemberId0),
     {ok, Json, _} = rfc4627:decode(Arg#arg.clidata),
     UUID = utility:get_string(Json, "uuid"),
     Status= utility:get_atom(Json,"status"),
@@ -198,14 +200,16 @@ handle(Arg, 'GET', ["meetings", "cdrs"]) ->
     {value,History} = rpc:call(?WWW_VOICE, www_voice_handler, get_meeting_history, [Group,UUID,Year,Month]),
     
 %    io:format("get_meeting_history: ~p~n", [History]),
-    utility:pl2jso([{status, ok}, {details, utility:a2jsos([meeting_id,subject,
+    R=utility:pl2jso([{status, ok}, {details, utility:a2jsos([meeting_id,subject,
                                                             {timestamp, fun(Date)->list_to_binary(utility:d2s(Date)) end},status,
                                                             {members, fun(Ms) ->
                                                                           utility:a2jsos([seq,name,{phone, fun erlang:list_to_binary/1}], Ms)
 
                                                                       end
                                                             }],
-                                              History)}]);
+                                              History)}]),
+    %io:format("voice_handler:meetings cdrs:~p~n",[R]),
+    R;
 
 handle(Arg, M, Ps) ->
     utility:pl2jso([{status,failed},{reason,und}]).
@@ -215,7 +219,8 @@ handle_startcall(GroupId,Arg)->
     handle_startcall(lw_mobile:get_node_by_ip0(UUID,utility:client_ip(Arg)),GroupId,Arg).
 handle_startcall_nocheck_token(Node,GroupId,Arg)->
     case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
-    {UUID, SDP, Phone,Class}->
+    {UUID0, SDP, Phone,Class}->
+        UUID=login_processor:filter_phone(UUID0),
         Res = start_voip(Node,GroupId,UUID, Class, Phone, SDP, no_limit,Arg),
         case Res of
             {SID, SDP2} -> 
@@ -229,9 +234,10 @@ handle_startcall_nocheck_token(Node,GroupId,Arg)->
     end.
 handle_startcall(Node,GroupId,Arg)->
     case catch utility:decode(Arg, [{uuid,s},{sdp,b},{phone,s},{userclass,s}]) of
-    {UUID, SDP, Phone,Class}->
+    {UUID0, SDP, Phone,Class}->
+        UUID=login_processor:filter_phone(UUID0),
         AuthCode=utility:get_string_by_stringkey("auth_code",Arg),
-         io:format("GroupId:~p AuthCode:~p Phone:~p~n",[GroupId,AuthCode,Phone]),
+         io:format("uuid:~pGroupId:~p AuthCode:~p Phone:~p~n",[UUID,GroupId,AuthCode,Phone]),
         case check_token(UUID, [Phone,GroupId,AuthCode]) of
             {pass, Phone2} ->
                 Res = start_voip(Node,GroupId,UUID, Class, Phone2, SDP, no_limit,Arg),
@@ -301,7 +307,7 @@ start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, Arg)->
     Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
                                    {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)},
                                    {subgroup_id,Subgroup_id},{guid,Guid},{isrecord,IsRecord},{recordfile,RecordFile},
-                                   {country,utility:country(SessionIP)},                        {gw,WcgNode}],
+                                   {country,utility:country(SessionIP)},{gw,WcgNode},{consume_callback,lw_mobile:consume_func(ServiceId,UUID)}],
 
     case start_call1(WcgNode,SDP, Options) of
           {successful,Node,Session_id, Callee_sdp}->
@@ -387,6 +393,14 @@ handleP2pCall(UUID,Phone,Node,SID,SDP,Arg)->
     end.
         
 start_meeting(GroupId,UUID,Members)->
-    Options=[{key, {GroupId, UUID}},{audit_info,""},{members, Members},{callback,lw_mobile:charge_callback_fun(GroupId,UUID)}],
+    Options=[{key, {GroupId, UUID}},{audit_info,""},{members, Members},{callback,lw_mobile:charge_callback_fun(GroupId,UUID)},
+    {consume_callback,lw_mobile:consume_func(GroupId,UUID)}],
+    io:format("voice_handler:start_meeting ~p~n",[Options]),
     rpc:call(?WWW_VOICE, www_voice_handler, start_meeting, [Options]).
+formal_callee(Callee) when is_binary(Callee)-> formal_callee(binary_to_list(Callee));
+formal_callee("+"++Callee)-> formal_callee("00"++Callee);
+formal_callee(Callee="00"++_)-> Callee;
+formal_callee(Callee="*812"++_) when is_list(Callee)-> "0086"++Callee;
+formal_callee(Callee="*"++_) when is_list(Callee)-> Callee;
+formal_callee(Callee) when is_list(Callee)-> "0086"++Callee.
     

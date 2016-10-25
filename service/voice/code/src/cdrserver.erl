@@ -64,19 +64,20 @@ handle_cdr_request(meeting, {{Service_id,_UUID},Audit_info=_GroupId, _Subject,De
                         charge=Charge, audit_info=Audit_info, details=Cdr_details1},
     callstat:save(Service_id,CDR);
 
-handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{_Name2,Phone2,_}},{StartTime,EndTime,Quantity},Options})->
+handle_cdr_request(callback, {{Service_id,UUID},Audit_info,{{_Name1,Phone1,_},{_Name2,Phone2,_}},TimeInfo1={StartTime,EndTime,Quantity},Options})->
     % modify to rate from rate_server
     Type = callback,
     [{_, Rate1},{_, Rate2}] = get_rates(Service_id, Type, [Phone1,Phone2]),
-    Charge = (Rate1+Rate2)*to_minute(Quantity),
+    Minutes=to_minute(Quantity),
+    Charge = (Rate1+Rate2)*Minutes,
+    ChargeRes=charge4callback(Options,[{Phone1,Minutes},{Phone2,Minutes}]),
     Cdr_details=#call_back_detail_new{phone1=Phone1, rate1=Rate1, phone2=Phone2, rate2=Rate2, start_time=StartTime, end_time=EndTime},
     CDR = #cdr{key={www_xengine:bill_id(Service_id), Service_id}, type=Type, quantity=Quantity,
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR),
-    case proplists:get_value(callback,Options) of
-    {Node,Mod,Fun,UUID0}->    rpc:call(Node,Mod,Fun,[UUID0,Charge]);
-    _-> void
-    end;    
+    Res=rpc:call('company@lwork.hk',zteapi,new_cdr,[{Service_id,UUID},{Phone1,Rate1},{Phone2,Rate2},TimeInfo1,Options++ChargeRes]),
+    io:format("cdrserver:~nrpc:call:~p ~nres:~p~n",[Options,Res]),
+    ok;
 
 handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{_Name2,Phone2,_}},{StartTime,EndTime,Quantity}})->
     % modify to rate from rate_server
@@ -88,19 +89,22 @@ handle_cdr_request(callback, {{Service_id,_UUID},Audit_info,{{_Name1,Phone1,_},{
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR);
 
-handle_cdr_request(voip, {{Service_id,_UUID},Audit_info,Phone,{StartTime,EndTime,Quantity},Options})->
+handle_cdr_request(voip, {{Service_id,UUID},Audit_info,Phone,TimeInfo1={StartTime,EndTime,Quantity},Options})->
     % modify to rate from rate_server
     Type = voip,
     [{_, Rate}] = get_rates(Service_id, Type, [Phone]),
-    Charge = Rate*to_minute(Quantity),
+    Minutes=to_minute(Quantity),
+    Charge = Rate*Minutes,
+    ChargeRes=charge4callback(Options,[{Phone,Minutes}]),
     Cdr_details=#voip_detail{phone=Phone,rate=Rate, start_time=StartTime, end_time=EndTime},
     Key={www_xengine:bill_id(Service_id), Service_id}, CDR = #cdr{key=Key, type=Type, quantity=Quantity,
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR),
-    case proplists:get_value(callback,Options) of
-    {Node,Mod,Fun,UUID0}->    rpc:call(Node,Mod,Fun,[UUID0,Charge]);
-    _-> void
-    end;
+    
+    Options1=Options++ChargeRes,
+    Res=rpc:call('company@lwork.hk',zteapi,new_cdr,[{Service_id,UUID},{Phone,1},{proplists:get_value(cid, Options),0},TimeInfo1,Options1]),
+    io:format("cdrserver:~nrpc:call:~p ~nres:~p~n",[Options1,Res]),
+    ok;
 handle_cdr_request(sms, Plist)->
      Service_id =proplists:get_value(service_id, Plist),
      Audit_info =proplists:get_value(audit_info, Plist),
@@ -115,10 +119,25 @@ handle_cdr_request(sms, Plist)->
 
 handle_cdr_request(Type, _Cdr_info)-> io:format("++++++++++++++++++++++++++++++++++++unhandled cdr_info type is ~p,cdr_info:~p~n", [Type,_Cdr_info]).   
 
+charge4callback(Options,PhoneMinutes)->
+    case proplists:get_value(consume_callback,Options) of
+    {Node,Mod,Fun,UUID0}->    
+        io:format("charge4callback ~p~n",[{Node,Mod,Fun,UUID0}]),
+        rpc:call(Node,Mod,Fun,[UUID0,PhoneMinutes]);
+    _-> 
+	    case proplists:get_value(callback,Options) of
+	    {Node,Mod,Fun,UUID0}->    
+	        Charge=lists:sum([Q||{_,Q}<-PhoneMinutes]),
+	        rpc:call(Node,Mod,Fun,[UUID0,Charge]);
+	    _-> []
+	    end        
+    end.
+
 get_cdr_from(Service_id, Bill_id)-> callstat:get_cdr_from(Service_id, Bill_id).
     
+to_minute(Duration) when Duration<2 ->0;
 to_minute(Duration) ->
-    trunc(Duration/60)+1.0.
+    trunc(Duration/60)+1.
 
 service_id({Service_id, _UUID})-> Service_id;
 service_id(S)-> S.

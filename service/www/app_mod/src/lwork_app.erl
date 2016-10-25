@@ -16,13 +16,18 @@ out(Arg) ->
     Uri = yaws_api:request_url(Arg),	
     Path = string:tokens(Uri#url.path, "/"), 
     Method = (Arg#arg.req)#http_request.method,
-    utility:log("clidata0:~p~n",[Arg#arg.clidata]),
     Arg1= 
-    case catch rfc4627:decode(Arg#arg.clidata) of
-    {ok,{obj,[{"data_enc",<<_:7/binary,Base64_Json_bin/binary>>}]},_}->
-        Json_bin=utility:fb_decode_base64(Base64_Json_bin),
-        Arg#arg{clidata=Json_bin};
-    _-> Arg
+    if is_binary(Arg#arg.clidata) andalso size(Arg#arg.clidata)>0 ->
+        utility:log("~p ~p clidata0:~s~n",[Method,Uri,Arg#arg.clidata]),
+        case catch rfc4627:decode(Arg#arg.clidata) of
+        {ok,{obj,[{"data_enc",<<_:7/binary,Base64_Json_bin/binary>>}]},_}->
+            Json_bin=utility:fb_decode_base64(Base64_Json_bin),
+            Arg#arg{clidata=Json_bin};
+        _-> 
+            io:format("no encription:~p ~p~n",[Method,Uri]),
+            Arg
+        end;
+    true-> Arg
     end,
     process_request(Path, Method, Arg1).
 
@@ -68,10 +73,10 @@ handle(Arg,Method, ["qvoice"|Params]) ->
     qvoice:handle(Arg, Method, Params);
 handle(Arg,Method, ["ft"|Params]) -> 
     www_ft:handle(Arg, Method, Params);
-handle(Arg, 'POST', ["lwork","media"| Params]) -> 
+handle(Arg, Meth, ["lwork","media"| Params]) -> 
     Ip=utility:client_ip(Arg),
     io:format("media params:~p~n",[Params]),
-    Obj=media:handle(Arg,'POST',Params),
+    Obj=media:handle(Arg,Meth,Params),
     io:format("ack:~p~n",[Obj]),
     utility:pl2jso_br(Obj);
 handle(Arg, 'POST', ["lwork","voices", ["fzdvoip"]]) -> 
@@ -109,7 +114,7 @@ handle(Arg, Method, ["lwork", "mobile1","paytest","package_pay"|Ps]) ->
     lw_mobile:handle(Arg, Method, ["paytest","package_pay"|Ps]);
 handle(Arg, Method, ["lwork", "mobile1"|Ps]) -> 
     Obj=lw_mobile:handle(Arg, Method, Ps),
-    io:format("lwork_app:handle mobile1 res:~p~n",[Obj]),
+    %io:format("lwork_app:handle mobile1 res:~p~n",[Obj]),
     Json_str=rfc4627:encode(Obj),
     Sep=[$a+random:uniform(9),$a+random:uniform(20)],
     Sep_bin = list_to_binary(Sep),
@@ -142,6 +147,7 @@ enc_json(Result)-> rfc4627:encode(utility:pl2jso_r(utility:v2b_r(Result))).
 err_log(Arg,Reason)->
 	{ok, IODev} = file:open("./log/server_error.log", [append]),
 	io:format(IODev, "~p:  Arg: ~p~n Reason: ~p~n", [erlang:localtime(), Arg, Reason]),
+    io:format("~p:  Arg: ~p~n Reason: ~p~n", [erlang:localtime(), Arg, Reason]),
 	file:close(IODev).
 
 

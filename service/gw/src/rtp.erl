@@ -387,9 +387,10 @@ handle_info(UdpMsg={udp,_Socket,Addr,Port,<<2:2,_:6,_:1,Codec:7,InSeq:16,_:32,SS
 			transport_status=inservice,peer={_Addr1,_Port1}}=ST)
 			when ?IS_RTP(Codec) -> %rtppacket from mobile or pc yxw
     R_base1=R_base#base_info{bytes_rcvd=Bsrcvd+size(Bin)},			
+    llog1(ST,"******~p rtp receive packet inseq:~p lastseq:~p",[SSRC,InSeq,LastSeq]),
     case judge_bad_seq(LastSeq,InSeq) of
     {backward,_} -> 
-%         llog1(ST,"rtp receive backward packet inseq:~p lastseq:~p",[InSeq,LastSeq]),
+         llog1(ST,"rtp receive backward packet inseq:~p lastseq:~p",[InSeq,LastSeq]),
         {noreply, ST#state{r_base=R_base1#base_info{cumu_over=Pktsover+1}}};
     {forward,N} ->
         NewST=ST#state{peer={Addr,Port},r_base=R_base1#base_info{pkts_rcvd=PktR+1,cumu_rcvd=CumuR+1},stats=up_udp_stats(ST#state.stats,Bin)},
@@ -1681,14 +1682,14 @@ try_port_pair(Begin, End, From, Port) when Port>End ->
 try_port_pair(Begin, End, From, Port) ->
 	case gen_udp:open(Port, [binary, {active, true}, {recbuf, 4096}]) of
 		{ok,Sock1} ->
-%			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
-%				{ok,Sock2} ->
-				       app_manager:set_last_used_webport(Port),
-					{ok,Port,Sock1,Sock1};
-%				{error, _} ->
-%					gen_udp:close(Sock1),
-%					try_port_pair(Begin, End, From, Port+2)
-%			end;
+			case gen_udp:open(Port+1, [binary, {active, true}, {recbuf, 4096}]) of
+				{ok,Sock2} ->
+				       app_manager:set_last_used_webport(Port+1),
+					{ok,Port,Sock1,Sock2};
+				{error, _} ->
+					gen_udp:close(Sock1),
+					try_port_pair(Begin, End, From, Port+2)
+			end;
 		{error, _} ->
 			try_port_pair(Begin, End, From, Port+2)
 	end.

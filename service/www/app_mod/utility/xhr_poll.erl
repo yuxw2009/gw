@@ -4,8 +4,11 @@
 -define(DETECT_NUM, 10).
 -define(DISCONNECT_NUM,10).
 -define(ANDROID, <<"android">>).
+-define(IOS, <<"ios">>).
 -define(IS_ANDROID(OsType),  (OsType == ?ANDROID)).
+-define(IS_IOS(OsType),  (OsType == ?IOS)).
 -record(state, {report_to, queue=[], pid, shake_timer,timeout_num=0, attrs=[],status=unpushable,act,os_type= ?ANDROID}).
+
 
 start(Options)->
     spawn(fun()-> loop0(Options) end).
@@ -17,6 +20,7 @@ stop(undefined)-> void;
 stop(Name) when is_list(Name)-> stop(list_to_atom(Name));
 stop(Name) when is_atom(Name)-> stop(whereis(Name));
 stop(Pid)-> 
+    log("xhr_poll:stop:~p~n",[Pid]),
     Self=self(),   
     Act=fun(#state{pid=PushPid})->
             Self ! {ack,ok},
@@ -65,7 +69,6 @@ exe_cmd(Pid,Act)->
 	    Pid !{act,Act,self()},
 	    receive
 	    {ack,Res}->
-	        io:format("xhr_poll:exe_cmd res get~n"),
 	        Res
 	    after 2000->
 	        io:format("xhr_poll:exe_cmd timeout~n"),
@@ -163,7 +166,7 @@ on_up_msg({fetch_msg, From}, State=#state{queue=Queue})->
     From ! Queue,
     log("xhr_poll:fetch_msg:~p and send:~p~n",[From,Queue]),
     State#state{pid=undefined, queue=[]}.
-on_shake_time(State=#state{timeout_num=TN,act=Act,os_type=OsType}) when TN<?DETECT_NUM orelse not ?IS_ANDROID(OsType)->
+on_shake_time(State=#state{timeout_num=TN,act=Act,os_type=OsType}) when TN<?DETECT_NUM orelse  ?IS_IOS(OsType)->
     if Act =/=undefined-> Act(); true-> void end,
     State#state{timeout_num=TN+1};
 on_shake_time(#state{attrs=Attrs,pid=Pid,report_to=Report_to}) ->
@@ -177,6 +180,7 @@ show(From, State=#state{})->
     From ! State,
     State.
 stop_chan(#state{pid=Pid,queue=Queue,attrs=_Attrs})->
+    log("xhr_poll:stop_chan:~p~n",[self()]),
     case is_alive(Pid) of
         true-> 
             Pid ! {failed,overtime};
@@ -185,6 +189,7 @@ stop_chan(#state{pid=Pid,queue=Queue,attrs=_Attrs})->
     exit(normal).
     
 dotickout(#state{pid=Pid,queue=_Queue,attrs=_Attrs})->
+    log("xhr_poll:dotickout:~p~n",[self()]),
     case is_alive(Pid) of
         true-> 
 %            Pid ! Queue++[[{reason,xhr_poll_stop_chan},{event, server_disc},{status,failed}]];
@@ -263,3 +268,4 @@ test_stop_pid()->
     stop(P),
     false=is_process_alive(P),
     ok.
+

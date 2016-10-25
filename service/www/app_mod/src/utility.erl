@@ -56,7 +56,11 @@ get_value(JsonObj, Key) ->
 
 value2list(V) when is_float(V) -> lists:flatten(io_lib:format("~p",[V]));
 value2list(V) when is_integer(V) -> integer_to_list(V);
+value2list(V) when is_list(V) -> V;
 value2list(V) when is_binary(V) -> binary_to_list(V).
+
+value2binary(V)->
+    list_to_binary(utility:value2list(V)).
 
 get_binary(JsonObj, Key) ->
     {ok, Value} = rfc4627:get_field(JsonObj, Key),
@@ -396,14 +400,33 @@ to_list(Url) when is_atom(Url)-> atom_to_list(Url);
 to_list(Url)-> Url.
 
 country(undefined)-> default;
-country({172,16,1,1})-> "CN";
-country({10,31,203,1})-> "CN";
 country({203,222,195,122})-> "HK";
+country({101,90,125,_})-> "CN";
 country(Ip={_A,_B,_C,_D})->  i2c:findLocal(ip2uint(Ip)).
-continent(Ip)-> c2s(country(Ip)).    
+continent(Ip)-> 
+    case iptype(Ip) of
+    wan-> c2s(country(Ip));
+    _-> default
+    end.
 
 ip2uint({A,B,C,D}) ->
     A*256*256*256 + B*256*256 + C*256 + D.
+
+iptype(Addr) when is_list(Addr)->	
+	case  inet_parse:address(Addr) of
+	{ok,Tuple={_A,_B,_C,_D}}->
+           iptype(Tuple);
+       _->  unknwn
+       end;
+iptype({A,B,_C,_D}) ->	
+       if A==10 -> lan_a;
+          A==172 andalso (B>=16 andalso B=<31) -> lan_b;
+          A==192 andalso B==168 -> lan_c;
+          A==169 andalso B==254 -> unused;
+       true -> wan
+       end;
+iptype(_)-> unknwn.       
+
 
 c2s("EE") -> "Europe";
 c2s("LV") -> "Europe";

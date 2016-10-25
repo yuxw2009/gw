@@ -64,6 +64,8 @@ third_deregister1(Acc)->
     _->
         void
     end.
+delete_devid_reg_t(DvID)->
+    ?DB_DELETE({devid_reg_t,DvID}).
 %self_noauth_register(Params)-> self_noauth_register1(Params); % temporary don't limit user login for account num consideration
 self_noauth_register(Params)->  % acc and name is same
 %    io:format("self_noauth_register:~p~n",[Params]),
@@ -175,18 +177,19 @@ forgetpwd(Json={obj,Params},<<"dth_common">>)->
     AuthCode=proplists:get_value( "auth_code",Params),
     Name=utility:get_string(Json, "name"),
     Pwd=utility:get_binary(Json,"pwd"),
+    UUID=
     case get_name_item(Name) of
-    {atomic,[#name2uuid{uuid=UUID}]}->  
-        case check_authcode(AuthCode,UUID,<<"dth_common">>) of
-        {ok,LR}->  
-            ?DB_WRITE(LR#lw_register{pwd=Pwd}),
-            NewParams=[{"uuid",UUID}|Params],
-            login_processor:login(NewParams,<<"uuid">>);
-        {failed,Reason}->
-            utility:pl2jso_br([{status,failed},{reason, Reason}])
-        end;
+    {atomic,[#name2uuid{uuid=UUID_}]}->  UUID_;
     _->
-        utility:pl2jso_br([{status,failed},{reason, username_not_exist}])
+        Name
+    end,
+    case check_authcode(AuthCode,UUID,<<"dth_common">>) of
+    {ok,LR}->  
+        ?DB_WRITE(LR#lw_register{pwd=Pwd}),
+        NewParams=[{"uuid",UUID}|Params],
+        login_processor:login(NewParams,<<"uuid">>);
+    {failed,Reason}->
+        utility:pl2jso_br([{status,failed},{reason, Reason}])
     end;
 forgetpwd(Json,<<"common">>)->
     AuthCode=utility:get_string(Json, "auth_code"),
@@ -255,9 +258,10 @@ unbind_name_uuid(Name)->
     
 deregister(UUID)->
     case get_register_info_by_uuid(UUID) of
-    {atomic,[#lw_register{name=Name}]}->  
+    {atomic,[#lw_register{name=Name,device_id=DvID}]}->  
         ?DB_DELETE({name2uuid,name_key(Name)}),
         ?DB_DELETE({lw_register, uuid_key(UUID)}),
+        delete_devid_reg_t(DvID),
         login_processor:del_account_tuple(uuid_key(UUID)),
         [{status,ok}];
     _->
@@ -285,7 +289,7 @@ add_payids(UUID, Payids)->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
 get_payrecord(G,Payid) when is_binary(G)->get_payrecord(binary_to_list(G),Payid);
-get_payrecord("dth_common",Payid)->
+get_payrecord(GroupId,Payid) when GroupId=="dth_common" orelse GroupId=="zy_common"->
     ?DB_READ(pay_types_record,Payid);
 get_payrecord(_,Payid)->
     ?DB_READ(pay_record,Payid).
@@ -314,6 +318,10 @@ get_pkgs(UUID)->
         proplists:get_value(pkgs,Pls,[]);
     _-> []
     end.
+
+add_pkg(UUID, #package_info{period=zy_coins,raw_pkginfo=RawInfo})->
+    Added=proplists:get_value(quatity,RawInfo,0.0),
+    add_coins(UUID,Added);
 add_pkg(UUID, Pkg)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls}]}->  
@@ -335,21 +343,26 @@ del_pkg(UUID, PayId)->
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
+get_coins(UUID)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[_Item=#lw_register{pls=Pls}]}->  
+        proplists:get_value(qu_coin,Pls,0);
+    _->
+        0
+    end.
 add_coins(UUID, Added)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls}]}->  
-        Coins0=proplists:get_value(coins,Pls,0),
-        Npls=lists:keystore(coins,1, Pls, {coins,Coins0+Added}),
+        Coins0=proplists:get_value(qu_coin,Pls,0),
+        NewCoins=trunc((Coins0+Added)*100)/100,
+        Npls=lists:keystore(qu_coin,1, Pls, {qu_coin,NewCoins}),
         ?DB_WRITE(Item#lw_register{pls=Npls}),
         [{status,ok}];
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
-%talk_over(UUID,Charges) when is_number(Charges)->  consume_coins(UUID,Charges);
-%talk_over(UUID,Pls) when is_list(Pls)->
-%    Charges=proplists:get_value(charges,Pls,0),
-%    consume_coins(UUID,Charges),
-%    Cdr=proplists:get_value(cdr,Pls,[]),
+del_coins(UUID, Added)->
+    add_coins(UUID,-Added).
 circles(Type,FromDate)-> circles(Type,FromDate,date()).
 circles(month,FromDate,ToDate)->
     {Y0,M0,D0}=FromDate,
@@ -357,7 +370,7 @@ circles(month,FromDate,ToDate)->
     (Y-Y0)*12+M-M0+ if D>=D0-> 1; true-> 0 end.
 package_consume([],_)-> [];
 package_consume([[]|T],Mins)-> package_consume(T,Mins);
-package_consume([H=#package_info{circles=Circles0}|T], Mins) when (Circles0==undefined)->
+package_consume([_H=#package_info{circles=Circles0}|T], Mins) when (Circles0==undefined)->
     package_consume(T,Mins);
 package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=FromDate,circles=Circles0,limits=Limits,cur_consumed=Consumed0}|T],
                                 Mins) when is_integer(Circles0)->
@@ -367,9 +380,6 @@ package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=F
         Consumed0+Mins>=Limits-> [package_consume(T,Consumed0+Mins-Limits)]++[H#package_info{cur_consumed=Limits}];
         true-> [H#package_info{cur_consumed=Consumed0+Mins}|T]
     end.
-consume_callback(UUID,Minutes)-> 
-    io:format("consume_callback:~p~n",[{UUID,Minutes}]),
-    consume_minutes(UUID,2*Minutes).
 consume_minutes(UUID,Minutes)->
     io:format("consume_minutes called:~p~n",[{UUID,Minutes}]),
     case get_register_info_by_uuid(UUID) of
@@ -378,11 +388,57 @@ consume_minutes(UUID,Minutes)->
         NewPkgs=package_consume(Pkgs,Minutes),
         Npls=lists:keystore(pkgs,1,Pls,{pkgs,NewPkgs}),
         ?DB_WRITE(Item#lw_register{pls=Npls}),
-        [{status,ok}];
+        [{status,ok},{pkg_consume,Minutes}];
     _->
-        [{status,failed},{reason,register_uuid_not_existed}]
+        [{status,failed},{reason,register_uuid_not_existed},{pkg_consume,Minutes}]
     end.
+zy_consume_func(UUID,PhoneMinutes)->  zy_consume_func(UUID,PhoneMinutes,[]).
+zy_consume_func(_UUID,[],Res)->  
+    {PkgMinuteList,CoinList}=lists:unzip(Res),
+    [{pkg_consume,lists:sum(PkgMinuteList)},{coins,lists:sum(CoinList)}];
+zy_consume_func(UUID,[H|T],Res)->  
+    Pls=zy_consume_func1(UUID,[H]),
+    Item={_PkgMins,_Coins}={proplists:get_value(pkg_consume,Pls,0),proplists:get_value(coins,Pls,0)},
+    zy_consume_func(UUID,T,[Item|Res]).
+
+zy_consume_func1(UUID,[{Callee,Minutes}])->
+    case get_group_id(UUID) of
+    <<"zy_common">> ->
+        zy_consume_voip(UUID,Minutes,voice_handler:formal_callee(Callee));
+    _->
+        consume_minutes(UUID,Minutes)
+    end.	       
+zy_consume_voip(UUID,Minutes,Callee)->
+    io:format("zy_consume_voip called:~p called:~p~n",[{UUID,Minutes},Callee]),
+    zy_consume_voip1(UUID,Minutes,Callee).
+zy_consume_voip1(UUID,Minutes,Callee="0086"++_)->
+    case check_balance(UUID) of
+    {true,no_limit}-> 
+        [{pkg_consume,Minutes},{coins,0}];
+    {false, _}->  
+        Coins=zy_consume_coins(UUID,Minutes,Callee),
+        [{pkg_consume,0},{coins,Coins}];
+    {true,Bal} when is_integer(Bal) andalso Bal > Minutes->  
+        consume_minutes(UUID,Minutes),
+        [{pkg_consume,Minutes},{coins,0}];
+    {true,Bal} when is_integer(Bal)->  
+        consume_minutes(UUID,Bal),
+        Coins=zy_consume_coins(UUID,Minutes-Bal,Callee),
+        [{pkg_consume,Bal},{coins,Coins}]
+    end;
+zy_consume_voip1(UUID,Minutes,Callee)->
+    Coins=zy_consume_coins(UUID,Minutes,Callee),
+    [{pkg_consume,0},{coins,Coins}].
     
+zy_consume_coins(UUID,Minutes,Callee)-> 
+    [{Callee,Rate}]=pay:get_rates(get_group_id(Callee),voip,[Callee]),
+    Trans=fun(Coins)->
+                 if Coins*100>trunc(Coins*100)-> trunc(Minutes*Rate*100+1)/100;
+                 true-> trunc(Coins*100)/100
+                 end end,
+    Coins=Trans(Minutes*Rate),
+    del_coins(UUID,Coins),
+    Coins.
 consume_coins(UUID,Minutes)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[Item=#lw_register{pls=Pls,group_id=GroupId}]}->  
@@ -400,9 +456,9 @@ consume_coins(UUID,Minutes)->
         Changed = [{lefts,NewCoins},{gifts,NewGift},{month,Month},{month_consumed,MonthConsumed}],
         Npls=lists:ukeymerge(1, Changed,Pls),
         ?DB_WRITE(Item#lw_register{pls=Npls}),
-        [{status,ok}];
+        [{pkg_consume,Minutes},{coins,0}];
     _->
-        [{status,failed},{reason,register_uuid_not_existed}]
+        []
     end.
     
 get_coin(UUID)->
@@ -419,6 +475,7 @@ get_coin(UUID)->
 get_pkginfo(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pls=Pls}]}->  
+        Coins=utility:value2binary(get_coins(UUID)),
         case package_consume(proplists:get_value(pkgs,Pls,[]),0) of
         [#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_] 
                     when Limits>0->
@@ -428,18 +485,59 @@ get_pkginfo(UUID)->
             NMon=(LeftMonths div 13)+(LeftMonths rem 13),
             Expire=integer_to_list(NYear)++"/"++integer_to_list(NMon)++"/"++integer_to_list(Day),
             Lefts=if is_number(Limits)-> round(Limits-Consumed); Limits==unlimit-> 99999999; true-> Limits end,
-            [{status,ok},{lefts,Lefts},{cur_consumed,round(Consumed)},{gifts,Gifts},{expir_date,list_to_binary(Expire)}];
-        []-> [{status,failed},{reason,no_packages}]
+            [{status,ok},{lefts,Lefts},{cur_consumed,round(Consumed)},{gifts,Gifts},{expir_date,list_to_binary(Expire)},{coins,Coins}];
+        []-> [{status,ok},{lefts,0},{coins,Coins}]
         end;
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
+max_minutes(UUID,Callee)->max_minutes2(UUID,voice_handler:formal_callee(Callee)).
+max_minutes2(UUID,Callee)-> max_minutes2(UUID,Callee,lw_register:get_group_id(UUID)).
+max_minutes2(UUID,Callee= [A,B,C,D|_],<<"zy_common">>) when [A,B,C,D]=/="0086"->   %international for zhiyu
+    GroupId=lw_register:get_group_id(UUID),
+    [{Callee,Rate}]=pay:get_rates(GroupId,voip,[Callee]),
+    Coins0= get_coins(UUID),
+    trunc(Coins0/Rate);
+max_minutes2(UUID,Callee,<<"zy_common">>)->     %national
+    GroupId=lw_register:get_group_id(UUID),
+    Lefts0=
+        case check_balance(UUID) of
+        {false,_}-> 0;
+        {true,Val} when is_integer(Val) orelse is_float(Val)->  Val;
+        {true,no_limit}->   999999
+        end,
+    [{Callee,Rate}]=pay:get_rates(GroupId,voip,[Callee]),
+    Coins0= get_coins(UUID),
+    Lefts0+trunc(Coins0/Rate);
+max_minutes2(UUID,Callee,_)->     %dth/dth_common user
+    case check_balance(UUID) of
+    {false,_}-> 0;
+    {true,Val} when is_integer(Val) orelse is_float(Val)->  Val;
+    {true,no_limit}->   999999
+    end.
+
+max_minutes1(UUID,Callee="0086"++_)->     %national
+    GroupId=lw_register:get_group_id(UUID),
+    Lefts0=
+        case check_balance(UUID) of
+        {false,_}-> 0;
+        {true,Val} when is_integer(Val) orelse is_float(Val)->  Val;
+        {true,no_limit}->   999999
+        end,
+    [{Callee,Rate}]=pay:get_rates(GroupId,voip,[Callee]),
+    Coins0= get_coins(UUID),
+    Lefts0+trunc(Coins0/Rate);
+max_minutes1(UUID,Callee="00"++_)->    %internatinal
+    GroupId=lw_register:get_group_id(UUID),
+    [{Callee,Rate}]=pay:get_rates(GroupId,voip,[Callee]),
+    Coins0= get_coins(UUID),
+    trunc(Coins0/Rate).    
 check_balance(UUID)-> check_balance1(UUID,"0086").
 check_balance1(UUID,Callee="0086"++_)-> check_balance(UUID,Callee,national);
 check_balance1(UUID,Callee="00"++_)->check_balance(UUID,Callee,international).
 check_balance(UUID,_Callee,Type)->
     case get_register_info_by_uuid(UUID) of
-    {atomic,[#lw_register{group_id=GroupId,pls=Pls}]} when GroupId== <<"dth_common">> orelse GroupId== <<"common">> ->   % unit is minutes
+    {atomic,[#lw_register{group_id=GroupId,pls=Pls}]}  when GroupId =/= <<"dth">> ->   % unit is minutes
         PkgInfos=get_pkginfo(UUID),
         case proplists:get_value(status,PkgInfos) of
         ok->
@@ -483,3 +581,33 @@ test_get_pay_usage()->
     UUID=unittest:test_uuid(),
 %    {true,}= check_balance(UUID),
     ok.
+%------------------------------test for zhiyu  --------------------------------------------------
+test_zhiyu_register_normal_process()->
+    Acc= <<"yxw">>,
+    DevId= <<"test_devid_for_zhiyu">>,
+    GroupId = <<"zy_common">>,
+    Name= Acc,
+    Auth_code = <<"18017813673">>,
+    Pwd= <<"888888">>,
+    Crc=list_to_binary(hex:to(crypto:hash(md5,<<Acc/binary,DevId/binary,GroupId/binary>>))),
+    Params=[{"group_id",GroupId},{"device_id",DevId},{"acc",Acc},{"crc",Crc},{"name",Name},{"auth_code",Auth_code},{"pwd",Pwd}],
+    {obj, Pls}=lw_register:self_noauth_register(Params),
+    UUID=proplists:get_value(uuid,Pls),
+    io:format("test:~p~n",[Pls]),
+    {atomic,[Reg_info]}= lw_register:get_register_info_by_uuid(UUID),
+    RegPls=utility:record2pl(record_info(fields,lw_register),Reg_info),
+
+    ok=proplists:get_value(status,Pls),
+
+    GroupId=proplists:get_value(group_id,RegPls),
+    DevId=proplists:get_value(device_id,RegPls),
+    lw_register:deregister(UUID),
+    {atomic,[]}= lw_register:get_register_info_by_uuid(UUID),
+    ok.
+
+test_max_time()->
+    UUID= <<"31271186">>,
+    MT=max_minutes(UUID,"0086180188888"),
+    true=(MT>0),
+    ok.
+    

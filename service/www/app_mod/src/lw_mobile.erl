@@ -10,6 +10,10 @@
 -define(CALL,"./log/call.log").
 -define(VERSION_INFO, "./docroot/version/version.info").
 -define(DTH_COMMON_PACKAGE_CONFIG, "./priv/package.info").
+-define(ZY_COMMON_PACKAGE_CONFIG, "/home/ubuntu/wcg/www/priv/zy_package.info").
+-define(ZY_COMMON_COIN_PACKAGE_CONFIG, "/home/ubuntu/wcg/www/priv/zy_package_coin.info").
+-define(ZY_TEST_PACKAGE_CONFIG, "/home/ubuntu/wcg/www/priv/zy_test_package.info").
+-define(ZY_TEST_COIN_PACKAGE_CONFIG, "/home/ubuntu/wcg/www/priv/zy_test_package_coin.info").
 -define(VERSION_DTH_INFO, "./docroot/version/version_dth.info").
 -define(VERSION_COMMON_INFO, "./docroot/version/version_common.info").
 
@@ -31,7 +35,8 @@ handle(Arg,'POST', ["self_register"])->
     Res=
     case proplists:get_value("group_id",Params) of
     <<"dth_common">> ->    lw_register:self_noauth_register(Params);
-    _-> [{status,failed},{reason,invalid_params}]
+    <<"zy_common">> ->    lw_register:self_noauth_register(Params);
+    _-> utility:pl2jso([{status,failed},{reason,invalid_params}])
     end,
     io:format("self_register:req:~p ack:~p~n",[Params,Res]),
     Res;
@@ -74,9 +79,12 @@ handle(Arg,'POST', ["login"])->
     Names=[headers|record_info(fields,headers)],
     Headers=lists:zip(Names,tuple_to_list(Tuple)),
 %    io:format("lw_mobile login headers:~n~p~n",[Headers]),
-    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    {ok, Json={obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     Res=login_processor:login([{"ip",IP}|Params]),
-    Res;
+    GroupId=utility:get_string(Json,"group_id"),
+    Result=translate_reason(undefined,GroupId,Res),
+    %io:format("~p~n",[{GroupId,Res,Result}]),
+    Result;
 handle(Arg,'POST', ["third_reg"])->
     IP = utility:client_ip(Arg),
     Acc = utility:query_string(Arg, "acc"),
@@ -97,19 +105,29 @@ handle(Arg,'POST', ["logout"])->
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     R=login_processor:logout([{"ip",IP}|Params]),
     R;
+handle(Arg,'POST', ["coin_package"])->  %for international call according to phone rate zhiyu
+    {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
+    io:format("coin_package:req:~p~n",[Params]),
+    GroupId=proplists:get_value("group_id",Params),
+    UUID=proplists:get_value("uuid",Params),
+    case coin_packages_info(UUID,GroupId) of
+    {ok,Info}-> utility:pl2jso([{status,ok},{package,utility:pl2jsos_br(Info)}]);
+    _-> utility:pl2jso_br([{status,failed}])
+    end;
 handle(Arg,'POST', ["ltalk_package"])->
     {ok, {obj,Params},_}=rfc4627:decode(Arg#arg.clidata),
     io:format("ltalk_package~n:req:~p~n",[Params]),
-    case {proplists:get_value("group_id",Params), packages_info()} of
-    {<<"dth_common">>, {ok,Info}}-> utility:pl2jso([{status,ok},{package,utility:pl2jsos_br(Info)}]);
+    GroupId=proplists:get_value("group_id",Params),
+    UUID=proplists:get_value("uuid",Params),
+    case packages_info(UUID,GroupId) of
+    {ok,Info}-> utility:pl2jso([{status,ok},{package,utility:pl2jsos_br(Info)}]);
     _-> utility:pl2jso_br([{status,failed}])
     end;
-handle(Arg,'POST', ["get_payid"])->
-    utility:log("get_payid clidata:~p~n",[Arg#arg.clidata]),
+handle(Arg,'POST', ["gen_zy_coin_payid"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
-    io:format("get_payid:req:~p~n",[Json]),
-    Res=pay:gen_payment(Json),
-    io:format("get_payid:ack:~p~n",[Res]),
+    io:format("get_types_payid:req:~p~n",[Json]),
+    Res=pay:gen_zy_coin_payid(Json),
+    io:format("get_types_payid:ack:~p~n",[Res]),
     utility:pl2jso_br(Res);
 handle(Arg,'POST', ["get_types_payid"])->
     {ok, Json,_}=rfc4627:decode(Arg#arg.clidata),
@@ -148,15 +166,22 @@ handle(Arg,'POST', ["login1"])->
     {UUID,Pwd, {obj, Clidatas}}= utility:decode(Arg, [{uuid, s}, {pwd, s}, {clidata,o}]),
     R=login_processor:login(UUID,IP,Pwd,Clidatas),
     R;
+handle(Arg,'POST', ["voip","rate"])->
+    _IP = utility:client_ip(Arg),
+    {UUID_SNO,Callee,Device_id}= utility:decode(Arg, [{user_id, s},{callee, s},{device_id,s}]),
+    
+    [{Callee,Rate}]=pay:get_rates("zy_common",voip, [Callee]),
+    io:format("rate:~p~n",[{Callee,Rate,utility:value2binary(Rate)}]),
+    utility:pl2jso([{status,ok},{rate,utility:value2binary(Rate)}]);
 handle(Arg, 'POST', ["voip", "calls"]) ->
     _IP = utility:client_ip(Arg),
-    {UUID_SNO,Callee}= utility:decode(Arg, [{user_id, s},{callee_phone, s}]),
+    {UUID_SNO,Callee,Device_id}= utility:decode(Arg, [{user_id, s},{callee_phone, s},{dev_id,s}]),
     R=login_processor:autheticated(UUID_SNO,Callee),
-    io:format("call auth result:~p~n",[{UUID_SNO,R}]),
+    io:format("call auth result:~p Device_id:~p~n",[{UUID_SNO,R},Device_id]),
     case R of
-    [{status,ok},{uuid,UUID}|_]-> start_call0(UUID, Arg);
+    [{status,ok},{uuid,UUID}|_]-> start_call0(login_processor:filter_phone(UUID), Arg);
     [{status,failed},{reason,Reason}]->
-        utility:pl2jso(get_failed_note(Reason))
+        utility:pl2jso(get_failed_note(UUID_SNO,Reason))
     end;
 handle(Arg, 'DELETE', [ "voip", "calls"]) ->
     SessionID = utility:query_string(Arg, "session_id"),
@@ -223,12 +248,13 @@ handle(Arg, 'POST', ["voip", "icalls"]) ->
     Node=lw_mobile:get_node_by_ip0(Callee,UUID_SNO,utility:client_ip(Arg)),
 %    utility:log(?CALL, "ios:~s=>~s ~s ~s clidata:~p",[UUID_SNO,Callee,utility:make_ip_str(_IP),Node,utility:get_by_stringkey("clidata",Arg)]),
     case login_processor:autheticated(UUID_SNO,Callee) of
-    [{status,ok},{uuid,UUID}|_]-> 
+    [{status,ok},{uuid,UUID0}|_]-> 
+        UUID=login_processor:filter_phone(UUID0),
         GroupId=get_group_id(UUID,Arg),
         login_processor:add_traffic(#traffic{uuid=UUID,caller=UUID,callee=Callee}),
         voice_handler:handle_startcall_nocheck_token(Node,GroupId,Arg);
     [{status,failed},{reason,Reason}]->
-        utility:pl2jso(get_failed_note(Reason))
+        utility:pl2jso(get_failed_note(UUID_SNO,Reason))
     end;
 
 handle(Arg, 'DELETE', [ "voip", "icalls"]) ->
@@ -539,11 +565,10 @@ p2p_push(CallerNode,Phone,Content)->
     end.
 
 get_maxtalkt(_UUID,"*"++_,_Arg)-> no_limit;
-get_maxtalkt(UUID,_,_Arg)->
-   case lw_register:check_balance(UUID) of
-   {true,Lefts} when is_number(Lefts) -> Lefts*60*1000;
-   {false,_} -> 0;
-   {true,no_limit}-> no_limit
+get_maxtalkt(UUID,Callee,_Arg)->
+   case lw_register:max_minutes(UUID,Callee) of
+   Lefts when is_number(Lefts) andalso Lefts<1000 -> Lefts*60*1000;
+   Lefts when is_number(Lefts) -> no_limit
    end.
 %get_group_id(Arg)->   
 %    case utility:get_by_stringkey("group_id",Arg) of
@@ -555,6 +580,8 @@ get_group_id(UUID,_Arg)->     %from login_info
 charge_callback_fun(GroupId,UUID)->
     Fun= if GroupId=="dth_common" orelse  GroupId=="dth" -> consume_minutes; true-> consume_coins end,
     {node(),lw_register,Fun,UUID}.
+consume_func(GroupId,UUID)->
+    {node(),lw_register,zy_consume_func,UUID}.
 build_call_options(UUID, Arg)->
     Ip=utility:client_ip(Arg),
     { _CallerPhone, Phone, {IPs=[SessionIP|_], Port, Codec}, Class} = utility:decode(Arg, [{caller_phone, s}, {callee_phone, s},
@@ -562,7 +589,8 @@ build_call_options(UUID, Arg)->
     {MaxtalkT0,GroupId} = {get_maxtalkt(UUID,Phone,Arg),get_group_id(UUID,Arg)},
     Node=node(),
     Options0=[{uuid, {GroupId, UUID}}, {audit_info, [{uuid,UUID},{ip,utility:make_ip_str(Ip)}]},{cid,UUID},{userclass, Class},{codec,Codec},
-                     {callback,charge_callback_fun(GroupId,UUID)},{country,utility:country(Ip)}],
+                     {callback,charge_callback_fun(GroupId,UUID)},{country,utility:country(Ip)},
+                     {consume_callback,consume_func(GroupId,UUID)}],
     case voice_handler:check_token(UUID, string:tokens(Phone,"@")) of
         {pass, Phone2,Others=[FeeLength]} ->
     %		         io:format("Phone:~p Others:~p~n",[Phone,Others]),
@@ -641,7 +669,6 @@ get_wcg_node(_UUID,Ip)->
         _->    wwwcfg:get(test_node)
     end.
 
-%get_node_by_ip0("00"++_,UUID=_yxwfztest,_) when UUID=="18017813673" -> 'gw@119.29.62.190';
 get_node_by_ip0(_Callee="0086"++_,UUID,Ip)-> 
     R=get_node_by_ip(UUID,Ip),
     io:format("~p=>~p Ip:~p choose node:~p~n",[UUID,_Callee,Ip,R]),
@@ -662,13 +689,15 @@ get_internal_node_by_ip("862180246528",_Ip)-> 'gw@10.32.2.4';
 get_internal_node_by_ip(UUID,Ip)-> 
     wwwcfg:get_internal_wcgnode(utility:c2s(utility:country(Ip))).
 %get_node_by_ip(_luyin_test="13788927293",_Ip)-> 'gw@119.29.62.190';
-get_node_by_ip(UUID,_Ip) when UUID=="02168895100" orelse UUID=="18017813673"-> 
-    'gw1@112.74.96.171'; %'gw1@10.31.203.1';%    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
+%get_node_by_ip(UUID,_Ip) when UUID=="31250025" orelse UUID=="18017813673" orelse UUID=="0086-18616527996"-> 
+%    'gw_git@202.122.107.66'; %'gw1@10.31.203.1';%    'gw@119.29.62.190'; %'gw_git@202.122.107.66'; %
 get_node_by_ip(UUID=_yxwfztest,_) when UUID=="31230011" orelse UUID=="31231028" -> get_internal_node_by_ip(UUID,{168,167,165,245});
 %get_node_by_ip(_Fztest="00862180246198",_Ip)-> wwwcfg:get_wcgnode("Africa");
 %get_node_by_ip(UUID="3"++_,Ip) when length(UUID)==8 -> get_internal_node_by_ip(UUID,Ip);
 %get_node_by_ip(UUID="00862180246"++_,Ip)-> get_internal_node_by_ip(UUID,Ip);
 get_node_by_ip(UUID,{203,222,195,122})-> get_internal_node_by_ip(UUID,{203,222,195,122});
+get_node_by_ip(UUID,{10,31,203,1})-> wwwcfg:get_wcgnode("Mainland");
+
 get_node_by_ip(UUID,Ip)->
     R0= wwwcfg:get_wcgnode(utility:c2s(utility:country(Ip))),
     case lists:member(R0,nodes()) of
@@ -691,7 +720,8 @@ do_callback1(SIPNODE,_UUID={Groupid,Uuid},LocalPhone,Remote_phone,MaxtalkTime)->
     {_A,B,_C}=erlang:now(),
     Session_id=list_to_binary(Uuid++"_"++integer_to_list(B)),
     Plist=[{Groupid,Session_id}, [{groupid,fake_auditinfo},{caller,{"", LocalPhone, 1}},
-                 {callee,{"", Remote_phone, 1}},{max_time,MaxtalkTime},{callback,charge_callback_fun(Groupid,Uuid)}]],
+                 {callee,{"", Remote_phone, 1}},{max_time,MaxtalkTime},{callback,charge_callback_fun(Groupid,Uuid)},
+                 {consume_callback,consume_func(Groupid,Uuid)}]],
     io:format("do_callback1,~p~n",[Plist]),
     
     case rpc:call(SIPNODE, lw_voice, start_callback, Plist) of
@@ -885,16 +915,80 @@ hexstr_to_bin([X,Y|T], Acc) ->
   {ok, [V], []} = io_lib:fread("~16u", [X,Y]),
   hexstr_to_bin(T, [V | Acc]).
 
-get_failed_note(balance_not_enough)->
+translate_reason(_UUID,Groupid,Json)->
+    {obj,Pls}=Json,
+    case proplists:get_value(status,Pls) of
+        failed->
+            Reason=proplists:get_value(reason,Pls),
+            Pls1=get_failed_note(_UUID,Groupid,Reason),
+            {obj,lists:ukeymerge(1,Pls,Pls1)};
+        _-> Json
+    end.
+get_failed_note(UUID,Reason)->  get_failed_note(UUID,get_group_id(UUID,undefined),Reason).
+
+get_failed_note(_UUID,"zy_common",group_not_match)->
+    [{status,failed},{reason,group_not_match},{type,alert},{timelen,5},
+      {content,<<"账号非法">>}];
+get_failed_note(_UUID,"zy_common",balance_not_enough)->
+    [{status,failed},{reason,balance_not_enough},{type,alert},{timelen,5},
+      {content,<<"账户余额不足,请您充值。如有疑问请咨询客服,谢谢">>}];
+get_failed_note(_UUID,"zy_common",not_actived)->
+    [{status,failed},{reason,not_actived},{type,alert},{timelen,5},
+      {content,<<"未激活">>}];
+get_failed_note(_UUID,"zy_common",no_logined)->
+    [{status,failed},{reason,no_logined},{type,tips},{timelen,5},
+      {content,<<"未登录">>}];
+get_failed_note(_UUID,_Groupid,balance_not_enough)->
     [{status,failed},{reason,balance_not_enough},{type,alert},{timelen,5},
       {content,<<"亲爱的用户,您的账户余额不足,请充值。如有疑问请拨打*812或者*810,谢谢！">>}];
-get_failed_note(not_actived)->
+get_failed_note(_UUID,_Groupid,not_actived)->
     [{status,failed},{reason,not_actived},{type,alert},{timelen,5},
       {content,<<"呼叫失败：电话未激活，可能原因：1 当月额度用完；2 套餐到期；3 当天拨打超过限制时长;4 拨打违规 详细请与代理商或者管理员联系,请用本软件拨打*810或者*812联系。">>}];
-get_failed_note(no_logined)->
+get_failed_note(_UUID,_Groupid,no_logined)->
     [{status,failed},{reason,no_logined},{type,tips},{timelen,5},
       {content,<<"您好,为确保账户安全,麻烦您重新登录,给您带来不便,敬请谅解">>}];
-get_failed_note(Other)->
+get_failed_note(_UUID,_Groupid,Other)->
     [{status,failed},{reason,Other},{type,tips},{timelen,5},{content,Other}].
+
+packages_info(GroupId)-> packages_info("",GroupId).
     
+packages_info(UUID,GroupId) when is_list(GroupId)-> packages_info(UUID,list_to_binary(GroupId));
+packages_info(_,<<"dth_common">>)-> packages_info();
+packages_info(UUID,<<"zy_common">>)-> 
+    {ok,R1}=zy_packages_info(),
+    {ok,R1++test_package(UUID)};
+packages_info(_,_)-> failed.
+
 packages_info()-> file:consult(?DTH_COMMON_PACKAGE_CONFIG).    
+zy_packages_info()-> file:consult(?ZY_COMMON_PACKAGE_CONFIG).    
+
+coin_packages_info(UUID,<<"zy_common">>)-> 
+    {ok,R1}=zy_coin_packages_info(),
+    {ok,R1++test_coin_package(UUID)}.
+
+zy_coin_packages_info()-> file:consult(?ZY_COMMON_COIN_PACKAGE_CONFIG).    
+
+
+-define(TEST_PHONES,["31271295","31271186"]).
+
+is_test_phone(UUID)->lists:member(UUID,?TEST_PHONES).
+test_package(UUID) when is_binary(UUID)->test_package(binary_to_list(UUID));
+test_package(UUID)->
+    io:format("test_package ~p~n",[UUID]),
+    case {get_group_id(UUID,undefined), is_test_phone(UUID)} of
+        {"zy_common",true}-> 
+            {ok,R}=file:consult(?ZY_TEST_PACKAGE_CONFIG),
+            R;
+        _-> []
+        end.
+
+test_coin_package(UUID) when is_binary(UUID)->test_coin_package(binary_to_list(UUID));
+test_coin_package(UUID)->
+    case {get_group_id(UUID,undefined), is_test_phone(UUID)} of
+        {"zy_common",true}-> 
+            {ok,R}=file:consult(?ZY_TEST_PACKAGE_CONFIG),
+            R;
+        _-> []
+        end.
+
+

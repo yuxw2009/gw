@@ -1,5 +1,5 @@
 -record(lw_register,{uuid,name="",phone="", device_id,pwd,group_id= <<"common">>, 
-             pls = [{pkgs,[]},{payids,[]}]}).  %group_id:common/dth/livecom/...    binary   %pls:[{balance,B},{feerate,R}]
+             pls = [{pkgs,[]},{payids,[]},{qu_coin,0.0}]}).  %group_id:common/dth/livecom/...    binary   %pls:[{balance,B},{feerate,R}]
              
  % account:0131000051@livecom for company employee  or 31250025 for public mail_infos:{mail_acc,mail_pwd,addr}
 -record(mail_t0,{account,mail_infos=[],uuid,max_oa_uid=1,max_mail_uid=1,pls=[]}).

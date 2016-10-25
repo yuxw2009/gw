@@ -55,8 +55,12 @@ init(Owner,Options) ->
 %    io:format("voip_ua:options:~p~n",[Options]),
     init(Owner,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
     
-init(Owner,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
-       io:format("voip_ua:init uuid:~p~n",[UUID]),
+init(Owner,Role,Cid0,Phone0,UUID0, Audit_info, Maxtime, Options) ->
+    UUID= case UUID0 of
+        {Groupid_,Caller_} when is_atom(Groupid_)-> {atom_to_list(Groupid_),Caller_};
+        _-> UUID0
+    end,
+    %   io:format("voip_ua:init uuid:~p~n",[{UUID0,UUID}]),
     Cid = session:trans_caller_phone(Phone0,Cid0),
     From=session:caller_addr(Cid ),
     Phone = session:trans_callee_phone0(Phone0,UUID),
@@ -371,12 +375,7 @@ generate_cdr(State)->
             Audit_info = State#state.audit_info,
             Phone = State#state.phone,
             Options=State#state.options,
-            cdrserver:new_cdr(voip, {UUID,Audit_info, Phone,TimeInfo,Options}),
-            CallerInfo1 = {State#state.cid,0},
-            CalleeInfo1 = {Phone,1},
-            TimeInfo1={StartTime,EndTime,TimeLen},
-            io:format("voip_ua:generate_cdr:~nrpc:call:~p~n",[Options]),
-            rpc:call('company@lwork.hk',zteapi,new_cdr,[UUID,CalleeInfo1,CallerInfo1,TimeInfo1,Options]);
+            cdrserver:new_cdr(voip, {UUID,Audit_info, Phone,TimeInfo,Options});
         true -> 
             no_cdr_needed
     end.
@@ -399,7 +398,7 @@ maxtalk_judge(State0=#state{max_time=Maxtime})->
 
 traffic(_St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
     Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
-      {callee_sip,sipcfg:ssip(Phone)},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
+      {callee_sip,sipcfg:ssip()},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
     rpc:call('traffic@lwork.hk',traffic,add,[Trf]).
     
     

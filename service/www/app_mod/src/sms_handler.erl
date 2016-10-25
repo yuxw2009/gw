@@ -16,10 +16,11 @@ handle(Arg, 'POST', ["auth_code"]) ->
     UUID    = utility:get_string(Json, "uuid"),
     Phone    = utility:get_string(Json, "phone"),
     case {lw_register:get_register_info_by_uuid(UUID), lw_register:get_register_info_by_phone(Phone)}  of
-    {{atomic,[_]},[_|_]} when Phone=/="13788927293",Phone=/="18296131759"->  
+    {{atomic,[_]},[_|_]} when Phone=/="13788927293",Phone=/="18017813673"->  
         io:format("888888888888888888888888~n"),
         utility:pl2jso_br([{status,failed},{reason, phone_already_bind}]);
-    {{atomic,[#lw_register{name=Name,group_id=GroupId}]},[]}->
+    {{atomic,[#lw_register{name=Name,group_id=GroupId}]},PhoneRegInfo} when PhoneRegInfo==[] orelse Phone=="13788927293" orelse 
+               Phone=="18017813673"->
         DID    = utility:get_string(Json, "device_id"),
         Code_bin=auth_code(UUID++DID),
         SerID  = wwwcfg:get_serid(),
@@ -39,6 +40,20 @@ handle(Arg, 'GET', []) ->
 %%% rpc call
 
 send_sms(Para) ->
+    [Phone]=proplists:get_value(members,Para),
+    Content=proplists:get_value(content,Para),
+    R=os:cmd("python test.py "++Phone++" "++Content),
+    case re:run(R,"'success': True") of
+    {match,[{100,15}]}->
+        [{status,ok},{phone,Phone}];
+    _-> 
+        case re:run(R,"errorcode=(\\d*) .*",[{capture, all_but_first, list}]) of
+        {match,[ErrCode]}->        [{status,failed},{reason,ErrCode}];
+        _-> [{status,failed},{reason,unknown}]
+        end
+    end.
+
+send_sms1(Para) ->
     Node = wwwcfg:get(voice_node),
     case rpc:call(Node, lw_sms, send_sms, [Para]) of
         {ok, Fails}-> [{status,ok}, {fails,Fails}];
@@ -46,7 +61,7 @@ send_sms(Para) ->
     end.
 
 get_sms_history(UUID, _SessionIP) ->
-    Node = www_cfg:get(voice_node),
+    Node = www_cfg:get(sms_node),
     {ok,R} = rpc:call(Node,tele,get_sms_history,[UUID]),
     R.
     

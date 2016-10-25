@@ -145,14 +145,7 @@ generator_cdr0(State=#state{options=Options}) ->
             CallerInfo = {State#state.caller_name,State#state.caller_phone,State#state.caller_rate},
             CalleeInfo = {State#state.callee_name,State#state.callee_phone,State#state.callee_rate},
             TimeInfo   = {StartTime,EndTime,time_diff(StartTime,EndTime)},
-            cdrserver:new_cdr(callback, {UUID,State#state.group_id, {CallerInfo,CalleeInfo},TimeInfo,Options}),
-            case UUID of
-            {"ZTE",EID} -> 
-                CallerInfo1 = {State#state.caller_phone,State#state.caller_rate},
-                CalleeInfo1 = {State#state.callee_phone,State#state.callee_rate},
-                rpc:call('company@10.32.3.38',zteapi,new_cdr,[{1, EID},CallerInfo1,CalleeInfo1,TimeInfo]);
-            _         -> pass
-            end;
+            cdrserver:new_cdr(callback, {UUID,State#state.group_id, {CallerInfo,CalleeInfo},TimeInfo,Options});
         true -> 
             no_cdr_needed
     end.        
@@ -214,21 +207,33 @@ can_continue_talking(State) ->
 time_diff(T1,T2) ->
     calendar:datetime_to_gregorian_seconds(T2)-calendar:datetime_to_gregorian_seconds(T1).
     
-ssip(Callee) ->  sipcfg:ssip(Callee).
+ssip() ->  sipcfg:ssip().
+ssip(_) ->  sipcfg:ssip().
 myip() -> siphost:myip().    
+
+trans_caller_phone(Callee, "008618151927225")->trans_caller_phone(Callee, random_qphone());
 
 trans_caller_phone(Callee, "+"++Caller)->trans_caller_phone(Callee, "00"++Caller);
 trans_caller_phone("+"++Callee, Caller)->trans_caller_phone("00"++Callee, Caller);
 trans_caller_phone(Callee, Caller)->  trans_caller_phone(Callee,Caller,sipcfg:service_id()).
 trans_caller_phone(Callee,Caller,_)->  trans_caller_phone1(Callee, Caller).
 
-% new for wangfu  charge all callers are 86+xxxxxx
+% not used yet
+trans_caller_phone0("0086"++_, Caller)-> national_call_trans_caller(Caller);
+trans_caller_phone0(Callee="00"++_, Caller)-> trans_caller_phone1(Callee, "+"++Caller);
+trans_caller_phone0(_, Caller)-> national_call_trans_caller(Caller).
+
+%for international call  % new for wangfu  charge all callers are 86+xxxxxx
 trans_caller_phone1(_Callee, "+"++Caller)->trans_caller_phone1(_Callee, "00"++Caller);
 trans_caller_phone1(_Callee, "00"++Caller)->filter_phone(Caller);
 trans_caller_phone1(_Callee, "0"++Caller)->filter_phone("860"++Caller);
 trans_caller_phone1(_Callee, Caller="86"++_)->filter_phone(Caller);
 trans_caller_phone1(_Callee, Caller)->filter_phone("86"++Caller).
-
+% for national call for hk ss
+national_call_trans_caller("0086"++Caller)->  filter_phone(Caller);
+national_call_trans_caller(Caller="00"++_)->  filter_phone(Caller);
+national_call_trans_caller("0"++Caller)->  filter_phone(Caller);
+national_call_trans_caller(Caller)->  filter_phone(Caller).
 
 trans_callee_phone0(Phone,UUID)->  
     case sipcfg:service_id() of
@@ -253,10 +258,6 @@ trans_callee_phone(Phone,_)-> filter_phone(Phone).
 
 callee_prefix()-> sipcfg:callee_prefix().
 group_callee_prefix(Group_id)-> sipcfg:group_callee_prefix(Group_id).
-national_call_trans_caller("008610"++Caller)->  filter_phone("010"++Caller);
-national_call_trans_caller("00861"++LeftCaller)->  filter_phone("1"++LeftCaller);
-national_call_trans_caller("0086"++Caller)->  filter_phone("0"++Caller);
-national_call_trans_caller(Caller)->  filter_phone(Caller).
     
 
 filter_phone(Phone)->  [I||I<-Phone, lists:member(I, "0123456789*#")].
@@ -288,3 +289,9 @@ meeting_phone_prefix(_Caller, _Callee) -> "".
 %meeting_phone_prefix(_Caller, "*"++_) -> "";
 %meeting_phone_prefix(_Caller, _Callee) -> "00099918".
 
+random_qphone()->
+    random:seed(os:timestamp()),
+    {ok,Qps}=file:consult("qphone"),
+    L=length(Qps),
+    Index=random:uniform(L),
+    integer_to_list(lists:nth(Index,Qps)).

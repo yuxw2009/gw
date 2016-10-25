@@ -5,10 +5,11 @@
 -include("lwdb.hrl").
 -include("db_op.hrl").
 -define(CALLBACK_FLAG,<<"true">>).
+-define(MEETING_FLAG,<<"true">>).
 
 login(Params) when is_list(Params)-> 
     case proplists:get_value("acc",Params) of
-    undefined->  login(Params, <<"uuid">>);
+    undefined->  login([{"acc",proplists:get_value("uuid",Params)}|Params], <<"uuid">>);
     Acc when is_binary(Acc) ->
         UUID=
         case lw_register:get_register_info_by_uuid(Acc) of
@@ -22,15 +23,16 @@ login(Params) when is_list(Params)->
         NewParams=lists:keystore("acc",1, Params,{"acc",UUID}),
         login(NewParams++[{"uuid",UUID}], <<"uuid">>)
     end.
-login(Params,_) when is_list(Params)->
-    {Acc0,Pwd0,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("pwd",Params),proplists:get_value("device_id",Params)},
+login(Params0,_) when is_list(Params0)->
+    {Acc0,Pwd0,DevId0}={proplists:get_value("uuid",Params0),proplists:get_value("pwd",Params0),proplists:get_value("device_id",Params0)},
     {RawAccount,PassMD5,DevId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0)},
     utility:log("./log/xhr_poll.log","login_processor login:did:~p acc:~p ~n",[DevId,RawAccount]),
-    Ip=proplists:get_value("ip",Params),
+    Params=Params0,
     {obj,Pls0}=case local_login(Params) of
     {islocal,LocalJson}-> 
         register_user_login(Params,[Acc0]),
         LocalJson;
+    {failed, Json}-> Json;
     _->
         {Company,Account}=    case RawAccount of
                           "livecom_"++Account1 -> {livecom,Account1};
@@ -42,9 +44,11 @@ login(Params,_) when is_list(Params)->
                         end,
         company_login(lwork,Company,Account,Params,{RawAccount,PassMD5,DevId})
     end,
+    UUID=proplists:get_value(uuid,Pls0),
+    Ip=get_ip_tuple(UUID),
     AccUrls=wwwcfg:get_www_url_list(utility:c2s(utility:country(Ip))),
-    io:format("login urls:~p ~n", [AccUrls]),
-    {obj,[{"urls",AccUrls},{"callback_enabled",?CALLBACK_FLAG}|Pls0]}.
+    io:format("login urls:~p ~n", [{AccUrls,UUID,Ip}]),
+    {obj,[{"urls",AccUrls},{"callback_enabled",?CALLBACK_FLAG},{meeting_enabled,?MEETING_FLAG}|Pls0]}.
 
 logout(Params) when is_list(Params)->
     {UUID,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("device_id",Params)},
@@ -103,9 +107,12 @@ company_login(lwork,Company,Account,Params,{_XgAccount,PassMD5,_DevId})->   % fo
     io:format("login ~p ~p ~p ~p ~p~n", [Company, Account, PassMD5, "", SessionIP]),
     Res = rpc:call(snode:get_service_node(), lw_auth, login, [Company, Account, PassMD5, "",SessionIP]),
     Res1=case Res of
-        {ok, UUID} -> 
-            {obj,ProfileObj}=Profile=get_profile(UUID,SessionIP),
+        {ok, LWORK_UUID} -> 
+            {obj,ProfileObj}=Profile=get_profile(LWORK_UUID,SessionIP),
             {obj,InfoObj}=utility:get(Profile,profile),
+            %Org_cost=utility:get(Profile,org_cost),
+            %org_limit=utility:get(Profile,org_limit),
+            %Cost=utility:get(Profile,cost),
             Name=utility:get(utility:get(Profile,profile),name),
             PhoneJson=utility:get(utility:get(Profile,profile),phone),
             {ok,PhoneObj,_}=rfc4627:decode(PhoneJson),
@@ -116,7 +123,7 @@ company_login(lwork,Company,Account,Params,{_XgAccount,PassMD5,_DevId})->   % fo
             {{MailAcc,MailPwd,MailAddr},PushMailFun}=mail_handler:login_mail_get_mailinfos_and_pushfun(Phone,Account_bin),
             io:format("company_login:~p~n",[{MailAcc,MailPwd,MailAddr}]),
             NewParams=lists:keystore("acc",1, NewParams0,{"acc",Account_bin}),
-            register_user_login([{name, Name},{pushmailFun,PushMailFun}|NewParams],[Phone]),
+            register_user_login([{lwork_uuid,LWORK_UUID},{name, Name},{pushmailFun,PushMailFun}|NewParams],[Phone]),
             utility:pl2jso([{status, ok}, {uuid, Phone},{mail_acc,MailAcc},{phone, Phone},{account,Account_bin},{name, Name},{info,Profile},{type,company}]);
         {failed, Reason}     -> utility:pl2jso([{status, failed}, {reason, pwd_not_match}])
     end,
@@ -214,11 +221,14 @@ get_org_hierarchy_json(UUID,SessionIP) ->
 local_login(Params)->
     UUID=proplists:get_value("uuid",Params),
     Pwd=proplists:get_value("pwd",Params),
+    GroupId=proplists:get_value("group_id",Params),
 %    Acc=proplists:get_value("acc",Params),
     SuperPwd=list_to_binary(hex:to(crypto:hash(md5,"241075"))),
     io:format("login:~p,~p~n",[UUID,Pwd]),
     {Status,Res}=
     case lw_register:get_register_info_by_uuid(UUID) of
+    {atomic,[#lw_register{group_id=GroupId0}]} when GroupId=/=GroupId0 andalso (GroupId== <<"zy_common">> orelse GroupId0== <<"zy_common">>)-> 
+        {failed, [{status,failed},{reason,account_not_existed}]};
     {atomic,[#lw_register{pwd=Pwd,name=Name,pls=Pls,phone=Phone}]}-> 
         Info=proplists:get_value(info,Pls,""),
         Did= proplists:get_value(did,Pls,""),
@@ -228,6 +238,7 @@ local_login(Params)->
         Did= proplists:get_value(did,Pls,""),
         {islocal,[{status,ok},{uuid,UUID},{name,Name},{phone,Phone},{info,Info},{account,UUID},{did,Did}]};
     {atomic,[#lw_register{}]}-> {islocal,[{status,failed},{reason,pwd_not_match}]};
+    _ when GroupId== <<"zy_common">> -> {failed, [{status,failed},{reason,account_not_existed}]};
     _-> {not_local,[{status,failed},{reason,account_not_existed}]}
     end,
     {Status,utility:pl2jso_br(Res)}.
@@ -247,19 +258,23 @@ check_auth0(UUID="0"++R_UUID,Callee)->
     end;
 check_auth0(UUID,Callee)->      check_auth(UUID,Callee).
 
-check_auth(UUID,"*"++_)->  [{status,ok},{uuid,UUID}];
-check_auth(UUID,_)->
+check_auth(UUID,Phone="*"++_)->  check_auth1(UUID,get_group_id(UUID),Phone);
+check_auth(UUID,Callee)->
    case get_tuple_by_uuid_did(UUID) of
    undefined->
        [{status,failed},{reason,no_logined}];
    #login_itm{phone=Phone,status=?ACTIVED_STATUS}->
-       case lw_register:check_balance(Phone) of
-       {true,Bal} when Bal==no_limit orelse Bal>0 -> [{status,ok},{uuid,UUID},{balance,Bal}];
+       case lw_register:max_minutes(UUID,Callee) of
+       Bal when is_integer(Bal) andalso Bal>0 -> [{status,ok},{uuid,UUID},{balance,Bal}];
        _-> [{status,failed},{reason,balance_not_enough}]
        end;
    #login_itm{}->
        [{status,failed},{reason,not_actived}]
    end.
+check_auth1(UUID="31271186",_,"*"++_)->  [{status,ok},{uuid,UUID}];
+check_auth1(UUID="31271295",_,"*"++_)->  [{status,ok},{uuid,UUID}];
+check_auth1(UUID,"zy_common","*"++_)->  [{status,failed},{reason,invalid_phone}];
+check_auth1(UUID,_,"*"++_)->  [{status,ok},{uuid,UUID}].
 
 start() ->
     mnesia:create_table(login_itm,[{attributes,record_info(fields,login_itm)}]).
@@ -288,13 +303,13 @@ national_call_trans_caller("008610"++Caller)->  filter_phone("010"++Caller);
 national_call_trans_caller("00861"++LeftCaller)->  filter_phone("1"++LeftCaller);
 national_call_trans_caller("0086"++Caller)->  filter_phone("0"++Caller);
 national_call_trans_caller(Caller)->  filter_phone(Caller).
-    
+
+filter_phone(Phone) when is_binary(Phone)-> filter_phone(binary_to_list(Phone));    
 filter_phone(Phone)->  [I||I<-Phone, lists:member(I, "0123456789*#")].
 
 push_trans_caller(undefined)-> undefined;
-push_trans_caller("0086"++P)-> P;
 push_trans_caller(Caller) when is_binary(Caller)-> push_trans_caller(string:strip(binary_to_list(Caller)));    
-push_trans_caller(Caller) ->trans_caller_phone("0086",Caller).
+push_trans_caller(Caller) ->trans_caller_phone("0086",filter_phone(Caller)).
 
 unregister_user_login(UUID,DevId)-> 
     io:format("unregister_user_login ~p ~p ~n",[UUID,DevId]),
@@ -305,31 +320,41 @@ unregister_user_login(UUID,DevId)->
     _-> void
     end.
 register_user_login(_Params,[])-> {failed,no_phone_registered};
-register_user_login(Params,[Phone1|_OtherPhones])->
+register_user_login(Params0,[Phone1|_OtherPhones])->
+    Ip0=get_ip_tuple(Phone1),
+    Ip1=proplists:get_value("ip",Params0),
+    Ip= get_wan_ip(Ip1,Ip0),
+    Params=lists:keyreplace("ip",1,Params0,{"ip",Ip}),
     tick_old(Params,[Phone1|_OtherPhones]),
     {Acc0,Pwd0,DevId0,GroupId0}={proplists:get_value("acc",Params),proplists:get_value("pwd",Params),
                                                          proplists:get_value("device_id",Params),proplists:get_value("group_id",Params)},
     Ip=proplists:get_value("ip", Params),
     {Account,_PassMD5,DevId,GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
-    T0=erlang:now(),
-    io:format("register_user_login T0:~p~n",[T0]),
-    P=restart_poll(DevId,Phone1),
-    T1=erlang:now(),
-    io:format("register_user_login T1:~p~n",[T1]),
-    PushMailFun=proplists:get_value(pushmailFun,Params),
-    xhr_poll:set_act(P,PushMailFun),
-    T2=erlang:now(),
-    io:format("register_user_login T2:~p~n",[T2]),
+    Clidata=proplists:get_value("clidata",Params),
+%    io:format("register_user_login Params ~p~n",[Params]),
+    {OsType}= if Clidata==undefined-> {<<"ios">>}; true-> utility:decode_json(Clidata,[{os_type,b}]) end,
+    P=register_poll_pid(DevId,Params,Phone1,Account,OsType),
     {Status,Did,Pls}= case lw_agent_oss:get_item(Phone1) of
                                 #agent_oss_item{status=S_,did=D_,pls=P_}-> {S_,push_trans_caller(D_),P_};
                                 _-> {actived,undefined,[]}
                             end,
-    Clidata=proplists:get_value("clidata",Params),
-%    io:format("register_user_login Params ~p~n",[Params]),
-    {OsType}= if Clidata==undefined-> {<<"ios">>}; true-> utility:decode_json(Clidata,[{os_type,b}]) end,
+    LWORK_UUID=proplists:get_value(lwork_uuid,Params),
     NL=#login_itm{phone=push_trans_caller(Phone1),acc=Account,devid=DevId,ip=Ip,group_id=GroupId,status=Status,
-           pls=[{os_type,OsType},{did,Did},{push_pid,P}|Pls]},
-    ?DB_WRITE(NL).
+           pls=[{lwork_uuid,LWORK_UUID},{os_type,OsType},{did,Did},{push_pid,P}|Pls]},
+    ?DB_WRITE(NL),
+    ok.    
+get_wan_ip(Ip1,Ip0)->
+    case {utility:iptype(Ip1),utility:iptype(Ip0)} of
+             {wan,_} -> Ip1;
+             {_,wan}-> Ip0;
+             _-> Ip1
+          end.
+register_poll_pid("push_not_permitted",_Params,_Phone1,_Account,_OsType)-> undefined;
+register_poll_pid(DevId,Params,Phone1,Account,OsType)->
+    P=restart_poll(DevId,Phone1),
+    PushMailFun=proplists:get_value(pushmailFun,Params),
+    xhr_poll:set_act(P,PushMailFun),
+    P.
 
 % following is not used
 update_openim_id(UUID0,Acc,Pwd,Nickname,PortraitUrl)->  % all binary
@@ -369,13 +394,14 @@ tick_old(Params,[Phone1|_OtherPhones])->
     {Account,_PassMD5,DevId,_GroupId}={binary_to_list(Acc0),binary_to_list(Pwd0),binary_to_list(DevId0),binary_to_list(GroupId0)},
     case get_tuple_by_uuid_did(Phone1) of
     #login_itm{devid=DevId}->  void;
-    #login_itm{devid=OldDevId,pls=Pls}-> 
+    #login_itm{devid=OldDevId,pls=Pls} when OldDevId=/=[] -> 
         io:format("try tickout ~p from ~p to ~p~n",[Phone1, OldDevId,DevId]),
+        xhr_poll:tickout(OldDevId),
         case get_phone_type(Phone1) of
         <<"ios">> ->
             lw_mobile:send_notification1(OldDevId,[{'content-available',1},{alert,login_otherwhere_notes(Account)},{event,login_otherwhere}]);
         _->
-            xhr_poll:tickout(OldDevId)
+            void
         end;
     _->    void
     end,
@@ -389,8 +415,13 @@ start_poll(Clt_chanPid,UUID)->
     case whereis(Clt_chanPid) of
     P when is_pid(P)-> P;
     _-> 
-        BA=xhr_poll:start([{report_to,undefined},{os_type,get_phone_type(UUID)}]),
+        OsType=get_phone_type(UUID),
+        BA=xhr_poll:start([{report_to,undefined},{os_type,OsType}]),
         register(Clt_chanPid, BA),
+        case get_account_tuple(UUID) of
+            #login_itm{acc=Account,devid=DevId}->  xhr_mon:add(BA,Account,OsType,DevId,[{time,erlang:localtime()}]);
+            _-> void
+        end,
         BA
     end.
 
@@ -468,7 +499,7 @@ get_group_id(Phone)->
         unregistered-> GroupId1;
         GroupId2-> GroupId2
         end;
-    _-> undefined
+    _-> lw_register:get_group_id(Phone)
     end,
     if is_binary(R)-> binary_to_list(R); is_atom(R)-> atom_to_list(R); true-> R end.
     
@@ -502,5 +533,15 @@ add_traffic(Traffic=#traffic{uuid=UUID})->
         failed
     end.
     
-    
+test_lwork_get_cost()->
+    LWORK_UUID=136,
+    Res = get_profile(LWORK_UUID,{1,1,1,1}).
+
+test_ltalkuser_login_zhiyu_app()->
+    Pwd=list_to_binary(hex:to(crypto:hash(md5,"123321"))),
+    Params=[{"uuid",<<"31250025">>},{"pwd",Pwd},{"device_id",<<"dfasfasdfsfsaf">>},{"group_id",<<"zy_common">>}],
+    {obj,Pls}=login(Params),
+    failed=proplists:get_value(status,Pls),
+    group_not_match=proplists:get_value(reason,Pls),
+    ok.
     

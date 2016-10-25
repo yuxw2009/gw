@@ -69,7 +69,7 @@ req: [{session_id, SID}]
 ack: [{status,ok}]
 
 11 get callback status
-get lwork/mobile/calls/status?uuid=u
+get lwork/mobile1/calls/status?session_id=s
 ack: [{status,ok}, {local,CallerStatus},{remote,CalleeStatus}]  released表示都释放
 
 12 长连接推送接口
@@ -109,7 +109,11 @@ ack:  [{status, ok}]
 18 根据uids获取oa提醒内容
 post fc2fc.com:8188/mail/get_oa_summary 
 params:  {account:"0131000032@livecom",page_num:n,page_index:i}
-ack: {status:ok,mails:[{uid:u,Subject:sub,oa_link:link}]}
+ack: {status:ok,uids:[{uid:u,Subject:sub,oa_link:link}]}
+
+19 根据uid找到oa_link
+get fc2fc.com:8188/mail/get_oa_link?account=a&uid=u
+ack: {status:ok,'uid':uid,'oa_link':oa_link}
 
 
 //以下不要
@@ -184,9 +188,8 @@ login 修改
 3 login接口
 post lwork/mobile/login
 req: {acc: a, pwd: s,device_id:did, clidata:{os_type:"android"},group_id:g}
-ack: {status:ok, uuid:u,info:info,{name,Name},{urls,Urls}}
-
-
+ack: {status:ok, uuid:u,info:info,{name,Name},{urls,Urls},account:account}
+注： account很重要 不能随便改，否则im登录不了，push service也不对，会导致退出。
 
 12 查询被叫在线状态
 post lwork/mobile1/query_status
@@ -289,7 +292,7 @@ ack: {status:ok, lefts:c, gifts:gc,month_consumed:mc,expir_date:e}
 
 4 获取支付订单
 post lwork/mobile/get_types_payid
-req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type,name:name,acc:acc,third_pay_org:org}
+req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type}
 org: "alipay" or "wx"
 ack: {status:ok, payid:payid,uuid:uuid}
 
@@ -306,3 +309,31 @@ http://119.29.62.190:8080/lwork/mobile1/paytest/package_pay
 post /lwork/mobile1/paytest/package_pay/apple
 req: {uuid:u,payid:payid,device_id:dvid,money:m,receipt:base64ed}
 ack: {status:ok}  {status:failed,reason:reason}
+
+
+for zhiyu
+获取直币订单号接口
+1 获取支付订单
+post lwork/mobile/gen_zy_coin_payid
+req: {uuid:u,device_id:dvid,money:m,group_id:g,pay_type:pay_type}
+ack: {status:ok, payid:payid,uuid:uuid}
+
+2 获取升级信息
+get lwork/mobile/version_common_no
+例子:
+curl -i -X GET   https://lwork.hk/lwork/mobile/version_common_no
+
+3 获取费率
+post lwork/mobile/voip/rate
+req: {uuid:u,device_id:dvid,callee:callee}
+ack: {status:ok, rate:Rate}
+例子：
+curl -i -H 'content-type: application/json' -X POST -d '{"user_id":"18017813673","callee_phone":"0085218017813673","device_id":"18017813673"}}'   https://lwork.hk/lwork/mobile/voip/rate
+
+4 获取话单
+用中兴ltalk的接口即可，如下：
+post URL:http://lwork.hk:8091/service.yaws
+req: form格式  command=load_employer_detail&companyid=15&employerid=31271186&t=1475130151405
+ack: [{"caller":"13913841060","called":"008613913841031","start_time":"2016-9-25-19-1-39","end_time":"2016-9-25-19-2-26","cost":"1.00",charge:c,pkg_minutes:p,"recurl":""}]
+例子:
+curl -i -X POST -d 'command=load_employer_detail&companyid=15&employerid=31271186'   http://lwork.hk:8091/service.yaws
