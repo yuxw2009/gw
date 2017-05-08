@@ -337,3 +337,8 @@ req: form格式  command=load_employer_detail&companyid=15&employerid=31271186&t
 ack: [{"caller":"13913841060","called":"008613913841031","start_time":"2016-9-25-19-1-39","end_time":"2016-9-25-19-2-26","cost":"1.00",charge:c,pkg_minutes:p,"recurl":""}]
 例子:
 curl -i -X POST -d 'command=load_employer_detail&companyid=15&employerid=31271186'   http://lwork.hk:8091/service.yaws
+
+5 分享送话费
+post lwork/mobile/share
+req: {uuid:u,device_id:dvid,group_id:g,type:type}   type: QQ  Qzone   WXSceneSession  WXSceneTimeline
+ack: {status:ok, uuid:uuid,minutes:m,coins:coins}   {status:failed,reason:shared_already}
