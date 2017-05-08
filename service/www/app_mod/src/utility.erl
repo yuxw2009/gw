@@ -113,6 +113,10 @@ atom(A) ->
         S
   end.
 
+query_table(T,CondFun)->
+    F=(fun(T,Con)-> qlc:e(qlc:q([X||X<-mnesia:table(T),Con(X)])) end),
+    Q=fun(T,Con)-> mnesia:transaction(fun()-> F(T,Con) end) end,
+    Q(T,CondFun).
 
 client_ip(Arg) ->
     {Ip, _Port} = Arg#arg.client_ip_port,

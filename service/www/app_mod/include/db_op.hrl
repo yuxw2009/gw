@@ -6,4 +6,5 @@
 -define(DB_DELETE(T,K), ?DB_DELETE({T,K})).
 -define(DB_DELETE(T_K), ?DB_OP(mnesia:delete(T_K))).
 -define(DB_QUERY(T), ?DB_OP(qlc:e(qlc:q([X||X<-mnesia:table(T)])))).
+-define(DB_QUERY(T,Cond), ?DB_OP(qlc:e(qlc:q([X||X<-mnesia:table(T),Cond])))).
 

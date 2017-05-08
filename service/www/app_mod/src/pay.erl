@@ -39,6 +39,8 @@
 						"3W4frJThvzJITaq18umBPMVt+mUuCPgfgzh9XC1sH6IUn/Dte4zAzNxZKZScpceY"
 						"2Fyi/c+aoA/klg==")).											
 
+-define(YOUMI_SERVER_SECRET,"430bad7418110ff9").
+
 gift_paytype(<<"dth_common">>)->  dth_temp1_20160622;
 gift_paytype(<<"zy_common">>)->  zy_temp1_20160914.
 
@@ -144,9 +146,23 @@ handle(Arg,'POST', [])->
     [Other,_]->
          io:format("zhifubao:other:~p~n",[Other])
     end,
+    {html, "success"};
+
+handle(Arg,'POST', ["youmi","jifen"])->
+    io:format("youmi Arg:~p~n",[Arg]),
+    utility:log("youmi.log","~p~n",[Arg]),
+    Params=yaws_api:parse_post(Arg),
+    io:format("post youmi:req:~p~n",[Params]),
+%    deal_zhifubao_callback(Params),
     {html, "success"}.
+    
 
-
+get_paid_items()->
+    ?DB_QUERY(pay_types_record,X#pay_types_record.status==paid).
+get_paid_items(GroupId)->
+    %[X||X<-mnesia:table(pay_types_record),Y<-mnesia:table(lw_register),X#pay_types_record.status==paid,Y#lw_register.uuid==X#pay_types_record.uuid,Y#lw_register.group_id== GroupId].
+    ?DB_OP(qlc:e(qlc:q([X||X<-mnesia:table(pay_types_record),Y<-mnesia:table(lw_register),X#pay_types_record.status==paid,
+        Y#lw_register.uuid==X#pay_types_record.uuid,Y#lw_register.group_id== GroupId,X#pay_types_record.money>0]))).
 deal_zhifubao_callback(Params)->
     PayId=proplists:get_value("out_trade_no",Params),
     Status=proplists:get_value("trade_status",Params),
@@ -185,7 +201,7 @@ gen_zy_coin_payid(Json,Payid)->
     case  lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[_LR]} when Money==trunc(Price) ->
         PkgInfo=gen_pkg_info1(Package,Payid),
-        Payment=#pay_types_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
+        Payment=#pay_types_record{payid=Payid,uuid=UUID,pay_org=GroupId,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
         ?DB_WRITE(Payment),
         [{status,ok},{payid,Payid},{uuid,UUID},{wakey,wx_key(GroupId)},{ws,wx_secret(GroupId)},{zs,zfb_secret(GroupId)}];
     {atomic,[]}->
@@ -202,12 +218,12 @@ gen_types_payid(Json,Payid)->
     Money=element(1,string:to_integer(MoneyStr)),
     PayTypes=utility:get_atom(Json,"pay_type"),
     [UUID, GroupId] =[utility:get_binary(Json,"uuid"),utility:get_binary(Json,"group_id")],
-    Package=get_package(GroupId,PayTypes),
+    Package=get_package(UUID,GroupId,PayTypes),
     Price=proplists:get_value(price,Package),
     case  lw_register:get_register_info_by_uuid(UUID) of
     {atomic,[_LR]} when Money==trunc(Price) ->
         PkgInfo=gen_pkg_info1(Package,Payid),
-        Payment=#pay_types_record{payid=Payid,uuid=UUID,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
+        Payment=#pay_types_record{payid=Payid,uuid=UUID,pay_org=GroupId,status=to_pay,money=Money,gen_time=erlang:localtime(),pkg_info=PkgInfo},
         ?DB_WRITE(Payment),
         [{status,ok},{payid,Payid},{uuid,UUID},{wakey,wx_key(GroupId)},{ws,wx_secret(GroupId)},{zs,zfb_secret(GroupId)}];
     {atomic,[]}->
@@ -227,8 +243,8 @@ get_all_paidrecord()->
 gift_for_reg(UUID)->
     case lw_register:get_group_id(UUID) of
     GroupId when is_binary(GroupId)->
-        PkgInfo=gen_pkg_info(GroupId,gift_paytype(GroupId),"gift"),
-        lw_register:add_pkg(UUID,PkgInfo);
+        %PkgInfo=gen_pkg_info(GroupId,gift_paytype(GroupId),"gift"),
+        lw_register:add_gifts(UUID, 10);
     _-> void
     end.
 
@@ -247,8 +263,9 @@ get_zy_coin_packages(UUID,GroupId,PayType)->
     TItem=lists:keyfind({type,PayType},1,TS),
     tuple_to_list(TItem).
     
-get_package(GroupId,PayType)->
-    {ok,Ps}=lw_mobile:packages_info(GroupId),
+get_package(GroupId,PayType)-> get_package("",GroupId,PayType).
+get_package(UUID,GroupId,PayType)->
+    {ok,Ps}=lw_mobile:packages_info(UUID,GroupId),
     TS=[list_to_tuple(I)||I<-Ps],
     TItem=lists:keyfind({type,PayType},1,TS),
     tuple_to_list(TItem).
@@ -296,16 +313,23 @@ wx_sign(Pls0)->
     StringSignTemp=KVStr++"&key="++?WXAPI_KEY,
     string:to_upper(hex:to(crypto:hash(md5,StringSignTemp))).
 
--define(RATENODE,'fate_service@10.32.3.52').
+-define(RATENODE,'fate_service@202.122.107.66').
+
+trans_fee(Coins,BaseNum)->
+    Flt=Coins*BaseNum,
+    if Flt>trunc(Flt)-> trunc(Flt+1)/BaseNum;
+    true-> trunc(Flt)/BaseNum
+    end.
+trans_fee(Rate_str) when is_list(Rate_str)-> 
+    case {string:to_float(Rate_str),string:to_integer(Rate_str)} of
+        {{Rate, _},_} when is_float(Rate)-> trans_fee(Rate,100);
+        {_,{Rate, _}} when is_integer(Rate)-> trans_fee(Rate,100);
+        _-> []
+    end.
 get_rates(Service_id,_Type, Phones)-> %[{P, 0.1}||P<-Phones].
-    Trans = fun(Rate_str)-> 
-        case string:to_float(Rate_str) of
-            {Rate, _} when is_float(Rate)-> (trunc(Rate*100)+1)/100;
-            _-> 0.1
-        end end,
     case rpc:call(?RATENODE, fate_service, batch_lookup, [Service_id,Phones]) of
-    {ok, Rates}-> [{P, Trans(R)}||{P,R}<-Rates];
-    _-> [{Phone, 0.1}||Phone<-Phones]
+    {ok, Rates}-> [{P, trans_fee(R)}||{P,R}<-Rates];
+    _-> []
     end.
 
 get_cdr(UUID0)->
@@ -401,10 +425,45 @@ zy_get_payid_test()->
     io:format("delete_pay_by_id: ~p ok~n",[Payid]),
     ok.
     
-zhiyu_national_package_info_test()->
-    lw_mobile:packages_info(<<"zy_common">>),
+zhiyu_national_tester_coin_package_info_test()->
+    TEST_UUID= <<"31271295">>,
+    {ok,Pls}=lw_mobile:coin_packages_info(TEST_UUID,<<"zy_common">>),
+    ?assertMatch([_],lists:filter(fun(I)-> zy_coin_test1==proplists:get_value(type,I) end,Pls)).
+zhiyu_national_coin_package_info_test()->
+    UUID= <<"31270001">>,
+    {ok,Pls1}=lw_mobile:coin_packages_info(UUID,<<"zy_common">>),
+    ?assertMatch([],lists:filter(fun(I)-> zy_coin_test1==proplists:get_value(type,I) end,Pls1)),
     ok.
 
+zhiyu_national_tester_package_info_test()->
+    TEST_UUID= <<"31271295">>,
+    {ok,Pls}=lw_mobile:packages_info(TEST_UUID,<<"zy_common">>),
+    ?assertMatch([_],lists:filter(fun(I)-> zy_test1_20160929==proplists:get_value(type,I) end,Pls)).
+zhiyu_national_package_info_test()->
+    UUID= <<"31270001">>,
+    {ok,Pls1}=lw_mobile:packages_info(UUID,<<"zy_common">>),
+    ?assertMatch([],lists:filter(fun(I)-> zy_test1_20160929==proplists:get_value(type,I) end,Pls1)),
+    ok.
+
+zhiyu_pay_for_package_test()->
+    GroupId= <<"zy_common">>,
+    UUID= <<"31271295">>,
+    Json=utility:pl2jso_br([{"uuid",UUID},{"money","2"},{"pay_type","zy_temp1_20160914"},{"group_id",GroupId}]),
+    Payid="test_package",
+    lw_register:del_pkg(UUID,Payid),
+    pay:delete_pay_by_id(Payid),
+    Res=pay:gen_types_payid(Json,Payid),
+    Exp=[{status,ok},{payid,Payid},{uuid,UUID},{wakey,wx_key(GroupId)},{ws,wx_secret(GroupId)},{zs,zfb_secret(GroupId)}],
+    ?assertEqual(Exp,Res),
+    [#pay_types_record{uuid=UUID,money=2}]=mnesia:dirty_read(pay_types_record,Payid),
+    Coins0=lw_register:get_coins(UUID),
+    Params=pay:zhifubao_callback_params_sample(Payid,"2"),
+    ok=pay:deal_zhifubao_callback(Params),
+    Package_infos=lw_register:get_pkgs(UUID),
+    Pkg_info=lists:keyfind(Payid,#package_info.payid,Package_infos),
+    Today=date(),
+    ?assertMatch(#package_info{from_date=Today},Pkg_info),
+    ok.
 zhiyu_pay_for_coin_test()->
     GroupId= <<"zy_common">>,
     UUID= <<"31270001">>,
@@ -426,12 +485,16 @@ zhiyu_pay_for_coin_test()->
 get_phone_rate_test()->
     GroupId = <<"zy_common">>,
     Callee = "0084186",
-    [{Callee,0.35}]=get_rates(GroupId,voip, [Callee]),
+    [{Callee,0.34}]=get_rates(GroupId,voip, [Callee]),
     ok.
 consume_voip_national_test()->
     Mins=2,
-    Res=test_consume_voip("008618888888888",Mins),
-    ?assertMatch([{pkg_consume,Mins}|_],Res).
+    Callee="008618888888888",
+    UUID= <<"31270001">>,
+    Min0=lw_register:max_minutes(UUID,Callee),
+    Res=test_consume_voip(Callee,Mins),
+    Min1=lw_register:max_minutes(UUID,Callee),
+    ?assertMatch(Min0,Min1+Mins).
 consume_voip_international_test()->
     test_consume_voip("0085288888888").
 consume_voip_national_limts_test()->
@@ -451,6 +514,10 @@ get_cdr_test()->
     UUID =unittest:test_uuid(),
     %?assertMatch([{status,ok}|_],get_cdr(UUID)),
     ok.
+get_itallypackage_test()->    
+    {ok,Pkgs}=lw_mobile:packages_info("31271295",<<"zy_common">>,"IT"),
+    {ok,It}=file:consult("./docroot/version/zy_italy_package.info"),
+    ?assert(Pkgs==It).
 test_consume_callback()->
     GroupId = <<"zy_common">>,
     Callee = "0084",

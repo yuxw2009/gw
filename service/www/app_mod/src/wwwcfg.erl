@@ -13,7 +13,7 @@ get_ios_wcgnode(Continent) when Continent=="Europe" orelse Continent=="Africa" o
 get_ios_wcgnode(_)->'gw1@119.29.62.190'.
 
 %get_wcgnode(default)-> get_wcgnode("Mainland");
-get_wcgnode("Mainland")-> 'gw1@112.74.96.171';%'gw1@10.31.203.1';%'gw_git@202.122.107.66';%'gw1@119.29.62.190';  %
+get_wcgnode("Mainland")-> 'gw1@10.31.203.1';%'gw1@112.74.96.171';%'gw_git@202.122.107.66';%'gw1@119.29.62.190';  %
 get_wcgnode(Continent) when Continent=="Europe" orelse Continent=="Africa" orelse Continent=="SouthAmerica"-> 
   'gw@10.32.2.4';
 %  'gw_git@202.122.107.66';

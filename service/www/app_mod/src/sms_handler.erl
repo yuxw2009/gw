@@ -29,7 +29,11 @@ handle(Arg, 'POST', ["auth_code"]) ->
         AuditInfo = utility:pl2jso([{uuid,UUID_BIN},{company,GroupId},{name,Name},{account,UUID_BIN},{orgid,<<"ml">>}]),
         Para = [{service_id,SerID},{audit_info,AuditInfo},{content,Code_bin},{members,Phones}],
         io:format("sms handle! Para:~p~n", [Para]),
-        utility:pl2jso_br(send_sms(Para));
+        R=case lw_register:is_zy_group({groupid,GroupId}) of
+            true-> send_sms(Para);
+            _-> send_sms1(Para)
+            end,
+        utility:pl2jso_br(R);
      {_,_}-> utility:pl2jso_br([{status,failed},{reason, account_not_exist}])
     end;
 

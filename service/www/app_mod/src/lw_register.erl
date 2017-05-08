@@ -40,7 +40,7 @@ add_third_reg(Params)->
 third_register(Acc="wx_"++_OpenId,Params)->third_register1(Acc,Params);
 third_register(Acc="qq_"++_OpenId,Params)->third_register1(Acc,Params).
 third_register1(Acc,Params)->
-    io:format("third_register"),
+    io:format("third_register:~p~n",[Params]),
     case login_processor:check_crc(Params) of
     true->
         Name=proplists:get_value("name",Params),
@@ -118,7 +118,7 @@ bind_phone(Json)->
     Phone=utility:get_string(Json, "phone"),
     DevId=utility:get_string(Json, "device_id"),
     case {lw_register:get_register_info_by_uuid(UUID), lw_register:get_register_info_by_phone(Phone)} of
-    {{atomic,[_]},[_|_]} when Phone=/="13788927293",Phone=/="18296131759"->  
+    {{atomic,[_]},[_|_]} when Phone=/="13788927293",Phone=/="18017813673"->  
         utility:pl2jso_br([{status,failed},{reason, phone_already_bind}]);
     {{atomic,[RegItem=#lw_register{}]},_} ->  
         case sms_handler:auth_code(UUID++DevId) of
@@ -131,6 +131,28 @@ bind_phone(Json)->
     _->
         [{status,failed},{reason,account_not_exist}]
     end.
+share_to_other(UUID,Type)->
+    Added=sharetype_to_gifts(Type),
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[RegItem=#lw_register{pls=Pls}]}->
+        SharedKey={shared_date,Type},
+        SharedDate=proplists:get_value(SharedKey,Pls,{0,0,0}),
+        Today=date(),
+        if Today>SharedDate->
+            Gifts0=proplists:get_value(gifts,Pls,0),
+            Gifts=Gifts0+Added,
+            NewPls=lists:keystore(gifts,1,Pls,{gifts,Gifts}),
+            NewPls1=lists:keystore(SharedKey,1,NewPls,{SharedKey,Today}),
+            ?DB_WRITE(RegItem#lw_register{pls=NewPls1}),
+            [{status,ok},{uuid,UUID},{minutes,Added},{coins,0}];
+        true->
+            [{status,failed},{reason,shared_already}]
+        end;
+     _->  [{status,failed},{reason,unregistered}]
+     end.
+    
+sharetype_to_gifts(_Type)->    %"QQ  Qzone   WXSceneSession  WXSceneTimeline"
+    5.
 delegate_register(Json)->
     AuthCode=utility:get_string(Json, "auth_code"),
     UUID=utility:get_string(Json, "uuid"),
@@ -343,6 +365,27 @@ del_pkg(UUID, PayId)->
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
     end.
+consume_gifts(UUID,Minutes0)->    
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[Item=#lw_register{pls=Pls}]}-> 
+        Gifts0=proplists:get_value(gifts,Pls,0),
+        {Gifts,Minutes}= if Gifts0> Minutes0->   {Gifts0-Minutes0, 0}; true-> {0,Minutes0-Gifts0} end,
+        Npls=lists:keystore(gifts,1,Pls,{gifts,Gifts}),
+        ?DB_WRITE(Item#lw_register{pls=Npls}),
+        Minutes;
+    _-> Minutes0
+    end.
+        
+add_gifts(UUID, Minutes)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[Item=#lw_register{pls=Pls}]}->  
+        Gifts=proplists:get_value(gifts,Pls,0),
+        Npls=lists:keystore(gifts,1, Pls, {gifts,Gifts+Minutes}),
+        ?DB_WRITE(Item#lw_register{pls=Npls}),
+        [{status,ok}];
+    _->
+        [{status,failed},{reason,register_uuid_not_existed}]
+    end.
 get_coins(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[_Item=#lw_register{pls=Pls}]}->  
@@ -380,18 +423,20 @@ package_consume([H=#package_info{period=Period,cur_circle=CurCircle0,from_date=F
         Consumed0+Mins>=Limits-> [package_consume(T,Consumed0+Mins-Limits)]++[H#package_info{cur_consumed=Limits}];
         true-> [H#package_info{cur_consumed=Consumed0+Mins}|T]
     end.
-consume_minutes(UUID,Minutes)->
-    io:format("consume_minutes called:~p~n",[{UUID,Minutes}]),
+consume_minutes(UUID,Minutes0)->
+    io:format("consume_minutes called:~p~n",[{UUID,Minutes0}]),
+    Minutes=consume_gifts(UUID,Minutes0),
     case get_register_info_by_uuid(UUID) of
-    {atomic,[Item=#lw_register{pls=Pls,group_id=GroupId}]}->  
+    {atomic,[Item=#lw_register{pls=Pls}]}-> 
         Pkgs=proplists:get_value(pkgs,Pls,[]),
         NewPkgs=package_consume(Pkgs,Minutes),
         Npls=lists:keystore(pkgs,1,Pls,{pkgs,NewPkgs}),
         ?DB_WRITE(Item#lw_register{pls=Npls}),
         [{status,ok},{pkg_consume,Minutes}];
     _->
-        [{status,failed},{reason,register_uuid_not_existed},{pkg_consume,Minutes}]
+        [{status,failed},{reason,register_uuid_not_existed},{pkg_consume,Minutes0}]
     end.
+    
 zy_consume_func(UUID,PhoneMinutes)->  zy_consume_func(UUID,PhoneMinutes,[]).
 zy_consume_func(_UUID,[],Res)->  
     {PkgMinuteList,CoinList}=lists:unzip(Res),
@@ -431,12 +476,9 @@ zy_consume_voip1(UUID,Minutes,Callee)->
     [{pkg_consume,0},{coins,Coins}].
     
 zy_consume_coins(UUID,Minutes,Callee)-> 
-    [{Callee,Rate}]=pay:get_rates(get_group_id(Callee),voip,[Callee]),
-    Trans=fun(Coins)->
-                 if Coins*100>trunc(Coins*100)-> trunc(Minutes*Rate*100+1)/100;
-                 true-> trunc(Coins*100)/100
-                 end end,
-    Coins=Trans(Minutes*Rate),
+    [{Callee,Rate}]=pay:get_rates(get_group_id(UUID),voip,[Callee]),
+    BaseNum=100,
+    Coins=pay:trans_fee(Minutes*Rate,100),
     del_coins(UUID,Coins),
     Coins.
 consume_coins(UUID,Minutes)->
@@ -476,17 +518,18 @@ get_pkginfo(UUID)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{pls=Pls}]}->  
         Coins=utility:value2binary(get_coins(UUID)),
+        Gifts=proplists:get_value(gifts,Pls,0),
         case package_consume(proplists:get_value(pkgs,Pls,[]),0) of
-        [#package_info{cur_consumed=Consumed,gifts=Gifts,limits=Limits,from_date=From,circles=Circles}|_] 
+        [#package_info{cur_consumed=Consumed,limits=Limits,from_date=From,circles=Circles}|_] 
                     when Limits>0->
             {Year,Mon,Day}=From,
             LeftMonths= Mon+Circles,
             NYear=Year+(LeftMonths div 13),
             NMon=(LeftMonths div 13)+(LeftMonths rem 13),
             Expire=integer_to_list(NYear)++"/"++integer_to_list(NMon)++"/"++integer_to_list(Day),
-            Lefts=if is_number(Limits)-> round(Limits-Consumed); Limits==unlimit-> 99999999; true-> Limits end,
+            Lefts=if is_number(Limits)-> Gifts+round(Limits-Consumed); Limits==unlimit-> 99999999; true-> Limits end,
             [{status,ok},{lefts,Lefts},{cur_consumed,round(Consumed)},{gifts,Gifts},{expir_date,list_to_binary(Expire)},{coins,Coins}];
-        []-> [{status,ok},{lefts,0},{coins,Coins}]
+        []-> [{status,ok},{lefts,Gifts},{gifts,Gifts},{coins,Coins}]
         end;
     _->
         [{status,failed},{reason,register_uuid_not_existed}]
@@ -503,16 +546,16 @@ max_minutes2(UUID,Callee,<<"zy_common">>)->     %national
     Lefts0=
         case check_balance(UUID) of
         {false,_}-> 0;
-        {true,Val} when is_integer(Val) orelse is_float(Val)->  Val;
+        {true,Val} when is_number(Val)->  Val;
         {true,no_limit}->   999999
         end,
     [{Callee,Rate}]=pay:get_rates(GroupId,voip,[Callee]),
     Coins0= get_coins(UUID),
-    Lefts0+trunc(Coins0/Rate);
+    trunc(Lefts0+Coins0/Rate);
 max_minutes2(UUID,Callee,_)->     %dth/dth_common user
     case check_balance(UUID) of
     {false,_}-> 0;
-    {true,Val} when is_integer(Val) orelse is_float(Val)->  Val;
+    {true,Val} when is_number(Val)->  Val;
     {true,no_limit}->   999999
     end.
 
@@ -521,7 +564,7 @@ max_minutes1(UUID,Callee="0086"++_)->     %national
     Lefts0=
         case check_balance(UUID) of
         {false,_}-> 0;
-        {true,Val} when is_integer(Val) orelse is_float(Val)->  Val;
+        {true,Val} when is_number(Val)->  Val;
         {true,no_limit}->   999999
         end,
     [{Callee,Rate}]=pay:get_rates(GroupId,voip,[Callee]),
@@ -539,14 +582,24 @@ check_balance(UUID,_Callee,Type)->
     case get_register_info_by_uuid(UUID) of
     {atomic,[#lw_register{group_id=GroupId,pls=Pls}]}  when GroupId =/= <<"dth">> ->   % unit is minutes
         PkgInfos=get_pkginfo(UUID),
+        Gifts=proplists:get_value(gifts,Pls,0),
         case proplists:get_value(status,PkgInfos) of
         ok->
-            [Gifts,Lefts]=[proplists:get_value(gifts,PkgInfos,0),proplists:get_value(lefts,PkgInfos,0)],
+            %[Gifts,Lefts]=[proplists:get_value(gifts,PkgInfos,0),proplists:get_value(lefts,PkgInfos,0)],
+            Lefts=proplists:get_value(lefts,PkgInfos,0),
             {Gifts>=0 orelse Lefts>=0,Gifts+Lefts};
-        _-> {false, balance_not_enough}
+        _ when Gifts>=0 -> {true,Gifts};
+        _-> {false,balance_not_enough}
         end;
     _->
         {true,no_limit}
+    end.
+
+get_bind_phone(UUID)->
+    case get_register_info_by_uuid(UUID) of
+    {atomic,[#lw_register{phone=PHONE}]} when is_binary(PHONE)->   binary_to_list(PHONE);
+    {atomic,[#lw_register{phone=PHONE}]} ->   PHONE;
+    _-> ""
     end.
 
 get_group_id(UUID)->
@@ -610,4 +663,7 @@ test_max_time()->
     MT=max_minutes(UUID,"0086180188888"),
     true=(MT>0),
     ok.
-    
+
+is_zy_group({groupid,GroupId}) when is_binary(GroupId)->is_zy_group({groupid,binary_to_list(GroupId)});
+is_zy_group({groupid,"zy_common"}) -> true;
+is_zy_group({groupid,_}) -> false.

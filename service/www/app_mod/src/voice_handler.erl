@@ -113,23 +113,29 @@ handle(Arg, 'POST', ["meetings"]) ->
     UUID = utility:get_string(Json, "uuid"),
 %    Group = utility:get_binary(Json, "group_id"),
     Group = login_processor:get_group_id(UUID),
-    io:format("meeting UUID ~p Group: ~p~n",[UUID,Group]),
-    Subject = utility:get_binary(Json, "subject"),
-    MObjs = utility:get(Json, "members"),
-    Members = [{utility:get_binary(Obj, "name"), utility:get_string(Obj, "phone")}  || Obj <- MObjs],
-    %%Members = [{"dhui","008615300801756"}],
-    case start_meeting(Group,UUID,Members) of
-        {value,MeetingId, Details} ->
-%           io:format("voice_handler meetings details:~p~n",[Details]),
-           utility:pl2jso([{status, ok}, 
-    	            {meeting_id, list_to_binary(MeetingId)},
-    	            {details, utility:a2jsos([member_id, 
-    	            	                      status, 
-    	            	                      name, 
-    	            	                      {phone, fun erlang:list_to_binary/1}],
-    	            	                     Details)}]);
-        {value,Reason}      -> utility:pl2jso([{status, failed},{reason,Reason}])
-    end;
+    if Group=="zy_common"->  
+        io:format("voice_handler meetings not allowed uuid:~p~n",[UUID]),
+        utility:pl2jso([{status, failed},{reason,balance_not_enough}]);
+    true->
+        io:format("meeting UUID ~p Group: ~p~n",[UUID,Group]),
+        Subject = utility:get_binary(Json, "subject"),
+        MObjs = utility:get(Json, "members"),
+        Members = [{utility:get_binary(Obj, "name"), utility:get_string(Obj, "phone")}  || Obj <- MObjs],
+        %%Members = [{"dhui","008615300801756"}],
+        case start_meeting(Group,UUID,Members) of
+            {value,MeetingId, Details} ->
+    %           io:format("voice_handler meetings details:~p~n",[Details]),
+               utility:pl2jso([{status, ok}, 
+        	            {meeting_id, list_to_binary(MeetingId)},
+        	            {details, utility:a2jsos([member_id, 
+        	            	                      status, 
+        	            	                      name, 
+        	            	                      {phone, fun erlang:list_to_binary/1}],
+        	            	                     Details)}]);
+            {value,Reason}      -> utility:pl2jso([{status, failed},{reason,Reason}]);
+            {pls,Res}-> utility:pl2jso_br(Res)
+        end
+      end;
 %% handle stop meeting request
 handle(Arg, 'GET', ["meetings", MeetingId,"delete"]) -> handle(Arg, 'DELETE', ["meetings", MeetingId]);
 handle(Arg, 'DELETE', ["meetings", MeetingId]) ->
@@ -304,7 +310,9 @@ start_voip(WcgNode,ServiceId,UUID, Class, Phone, SDP, MaxtalkT, Arg)->
     SessionIP=utility:client_ip(Arg),
     {Subgroup_id,Guid} = utility:decode(Arg,[{subgroup_id,s},{guid,s}]),
     {IsRecord,RecordFile}= if ServiceId=="xh"->  {true,ServiceId++"_"++Subgroup_id++"_"++Guid}; true-> {false,""} end,
-    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,UUID},{userclass, Class},
+    Cid0=lw_register:get_bind_phone(UUID),
+    Cid=if Cid0==""-> lw_mobile:trans_mobile(UUID,ServiceId); true-> Cid0 end,
+    Options = [{phone, Phone}, {uuid, {ServiceId, UUID}}, {audit_info, [{uuid,UUID},{ip,SessionIP}]},{cid,Cid},{userclass, Class},
                                    {max_time, MaxtalkT},{callback,lw_mobile:charge_callback_fun(ServiceId,UUID)},
                                    {subgroup_id,Subgroup_id},{guid,Guid},{isrecord,IsRecord},{recordfile,RecordFile},
                                    {country,utility:country(SessionIP)},{gw,WcgNode},{consume_callback,lw_mobile:consume_func(ServiceId,UUID)}],
@@ -393,10 +401,19 @@ handleP2pCall(UUID,Phone,Node,SID,SDP,Arg)->
     end.
         
 start_meeting(GroupId,UUID,Members)->
-    Options=[{key, {GroupId, UUID}},{audit_info,""},{members, Members},{callback,lw_mobile:charge_callback_fun(GroupId,UUID)},
-    {consume_callback,lw_mobile:consume_func(GroupId,UUID)}],
-    io:format("voice_handler:start_meeting ~p~n",[Options]),
-    rpc:call(?WWW_VOICE, www_voice_handler, start_meeting, [Options]).
+    io:format("start_meeting:~p ~n",[{UUID,Members}]),
+    R=login_processor:autheticate_members(UUID,Members),
+    io:format("meeting auth result:~p ~n",[{UUID,R}]),
+    case proplists:get_value(status,R) of
+    ok-> 
+        Minutes=proplists:get_value(balance,R,0),
+        
+        Options=[{key, {GroupId, UUID}},{audit_info,""},{members, Members},{callback,lw_mobile:charge_callback_fun(GroupId,UUID)},
+        {consume_callback,lw_mobile:consume_func(GroupId,UUID)},{max_time,Minutes*60*1000}],
+        io:format("voice_handler:start_meeting ~p~n",[Options]),
+        rpc:call(?WWW_VOICE, www_voice_handler, start_meeting, [Options]);
+    _-> {pls,R}
+    end.
 formal_callee(Callee) when is_binary(Callee)-> formal_callee(binary_to_list(Callee));
 formal_callee("+"++Callee)-> formal_callee("00"++Callee);
 formal_callee(Callee="00"++_)-> Callee;

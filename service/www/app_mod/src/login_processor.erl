@@ -5,7 +5,7 @@
 -include("lwdb.hrl").
 -include("db_op.hrl").
 -define(CALLBACK_FLAG,<<"true">>).
--define(MEETING_FLAG,<<"true">>).
+-define(MEETING_FLAG,<<"false">>).
 
 login(Params) when is_list(Params)-> 
     case proplists:get_value("acc",Params) of
@@ -46,9 +46,11 @@ login(Params0,_) when is_list(Params0)->
     end,
     UUID=proplists:get_value(uuid,Pls0),
     Ip=get_ip_tuple(UUID),
-    AccUrls=wwwcfg:get_www_url_list(utility:c2s(utility:country(Ip))),
+    Continent=utility:c2s(utility:country(Ip)),
+    AccUrls=wwwcfg:get_www_url_list(Continent),
     io:format("login urls:~p ~n", [{AccUrls,UUID,Ip}]),
-    {obj,[{"urls",AccUrls},{"callback_enabled",?CALLBACK_FLAG},{meeting_enabled,?MEETING_FLAG}|Pls0]}.
+    VoipFlag=if Continent == "Mainland"-> <<"false">>; true-> <<"true">> end,
+    {obj,[{"urls",AccUrls},{"voip_enabled",VoipFlag},{"callback_enabled",?CALLBACK_FLAG},{meeting_enabled,?MEETING_FLAG}|Pls0]}.
 
 logout(Params) when is_list(Params)->
     {UUID,DevId0}={proplists:get_value("uuid",Params),proplists:get_value("device_id",Params)},
@@ -227,6 +229,8 @@ local_login(Params)->
     io:format("login:~p,~p~n",[UUID,Pwd]),
     {Status,Res}=
     case lw_register:get_register_info_by_uuid(UUID) of
+    %{atomic,[#lw_register{group_id= <<"zy_common">>}]}-> 
+    %    {failed, [{status,failed},{reason,account_not_existed}]};
     {atomic,[#lw_register{group_id=GroupId0}]} when GroupId=/=GroupId0 andalso (GroupId== <<"zy_common">> orelse GroupId0== <<"zy_common">>)-> 
         {failed, [{status,failed},{reason,account_not_existed}]};
     {atomic,[#lw_register{pwd=Pwd,name=Name,pls=Pls,phone=Phone}]}-> 
@@ -243,38 +247,64 @@ local_login(Params)->
     end,
     {Status,utility:pl2jso_br(Res)}.
         
-autheticated(UUID_SNO,Callee)-> 
+autheticate_members(UUID_SNO,Members)->  autheticate_members(UUID_SNO,Members,[]).
+autheticate_members(UUID_SNO,[],Rets=[Ret|_])->  
+    Bals=[proplists:get_value(balance,Ret)||Ret<-Rets],
+    Bal=lists:min(Bals)/length(Rets),
+    UUID=proplists:get_value(uuid,Ret),
+    [{status,ok},{uuid,UUID},{balance,Bal}];
+autheticate_members(UUID_SNO,[{_,Callee}|Members],Rets)->  
+    case autheticated(UUID_SNO,Callee) of
+    Ret=[{status,ok},{uuid,UUID}|_]->  autheticate_members(UUID_SNO,Members,[Ret|Rets]);
+    _-> [{status,failed},{reason,balance_not_enough}]
+    end.
+autheticated(UUID_SNO,Callee)-> autheticated(UUID_SNO,Callee,voip).
+autheticated(UUID_SNO,Callee,Service)-> 
    UUID0=
    case string:tokens(UUID_SNO,"_") of
        [Head|_]->Head;
        _-> undefined
    end,
-   check_auth0(UUID0,Callee).
+   check_auth0(UUID0,Callee,Service).
 
-check_auth0(UUID="0"++R_UUID,Callee)->  
-    case check_auth(UUID,Callee) of
-    [{status,failed}|_]->  check_auth(R_UUID,Callee);
+check_auth0(UUID="0"++R_UUID,Callee,Service)->  
+    case check_auth(UUID,Callee,Service) of
+    [{status,failed}|_]->  check_auth(R_UUID,Callee,Service);
     R-> R
     end;
-check_auth0(UUID,Callee)->      check_auth(UUID,Callee).
+check_auth0(UUID,Callee,Service)->      check_auth(UUID,Callee,Service).
 
-check_auth(UUID,Phone="*"++_)->  check_auth1(UUID,get_group_id(UUID),Phone);
-check_auth(UUID,Callee)->
+check_auth(UUID,Phone="*"++_,_)->  check_auth_internal(UUID,get_group_id(UUID),Phone);
+check_auth(UUID,Callee,Service)-> check_auth_external(UUID,Callee,get_group_id(UUID),utility:country(get_ip_tuple(UUID)),Service).
+
+check_auth_internal(UUID="31271186",_,"*"++_)->  [{status,ok},{uuid,UUID}];
+check_auth_internal(UUID="31271295",_,"*"++_)->  [{status,ok},{uuid,UUID}];
+check_auth_internal(_UUID,"zy_common","*"++_)->  [{status,failed},{reason,invalid_phone}];
+check_auth_internal(UUID,ott,_)->  [{status,ok},{uuid,UUID}];
+check_auth_internal(UUID,<<"ott">>,_)->  [{status,ok},{uuid,UUID}];
+check_auth_internal(UUID,_,"*"++_)->  [{status,ok},{uuid,UUID}].
+
+check_auth_external(UUID,Callee,GroupId,Country,Service) when is_list(GroupId)->  check_auth_external(UUID,Callee,list_to_binary(GroupId),Country,Service);
+check_auth_external(UUID,"0086"++_,GroupId,"CN",voip) when GroupId== <<"dth_common">> orelse GroupId== <<"zy_common">> ->   
+    [{status,failed},{reason,policy_risk}];
+check_auth_external(UUID,[A,B|_],GroupId,"CN",voip) when (A=/=$0 orelse B=/=$0) andalso (GroupId== <<"dth_common">> orelse GroupId== <<"zy_common">>) ->   
+    [{status,failed},{reason,policy_risk}];
+check_auth_external(UUID,Callee,GroupId,Country,Service)->
+   io:format("check_auth_external:~p~n",[{UUID,get_tuple_by_uuid_did(UUID)}]),
    case get_tuple_by_uuid_did(UUID) of
    undefined->
        [{status,failed},{reason,no_logined}];
+   %#login_itm{group_id=GroupId} when GroupId=="zy_common" -> [{status,failed},{reason,balance_not_enough}];
    #login_itm{phone=Phone,status=?ACTIVED_STATUS}->
        case lw_register:max_minutes(UUID,Callee) of
-       Bal when is_integer(Bal) andalso Bal>0 -> [{status,ok},{uuid,UUID},{balance,Bal}];
+       Bal when is_number(Bal) andalso Bal>0 -> 
+           Bal1=if Service==callback-> trunc(Bal/2); true-> Bal end,
+           [{status,ok},{uuid,UUID},{balance,Bal1}];
        _-> [{status,failed},{reason,balance_not_enough}]
        end;
    #login_itm{}->
        [{status,failed},{reason,not_actived}]
    end.
-check_auth1(UUID="31271186",_,"*"++_)->  [{status,ok},{uuid,UUID}];
-check_auth1(UUID="31271295",_,"*"++_)->  [{status,ok},{uuid,UUID}];
-check_auth1(UUID,"zy_common","*"++_)->  [{status,failed},{reason,invalid_phone}];
-check_auth1(UUID,_,"*"++_)->  [{status,ok},{uuid,UUID}].
 
 start() ->
     mnesia:create_table(login_itm,[{attributes,record_info(fields,login_itm)}]).
@@ -425,6 +455,18 @@ start_poll(Clt_chanPid,UUID)->
         BA
     end.
 
+share_to_other(Json)->
+    GroupId=utility:get_string(Json, "group_id"),
+    UUID=utility:get_string(Json, "uuid"),
+    Type=utility:get_string(Json, "type"),
+    DevId=utility:get_string(Json, "device_id"),
+
+    case get_account_tuple(UUID) of
+    #login_itm{devid=DevId,group_id=GroupId}->
+        lw_register:share_to_other(UUID,Type);
+    _-> [{status,failed},{reason,no_logined}]
+    end.
+
 del_account_tuple(Phone0)->
     Phone = push_trans_caller(Phone0),
     ?DB_DELETE({login_itm,Phone}).
@@ -473,6 +515,9 @@ get_ip_tuple(Phone)->
     #login_itm{ip=Ip}-> Ip;
     _-> undefined
     end.
+get_country(Phone)->    
+    Ip=get_ip_tuple(Phone),
+    utility:country(Ip).
 get_phone_type(Phone)->
     case get_tuple_by_uuid_did(Phone) of
     #login_itm{pls=Pls}-> 

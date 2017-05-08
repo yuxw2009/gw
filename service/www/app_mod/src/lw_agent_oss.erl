@@ -34,7 +34,7 @@ bind_sipdn(Pls)->
         [{"RETN","0"}]
     end.
 delegate_register(Sdn,AuthCode)->
-    Json=utility:pl2jso_br([{"uuid",Sdn},{"auth_code",AuthCode},{"pwd",hex:to(crypto:hash(md5,AuthCode))},{"group_id",ott}]),
+    Json=utility:pl2jso_br([{"uuid",Sdn},{"auth_code",AuthCode},{"pwd",hex:to(crypto:hash(md5,AuthCode))},{"group_id",<<"ott">>}]),
     lw_register:delegate_register(Json).
 test_bind(Phone,Pass)-> bind_sipdn([{sdn,Phone},{password,Pass}]).
 unbind_sipdn(Pls)->
