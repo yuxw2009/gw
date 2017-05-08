@@ -1,23 +1,34 @@
 -module(sipcfg).
 -compile(export_all).
 
-% zte å…¬ç½‘ss "202.122.107.42"   000888280086  000888290086(cli)
-% ¶«·½¿Æ¼¼120.26.114.65 Í¸´«ËÍ2 Òþ²ØËÍ0
-ssip()-> "202.122.107.42".
-ssip(_) -> "202.122.107.42".%"113.105.152.156".%ç‰§é›¨ç§‘æŠ€é€9 "112.124.1.103". %é€2.%%%"120.27.36.134".%songshiwangluo. %202.122.107.42". %zte ss public    % "121.14.38.110". alpha   
-myip() -> "119.29.62.190".    
-get(sip_socket_ip)-> "10.251.64.90";
-get(www_node)-> 'wcgwww@119.29.62.190'.
-service_id()-> "".
-callee_prefix()-> "9".  %"00088818".
-group_callee_prefix({"fzd",_})->  "";
-group_callee_prefix({"dth",_})->  "00088818";
-group_callee_prefix({"xh",_})->  "00088818";
-group_callee_prefix({"qvoice",_})->  "00099918";
-group_callee_prefix({"livecom",Caller="1"++_}) when length(Caller)==11 ->  "00099918";
-group_callee_prefix({"livecom",Caller="00861"++_}) when length(Caller)==15 ->  "00099918";
-group_callee_prefix({"livecom",_Caller=[$0,Second|_]}) when Second=/=$0 ->  "00088839";
-group_callee_prefix({"ZTE",Caller="1"++_}) when length(Caller)==11 ->  "00099918";
-group_callee_prefix({"ZTE",Caller="00861"++_}) when length(Caller)==15 ->  "00099918";
-group_callee_prefix(_)->  "00088818".
+myip()->   "10.32.7.28".
+ssip() -> "10.32.4.11".
+get(sip_socket_ip)-> "10.32.7.28";
+get(www_node)-> 'www_dth@10.32.3.52'.
+service_id()-> "ml".
+callee_prefix()-> "00088818".
+
+group_callee_prefix(UUID)->  group_callee_prefix(UUID,"").
+
+% chinese number all 00099918  
+group_callee_prefix({GroupId,_Caller},[I1,I2,I3,I4|_]) when [I1,I2] =/= "00" orelse [I1,I2,I3,I4]=="0086"->  "00099918";
+group_callee_prefix({"xxkj",_Caller},"0086"++_)  ->  "*003773";
+group_callee_prefix({"dth",_},_)->  "00088818";
+group_callee_prefix({"xh",_Caller="0"++_},_) ->  "00088839";
+group_callee_prefix({"xh",_},_)->  "00088818";
+group_callee_prefix({qvoice,_},_)->  "00099918";
+group_callee_prefix({"qvoice",_},_)->  "00099918";
+
+%group_callee_prefix({"livecom",Caller="1"++_},_) when length(Caller)==11 ->  "00099918";
+%group_callee_prefix({"livecom",Caller="00861"++_},_) when length(Caller)==15 ->  "00099918";
+%group_callee_prefix({"livecom",_Caller=[$0,Second|_]},_) when Second=/=$0 ->  "00088839";
+group_callee_prefix({"livecom",_},_) ->  "00099918";
+group_callee_prefix({"èŽ±æ©å…‹",Caller="1"++_},_) when length(Caller)==11 ->  "00088818";
+group_callee_prefix({"èŽ±æ©å…‹",Caller="00861"++_},_) when length(Caller)==15 ->  "00088818";
+group_callee_prefix({"èŽ±æ©å…‹",_Caller=[$0,Second|_]},_) when Second=/=$0 ->  "00088839";
+group_callee_prefix({"èŽ±æ©å…‹",_Caller},"00357"++_) ->  "00099918";
+
+group_callee_prefix({"xxkj",_Caller},_)  ->  "*003773";
+
+group_callee_prefix(_,_)->  "00088818".
 

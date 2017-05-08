@@ -211,6 +211,7 @@ ssip() ->  sipcfg:ssip().
 ssip(_) ->  sipcfg:ssip().
 myip() -> siphost:myip().    
 
+trans_caller_phone(Callee, Caller) when is_binary(Caller) ->trans_caller_phone(Callee, binary_to_list(Caller));
 trans_caller_phone(Callee, "008618151927225")->trans_caller_phone(Callee, random_qphone());
 
 trans_caller_phone(Callee, "+"++Caller)->trans_caller_phone(Callee, "00"++Caller);
@@ -226,8 +227,10 @@ trans_caller_phone0(_, Caller)-> national_call_trans_caller(Caller).
 %for international call  % new for wangfu  charge all callers are 86+xxxxxx
 trans_caller_phone1(_Callee, "+"++Caller)->trans_caller_phone1(_Callee, "00"++Caller);
 trans_caller_phone1(_Callee, "00"++Caller)->filter_phone(Caller);
+trans_caller_phone1(_Callee, "0571"++Caller)->filter_phone("8610571"++Caller);
 trans_caller_phone1(_Callee, "0"++Caller)->filter_phone("860"++Caller);
 trans_caller_phone1(_Callee, Caller="86"++_)->filter_phone(Caller);
+trans_caller_phone1(_Callee, Caller) when length(Caller)<5 ->filter_phone("8675526776160");
 trans_caller_phone1(_Callee, Caller)->filter_phone("86"++Caller).
 % for national call for hk ss
 national_call_trans_caller("0086"++Caller)->  filter_phone(Caller);
@@ -247,20 +250,22 @@ trans_callee_phone("*"++Phone,_)->  "*000001"++filter_phone(Phone);
 trans_callee_phone(Phone,{"livecom",_}=UUID) when length(Phone) =<4 ->  % livecom subphone
     trans_callee_phone("*"++Phone,UUID);
 trans_callee_phone("+"++Phone,UUID)->  trans_callee_phone("00"++Phone,UUID);
-trans_callee_phone(Phone="00"++_,UUID={_Group_id,_})->  group_callee_prefix(UUID)++filter_phone(Phone);
+trans_callee_phone(Phone="00"++_,UUID={_Group_id,_})->  group_callee_prefix(UUID,Phone)++filter_phone(Phone);
 trans_callee_phone(Phone="2"++_,{"dth",_}=_UUID) when length(Phone) == 5 ->  % sip small phone????????????????
     filter_phone(Phone);
 trans_callee_phone(Phone="3"++_,{"dth",_}=_UUID) when length(Phone) == 8 ->  % sip small phone????????????????
     filter_phone(Phone);
-trans_callee_phone("0"++Phone,UUID={_Group_id,_})->  group_callee_prefix(UUID)++"0086"++filter_phone(Phone);
-trans_callee_phone(Phone,UUID={_Group_id,_})->  group_callee_prefix(UUID)++"0086"++filter_phone(Phone);
+trans_callee_phone(Phone="0"++Left,UUID={_Group_id,_})->  group_callee_prefix(UUID,Phone)++"0086"++filter_phone(Left);
+trans_callee_phone(Phone,UUID={_Group_id,_})->  group_callee_prefix(UUID,Phone)++"0086"++filter_phone(Phone);
 trans_callee_phone(Phone,_)-> filter_phone(Phone).
 
 callee_prefix()-> sipcfg:callee_prefix().
-group_callee_prefix(Group_id)-> sipcfg:group_callee_prefix(Group_id).
+group_callee_prefix(Group_id,Phone)-> sipcfg:group_callee_prefix(Group_id,Phone).
     
 
-filter_phone(Phone)->  [I||I<-Phone, lists:member(I, "0123456789*#")].
+filter_phone(Phone)->  
+   io:format("filter_phone ~p~n",[Phone]),
+   [I||I<-Phone, lists:member(I, "0123456789*#")].
 
 caller_addr(Phone) ->  caller_addr(none,Phone).
 callee_addr(Phone) ->callee_addr(none,Phone).

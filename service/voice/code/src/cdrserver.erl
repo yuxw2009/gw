@@ -3,6 +3,8 @@
 -include("call.hrl").
 -export([get_cdr_from/2]).
 
+cdr_server()->
+    'cdr@202.122.107.66'.
 start_monitor() ->
     case whereis(?MODULE) of
         undefined-> 
@@ -75,7 +77,7 @@ handle_cdr_request(callback, {{Service_id,UUID},Audit_info,{{_Name1,Phone1,_},{_
     CDR = #cdr{key={www_xengine:bill_id(Service_id), Service_id}, type=Type, quantity=Quantity,
                         charge=Charge, audit_info=Audit_info, details=Cdr_details},
     callstat:save(Service_id,CDR),
-    Res=rpc:call('company@lwork.hk',zteapi,new_cdr,[{Service_id,UUID},{Phone1,Rate1},{Phone2,Rate2},TimeInfo1,Options++ChargeRes]),
+    Res=rpc:call(cdr_server(),zteapi,new_cdr,[{Service_id,UUID},{Phone1,Rate1},{Phone2,Rate2},TimeInfo1,Options++ChargeRes]),
     io:format("cdrserver:~nrpc:call:~p ~nres:~p~n",[Options,Res]),
     ok;
 
@@ -102,8 +104,8 @@ handle_cdr_request(voip, {{Service_id,UUID},Audit_info,Phone,TimeInfo1={StartTim
     callstat:save(Service_id,CDR),
     
     Options1=Options++ChargeRes,
-    Res=rpc:call('company@lwork.hk',zteapi,new_cdr,[{Service_id,UUID},{Phone,1},{proplists:get_value(cid, Options),0},TimeInfo1,Options1]),
-    io:format("cdrserver:~nrpc:call:~p ~nres:~p~n",[Options1,Res]),
+    Res=rpc:call(cdr_server(),zteapi,new_cdr,[{Service_id,UUID},{Phone,1},{proplists:get_value(cid, Options),0},TimeInfo1,Options1]),
+    io:format("cdrserver:~nrpc:call:~p ~nres:~p~n",[Options1,{cdr_server(),Res}]),
     ok;
 handle_cdr_request(sms, Plist)->
      Service_id =proplists:get_value(service_id, Plist),
