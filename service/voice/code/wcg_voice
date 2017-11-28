@@ -1,0 +1,2 @@
+cd /home/newlwk/new_wcg/voice/code
+erl -name voice@10.32.7.28 -setcookie yxwabc -pa ./ebin -pa ./yxa/ebin -s xengine  -detached

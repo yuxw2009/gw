@@ -228,6 +228,9 @@ trans_caller_phone0(_, Caller)-> national_call_trans_caller(Caller).
 trans_caller_phone1(_Callee, "+"++Caller)->trans_caller_phone1(_Callee, "00"++Caller);
 trans_caller_phone1(_Callee, "00"++Caller)->filter_phone(Caller);
 trans_caller_phone1(_Callee, "0571"++Caller)->filter_phone("8610571"++Caller);
+trans_caller_phone1(_Callee, "051257909227")->"151257909227";
+trans_caller_phone1(_Callee, "073183611974")->"173183611974";
+trans_caller_phone1(_Callee, "08743337815")->"18743337815";
 trans_caller_phone1(_Callee, "0"++Caller)->filter_phone("860"++Caller);
 trans_caller_phone1(_Callee, Caller="86"++_)->filter_phone(Caller);
 trans_caller_phone1(_Callee, Caller) when length(Caller)<5 ->filter_phone("8675526776160");
@@ -260,7 +263,9 @@ trans_callee_phone(Phone,UUID={_Group_id,_})->  group_callee_prefix(UUID,Phone)+
 trans_callee_phone(Phone,_)-> filter_phone(Phone).
 
 callee_prefix()-> sipcfg:callee_prefix().
-group_callee_prefix(Group_id,Phone)-> sipcfg:group_callee_prefix(Group_id,Phone).
+group_callee_prefix(Group_id,Phone)-> 
+    R=sipcfg:group_callee_prefix(Group_id,Phone),
+    R.
     
 
 filter_phone(Phone)->  
