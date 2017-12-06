@@ -1,1 +1,2 @@
-erl -name fzdvoice@ubuntu.livecom -setcookie hkabc -pa ./ebin -pa ./yxa/ebin -s xengine
+
+erl -name incomingproxy@192.168.1.44 -setcookie yxwabc -pa ./ebin -pa ./yxa/ebin -s start_module start incomingproxy

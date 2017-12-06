@@ -2,8 +2,8 @@
   delay_release_ms=>6000,        %延迟释放主叫侧 毫秒
   callee_delay_release_ms=>0,    %延迟释放被叫侧
   need_antispy=>false,           %是否防盗打false 或者true
-  my_sip_ip=>"10.32.3.213",      %sip本机地址
-  my_netcard_ip=>"10.32.3.234",  %本机sip绑定的网卡地址
+  my_sip_ip=>"192.168.1.44",      %sip本机地址
+  my_netcard_ip=>"192.168.1.44",  %本机sip绑定的网卡地址
   myport=>5060,                  % 
   in_ssips=>["10.32.3.239","10.32.4.10","10.32.4.11"],       %允许的呼入ss ip，数组[IP1,IP2]
   in_ssport=>5060,               %暂时未用

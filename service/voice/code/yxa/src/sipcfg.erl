@@ -1,5 +1,6 @@
 -module(sipcfg).
 -compile(export_all).
+-include("call.hrl").
 
 myip() ->    
     case catch mnesia:dirty_read(call_opt_t,node()) of
