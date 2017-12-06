@@ -3,6 +3,8 @@
 
 -include("siprecords.hrl").
 -include("sipsocket.hrl").
+-include("db_op.hrl").
+-include("call.hrl").
 
 -record(state,{
                peerpid,
@@ -12,6 +14,10 @@
                transaction_pid,
                invite_request,
                answer_timer,
+               service_module,
+               call_id,
+               siporigin,
+               sip_tpstatus,
                start_time}).
 
 
@@ -19,23 +25,27 @@
 stop(UA) -> 
     UA ! stop.
 
-	
-start(Request=#request{method="INVITE"},YxaCtx=#yxa_ctx{thandler = THandler})->
-    P=spawn(fun()-> init(Request,YxaCtx) end),
+start(Request,YxaCtx)-> start(Request,YxaCtx,undefined).
+start(Request=#request{method="INVITE"},YxaCtx=#yxa_ctx{thandler = THandler},ServModule)->
+    P=spawn(fun()-> init(Request,YxaCtx,ServModule) end),
     transactionlayer:change_transaction_parent(THandler,self(),P).
     
-
-init(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{thandler = THandler}) ->
+init(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{thandler = THandler},SModule) ->
     %imform (Caller,Callee, SDP, self()) to www,and wait selfSDP from w2p
+    erlang:group_leader(whereis(user), self()),
     {ok,ResponseToTag} = transactionlayer:get_my_to_tag(THandler),
-    case handle_invite(Request,YxaCtx) of
-    {{ok,PeerPid},Contact}->
+    case handle_invite(Request,YxaCtx,SModule) of
+    {{ok,PeerPid},Contact,Caller,Callee}->
         Dialog=create_server_dialog(Request,ResponseToTag,Contact),
         transactionlayer:adopt_server_transaction_handler(THandler),
         _Ref = erlang:monitor(process,PeerPid),
-        State=#state{dialog=Dialog,invite_request=Request,transaction_pid=THandler,peerpid=PeerPid},
+        CallId=Dialog#dialog.callid,
+        State=#state{dialog=Dialog,invite_request=Request,transaction_pid=THandler,peerpid=PeerPid,service_module=SModule,
+            siporigin=YxaCtx#yxa_ctx.origin,call_id=CallId},
+        %io:format("+"),
+        ?DB_WRITE(#callid2node_t{callid=CallId,sipnode=node(),caller=Caller,callee=Callee}),
         loop(tpwtring, State);
-    {{failed,Reason},_}->
+    {{failed,Reason},_,_Caller,_Callee}->
         transactionlayer:send_response_handler(THandler, 403, Reason)
     end.
      
@@ -58,8 +68,18 @@ loop(StateName,State=#state{}) ->
              end
         end.
 
-terminate(State=#state{})->
-	traffic(State),
+terminate(State=#state{siporigin=#siporigin{call_dispatcher=Dispatcher},call_id=CallId})->
+       if State#state.dialog=/=null-> 
+           CallId=State#state.dialog#dialog.callid,
+           %io:format("-"),
+           if is_pid(Dispatcher)-> 
+               Dispatcher ! {close,CallId};true-> void end;
+       true-> 
+           void
+       end,
+       utility:delay(1000),
+       ?DB_DELETE({callid2node_t,CallId}),
+	%traffic(State),
 	stop.
 
 on_message({servertransaction_cancelled,STPid,Reason},_,State) ->
@@ -77,7 +97,8 @@ on_message(stop,_,_State) ->
     io:format("abnormal ~p state ~p~n",[stop,_State]),
     stop;
 on_message({'DOWN', _Ref, process, Owner, _Reason},Status,State=#state{peerpid=Owner})->
-    stop(self()),
+    DelaySecond=dbmanager:get_delay_release(),
+    timer:apply_after(DelaySecond,?MODULE,stop,[self()]),
     {Status,State};
     
 
@@ -129,10 +150,12 @@ on_message({clienttransaction_terminating, _, _}, StateName, State) ->
     
 on_message({'EXIT', _, normal}, StateName,State) ->
    {StateName, State};
-on_message({tp_status,Status,Body}, StateName,State=#state{transaction_pid=THandler}) ->
-    transactionlayer:send_response_handler(THandler, Status, "OK", [{"Content-Type", ["application/sdp"]}], Body),
+on_message({tp_status,#response{status=Status,body=Body,reason=Reason,header=ResponseHeader}}, StateName,State=#state{transaction_pid=THandler,invite_request=#request{uri=URI}}) ->
+    Allow=keylist:fetch('allow', ResponseHeader),
+    Contact= [contact:print(contact:new(URI))],
+    transactionlayer:send_response_handler(THandler, Status, Reason, [{"Allow", Allow},{"Contact",Contact}], Body),
     NewStateName=notify_status(self(),Status,StateName),
-   {NewStateName, State};
+   {NewStateName, State#state{sip_tpstatus=Status}};
 on_message(Unhandeld,StateName,State=#state{}) ->
     {StateName,State}. 
 
@@ -141,7 +164,10 @@ notify_status(OpPid,Status,StateName)->
         not_changing-> StateName;
         NewStatename-> NewStatename
     end.
-notify_status1(OpPid,200)->  call_mgr:enter_talking(OpPid), ready;
+notify_status1(OpPid,200)->  
+    call_mgr:enter_talking(OpPid), 
+    traffic:enter_talking(OpPid),
+    ready;
 notify_status1(_,180)-> ring;
 notify_status1(_,183)-> ring;
 notify_status1(_,_)-> not_changing.
@@ -164,23 +190,26 @@ send_bye(State) ->
         Dialog =/= null ->
             {ok, Bye, _Dialog, _Dst} = 
                 sipdialog:generate_new_request("BYE", [{"Max-Forwards", ["9"]}], <<>>, Dialog),
-                siphelper:send_request(Bye);
+                siphelper:send_request(Bye,State#state.siporigin#siporigin.sipsocket);
         true ->
             pass
     end.
     
 traffic(_St=#state{})->
     todo.
-copyheaders()-> Ls=[allow,'max-forwards',"diversion","to"], [keylist:normalize(I)||I<-Ls].
-handle_invite(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{origin=Origin,thandler = THandler})->
-    {CallerName,#sipurl{user=Caller}}=sipheader:from(Header),
-    {CalleeName,#sipurl{user=ToCallee}}=sipheader:to(Header),
+is_valid_inss(SSIp)->
+    SSIps=sipcfg:inssips(),
+    lists:member(SSIp,SSIps).
+handle_invite(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{origin=Origin=#siporigin{addr=Addr},thandler = THandler},SM)->
+    {_Name,#sipurl{user=Caller}}=sipheader:from(Header),
     #sipurl{user=Callee}=Request#request.uri,
     Contact=siphelper:generate_contact_str(Caller),
-    CopyHeaders = keylist:copy(Header, copyheaders()),
-    {handle_invite1({CallerName,Caller},{CalleeName,Callee},Origin,SDP,CopyHeaders),Contact}.
+    Allow=keylist:fetch('allow', Header),
+    Headers=[{allow,Allow}],
+    {handle_invite1(Caller,Callee,Origin,SDP,SM,is_valid_inss(Addr),Headers),Contact,Caller,Callee}.
 
-
-handle_invite1(Caller,Callee,Origin,SDP,CopyHeaders)->
-    call_mgr:sip_incoming(Caller,Callee,Origin,SDP,self(),CopyHeaders).
+handle_invite1(Caller,Callee,Origin,SDP,SM,true,Headers)->
+    call_mgr:sip_incoming(Caller,Callee,Origin,SDP,self(),SM,Headers);
+handle_invite1(_Caller,_Callee,_Origin,_SDP,_SM,false,_)->
+    {failed,"invalid ss"}.
     

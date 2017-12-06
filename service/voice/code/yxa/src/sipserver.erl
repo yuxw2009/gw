@@ -16,7 +16,7 @@
 -export([
 	 start/2,
 	 stop/0,
-	 
+	 async_process/2,
 	 restart/0,
 	 process/2
 	]).
@@ -293,6 +293,8 @@ process(Packet, Origin) when is_record(Origin, siporigin) ->
 	    Unspecified
     end.
 
+async_process(Packet, Origin)->
+    yxa_proc:safe_spawn(sipserver, process, [Packet, Origin]).
 %%--------------------------------------------------------------------
 %% @spec    (Dst, Request, YxaCtx) ->
 %%            ignore      |

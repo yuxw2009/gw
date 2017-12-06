@@ -40,7 +40,7 @@ init(Request=#request{method="INVITE",body=SDP,header=Header},YxaCtx=#yxa_ctx{th
     %imform (Caller,Callee, SDP, self()) to www,and wait selfSDP from w2p
     {_,#sipurl{user=Caller}}=sipheader:from(Header),
     #sipurl{user=Callee}=Request#request.uri,
-    io:format("p2p_tp_ua:init Caller ~p=>~p ~n",[Caller,Callee]),
+%    io:format("p2p_tp_ua:init Caller ~p ~n",[Caller]),
     case rpc:call(sipcfg:get(www_node),lw_mobile,sip_p2p_tp_call,[Caller,Callee,SDP,self()]) of
     {failed,_Reason}-> 
         io:format("p2p_tp_ua:init rpc:call failed ~p ~n",[_Reason]),

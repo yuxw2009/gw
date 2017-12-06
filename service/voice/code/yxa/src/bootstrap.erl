@@ -11,6 +11,7 @@
 -module(bootstrap).
 
 -export([start/0,
+             my_wait_for_tables/2,
 	 replica/1
 	]).
 

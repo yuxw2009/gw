@@ -15,10 +15,10 @@
 %%--------------------------------------------------------------------
 -export([
 	 parse/2,
-
+        parse_call_id/1,
 	 test/0
 	]).
-
+-compile(export_all).
 %%--------------------------------------------------------------------
 %% Internal exports
 %%--------------------------------------------------------------------
@@ -245,6 +245,43 @@ parse_one_header(Bin, Offset) ->
     This = #header{key=Key, valueptrs=ValuePtrs, comma=Comma},
     {ok, This, NextLineOffset}.
 
+parse_one_header_name_value(Bin, Offset) ->
+   {ok, #header{key=KeyPtr, valueptrs=[ValuePtr|_]}, NextLineOffset}=parse_one_header(Bin, Offset),
+   KeyName=extract_value_s([KeyPtr],Bin),
+   ValueName=extract_value_s([ValuePtr],Bin),
+   {{KeyName,ValueName},NextLineOffset}.
+   
+parse_one_header_name_value_2_lower(Bin, Offset) ->
+   {{[KeyName],ValueName},NextLineOffset}=parse_one_header_name_value(Bin, Offset),
+   {{[string:to_lower(KeyName)],ValueName},NextLineOffset}.
+   
+parse_call_id(Packet) when is_list(Packet)->parse_call_id(list_to_binary(Packet));
+parse_call_id(Packet)->
+    {FirstLine, HeaderOffset} = parse_firstline(Packet, 0),
+    {FirstLine,parse_call_id(Packet,HeaderOffset)}.
+
+parse_call_id(Bin, Offset) ->
+    parse_call_id(Bin, Offset, []).
+
+parse_call_id(Bin, Offset, Res) ->
+    case Bin of
+	<<_:Offset/binary, ?CR, ?LF, _/binary>> ->
+	    %% CRLF, must be header-body separator. We are finished.
+	    {"",undefined};
+	<<_:Offset/binary, N:8, _/binary>> when N == ?CR; N == ?LF ->
+	    %% CR or LF, must be header-body separator (albeit broken). We are finished.
+	    {"",undefined};
+	<<_:Offset/binary, _, _/binary>> ->
+	    case  parse_one_header_name_value_2_lower(Bin, Offset) of
+    	    {{["call-id"],[CallId]},_}-> {CallId,proplists:get_value(from,Res)};
+    	    {{["from"],[From]},NextOffset}-> parse_call_id(Bin, NextOffset, [{from,From}|Res]);
+    	    {_,NextOffset}->	    parse_call_id(Bin, NextOffset, Res)
+	    end;
+	_ ->
+	    throw({error, no_header_body_separator_found})
+    end.
+    
+
 %%--------------------------------------------------------------------
 %% @spec    (Bin, Offset) ->
 %%            {Length, AfterColonOffset}
@@ -295,6 +332,44 @@ parse_one_header_key2(Bin, Offset, KeyLen, RequireColon) ->
 		    throw({error, non_colon_when_colon_was_required});
 		false ->
 		    parse_one_header_key2(Bin, Offset + 1, KeyLen + 1, false)
+	    end;
+	_ ->
+	    throw({error, no_end_of_key_or_no_header_body_separator})
+    end.
+parse_one_header_keyname(Bin, Offset) ->
+    parse_one_header_key3(Bin, Offset, 0, false,[]).
+parse_one_header_key3(Bin, Offset, KeyLen, RequireColon,Res) ->
+    case Bin of
+	<<_:Offset/binary, N, _/binary>> when N == ?SP; N == ?HTAB ->
+	    %% RFC3261 BNF for headers :
+	    %% To separate the header name from the rest of value,
+	    %% a colon is used, which, by the above rule, allows whitespace before,
+	    %% but no line break, and whitespace after, including a linebreak.
+	    case (KeyLen >= 0) of
+		false ->
+		    %% XXX should be (KeyLen > 0) ?
+		    throw({error, whitespace_where_header_name_was_expected});
+		true ->
+		    %% KeyLen is non-zero, so tab and space are OK - don't increase
+		    %% KeyLen for spaces though, and set RequireColon to true
+		    parse_one_header_key3(Bin, Offset + 1, KeyLen, true,Res)
+	    end;
+	<<_:Offset/binary, $:, _/binary>> ->
+	    %% Colon spotted
+	    case (KeyLen >= 0) of
+		true ->
+		    %% KeyLen >= 0. We are finished.
+		    {KeyLen, Offset,list:reverse(Res)};
+		false ->
+		    throw({error, colon_where_header_name_was_expected})
+	    end;
+	<<_:Offset/binary, K1:8, _/binary>> ->
+	    %% anything else, make sure we don't have RequireColon set
+	    case RequireColon of
+		true ->
+		    throw({error, non_colon_when_colon_was_required});
+		false ->
+		    parse_one_header_key3(Bin, Offset + 1, KeyLen + 1, false, [K1|Res])
 	    end;
 	_ ->
 	    throw({error, no_end_of_key_or_no_header_body_separator})

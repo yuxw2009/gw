@@ -3,6 +3,8 @@
 
 -include("siprecords.hrl").
 -include("sipsocket.hrl").
+-include("call.hrl").
+-include("db_op.hrl").
 
 -record(state,{peerpid,
                timer_ref,   %% for invite timeout
@@ -26,6 +28,8 @@
                max_talkT,
                alertT,
                options,
+               siporigin,
+               callid,
                max_time}).
 
 
@@ -56,21 +60,27 @@ init(Peer,Options) ->
     init(Peer,caller,Cid0,Phone,UUID, Audit_info, Maxtime,Options).
     
 init(Peer,Role,Cid0,Phone0,UUID, Audit_info, Maxtime, Options) ->
-    Cidname = proplists:get_value(callername, Options,none),
+    SipOrigin=proplists:get_value(siporigin,Options),
+    {SSIp0,MyIp0}=
+    case catch mnesia:dirty_read(call_opt_t,node()) of
+        [#call_opt_t{value=#{out_ssip:=SsIp0_,my_sip_ip:=MyIp_}}]   ->  {SsIp0_,MyIp_};
+        _-> {"",""}
+    end,
+    SSIp=if is_list(SSIp0) andalso length(SSIp0)>0-> SSIp0;true-> SipOrigin#siporigin.addr end,
+    MyIp=if is_list(MyIp0) andalso length(MyIp0)>0-> MyIp0;true-> sipcfg:myip() end,
     Cid = session:trans_caller_phone(Phone0,Cid0),
-    From=session:caller_addr(Cidname,Cid ),
-    Calleename = proplists:get_value(calleename, Options,none),
+    From=session:caller_addr(Cid,MyIp),
     Phone = session:trans_callee_phone0(Phone0,UUID),
     process_flag(trap_exit,true),
-    To=session:callee_addr(Calleename,Phone),
+    To=session:callee_addr1(Phone,SSIp),
     if
         is_integer(Maxtime)-> void;
         true->
-            void %uid_manager:start_call(Cid, [{sip_pid, self()}, {peerpid,Peer}])
+            uid_manager:start_call(Cid, [{sip_pid, self()}, {peerpid,Peer}])
     end,
     _Ref = erlang:monitor(process,Peer),
-    loop(idle, #state{peerpid=Peer,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone0,sip_phone=Phone,max_time=Maxtime, cid=Cid0,
-                             sip_cid=Cid,options=Options}).
+    loop(idle, #state{peerpid=Peer,role=Role,from=From,to=To, uuid=UUID, audit_info=Audit_info,phone=Phone0,
+                           sip_phone=Phone,max_time=Maxtime, cid=Cid0,sip_cid=Cid,options=Options,siporigin=SipOrigin}).
 
 %% StateName: idle | trying | |ring | ready | cancel    
 loop(StateName,State=#state{cid=_CID}) ->
@@ -91,17 +101,23 @@ loop(StateName,State=#state{cid=_CID}) ->
              end
         end.
 
-terminate(St=#state{max_talkT=MaxTalkT,timer_ref=InviteT,alertT=AlertT})->
+terminate(St=#state{callid=CallId,max_talkT=MaxTalkT,timer_ref=InviteT,alertT=AlertT,siporigin=#siporigin{call_dispatcher=Dispatcher}})->
 	timer:cancel(MaxTalkT),
 	timer:cancel(InviteT),
 	timer:cancel(AlertT),
+       %io:format("/"),
+       if CallId=/=undefined-> 
+           if is_pid(Dispatcher)-> Dispatcher ! {close,CallId};true-> void end;
+       true-> 
+           void
+       end,
 	case St#state.uuid of
 	{"qvoice",_}-> void;
-	{GroupId,_} when GroupId==fzd orelse GroupId=="fzd" -> generate_cdr4shuobar(St);
 	{_,_}-> generate_cdr(St);
     _-> void
 	end,
-	traffic(St),
+       utility:delay(1000),
+       ?DB_DELETE(callid2node_t,CallId),
 	stop.
 
 on_message({'DOWN', _Ref, process, Owner, _Reason},Status,State=#state{peerpid=Owner})->
@@ -120,14 +136,17 @@ on_message(stop,StateName,State) when StateName==trying;StateName==ring->
 on_message(stop,_,_State) ->
     stop;
 
-on_message({invite, Body},idle,State=#state{options=Options}) ->
-    ExtraHeaders=proplists:get_value(extraheaders,Options,[]),
-    io:format("##########################################~n~p~n",[ExtraHeaders]),
-    {ok, Request} = build_invite(State#state.from, State#state.to, Body,ExtraHeaders),
+on_message({invite, Body},idle,State=#state{siporigin=#siporigin{call_dispatcher=Dispatcher}}) ->
+    {ok, Request,CallId} = build_invite(State#state.from, State#state.to, Body),
+    ?DB_WRITE(#callid2node_t{callid=CallId,sipnode=node(),caller=State#state.cid,callee=State#state.phone}),
+    utility:delay(500),
     status_change(trying,State),
-    {ok,TRef} =  timer:send_after(6000*10,trying_detecting_timeout),
+    {ok,TRef} =  timer:send_after(1000*120,trying_detecting_timeout),
     State2 = State#state{timer_ref=TRef},
-    {trying,do_send_invite(Request,State2)};
+    if is_pid(Dispatcher)-> Dispatcher ! {send_first_invite,CallId,node()};true-> void end,
+    State3=do_send_invite(Request,State2),
+    %io:format("*"),
+    {trying,State3#state{callid=CallId}};
 
 on_message({invite_in_dialog, SDP},ready,State) ->
     {ok, Invite, NewDialog,_}=
@@ -135,7 +154,7 @@ on_message({invite_in_dialog, SDP},ready,State) ->
                                        [{"Content-Type", ["application/sdp"]}], 
                                        SDP, State#state.dialog),
     
-    {ok, Pid, _Branch} = siphelper:send_request(Invite),
+    {ok, Pid, _Branch} = siphelper:send_request(Invite,State#state.siporigin#siporigin.sipsocket),
     {ready,State#state{invite_request=Invite,dialog=NewDialog,transaction_pid=Pid,sdp=SDP}};    
     
 on_message(max_talk_timeout,ready,State=#state{from=From,to=To}) ->
@@ -155,7 +174,7 @@ on_message({new_response, #response{status=200}=Response, _YxaCtx}, StateName,St
             when CSeqNo == State#state.invite_cseq, State#state.ack_request /= undefined ->
         %% Resend ACK
             {ok, _SendingSocket, _Dst, _TLBranch} = 
-                siphelper:send_ack(State#state.ack_request, []);
+                siphelper:send_ack_with_sipsocket(State#state.ack_request, [],State#state.siporigin#siporigin.sipsocket);
         _ ->
             pass
     end,
@@ -194,8 +213,8 @@ on_message({clienttransaction_terminating, _, _}, StateName, State) ->
 on_message({'EXIT', _, normal}, StateName,State) ->
    {StateName, State};
 
-on_message(Branch={branch_result,_,_,_,#response{status=SipStatus,body=Body}},Status,State) ->
-    State#state.peerpid ! {tp_status,SipStatus,Body},
+on_message(Branch={branch_result,_,_,_,Response=#response{}},Status,State) ->
+    State#state.peerpid ! {tp_status,Response},
     on_branch_result(Branch,Status,State);
 
 on_message(Unhandeld,StateName,State=#state{role=Role}) ->
@@ -248,7 +267,6 @@ on_branch_result({branch_result,_,_,_,#response{status=200,body=SDP}=Response},t
     notify_status(NewState0, ring),
     NewState1=status_change(ready,NewState0),
     {ready,NewState1};	
-
 
 on_branch_result({branch_result,_,_,_,#response{status=200,body=SDP}},ring,State0=#state{}) ->
     State =maxtalk_judge(State0),
@@ -325,9 +343,9 @@ send_ack(State) ->
         Dialog =/= null ->
             CSeq = integer_to_list(State#state.dialog#dialog.local_cseq),
             {ok, Ack, _Dialog, _Dst} = 
-            sipdialog:generate_new_request("ACK", [{"CSeq", [CSeq++ " ACK"]}], <<>>, State#state.dialog),
-            siphelper:send_ack(Ack, []),
-        State#state{ack_request = Ack};
+                                     sipdialog:generate_new_request("ACK", [{"CSeq", [CSeq++ " ACK"]}], <<>>, State#state.dialog),
+            siphelper:send_ack_with_sipsocket(Ack, [],State#state.siporigin#siporigin.sipsocket),
+            State#state{ack_request = Ack};
        true ->
             State
     end.
@@ -338,7 +356,7 @@ send_bye(State) ->
         Dialog =/= null ->
             {ok, Bye, _Dialog, _Dst} = 
                 sipdialog:generate_new_request("BYE", [], <<>>, Dialog),
-                siphelper:send_request(Bye);
+                siphelper:send_request(Bye,State#state.siporigin#siporigin.sipsocket);
         true ->
             pass
     end.
@@ -352,44 +370,30 @@ build_register(User,Passwd)  ->
     {ok, Request, _CallId, _FromTag, _CSeqNo} =
 	siphelper:start_generate_request_1("REGISTER",register_from(User),register_to(User),[{"Expires", ["7200"]}], <<>>, [{user,User},{pass,Passwd}]),
     {ok, Request}.
-build_invite(From, To, Body,ExtraHeaders) when is_record(From, contact),is_record(To, contact),is_binary(Body) ->
-    Headers=case ExtraHeaders of
-                 {keylist,KeyElems}->  [{Key,Value}||{_,_,Key,Value}<-KeyElems];
-                 _->[]
-                 end,
-    {ok, Request, _CallId, _FromTag, _CSeqNo} =
+build_invite(From, To, Body) when is_record(From, contact),is_record(To, contact),is_binary(Body) ->
+    {ok, Request, CallId, _FromTag, _CSeqNo} =
     siphelper:start_generate_request("INVITE",From,To,
-                                     [{"Content-Type", ["application/sdp"]}|Headers],
+                                     [{"Content-Type", ["application/sdp"]}],
                                      Body),
-    {ok, Request}.
+    {ok, Request,CallId}.
     
-do_send_invite(Request,State) ->
+do_send_invite(Request,State=#state{options=Options}) ->
     [Contact] = keylist:fetch('contact', Request#request.header),
     Header = Request#request.header,
     CSeq = State#state.invite_cseq + 1,
     NewHeader0 = keylist:set("CSeq", [lists:concat([CSeq, " ", Request#request.method])], Header),
-    NewHeader = keylist:set("Max-Forwards", ["70"], NewHeader0),
+    Allow=proplists:get_value(allow,Options,"INVITE,ACK,OPTIONS,BYE,CANCEL,INFO,REFER,NOTIFY,SUBSCRIBE"),
+    NewHeader1 = keylist:set("Allow", Allow, NewHeader0),
+    NewHeader = keylist:set("Max-Forwards", ["70"], NewHeader1),
     NewRequest = Request#request{header=NewHeader},
-    {ok, Pid, _Branch} = siphelper:send_request(NewRequest),
+    {ok, Pid, _Branch} = siphelper:send_request(NewRequest,State#state.siporigin#siporigin.sipsocket),
     State#state{invite_cseq=CSeq,transaction_pid=Pid,invite_request=NewRequest,contact=Contact}.
 
 null_rtp() ->
     <<"v=0\r\no=LTALK 100 1000 IN IP4 10.32.3.41\r\ns=phone-call\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 10792 RTP/AVP 18 4 8 0 101\r\na=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-11\r\na=ptime:20\r\n">>.
 
 generate_cdr(State)->
-    if
-        State#state.start_time =/= undefined ->
-            StartTime = State#state.start_time,
-            EndTime = calendar:local_time(),
-            TimeInfo   = {StartTime,EndTime,session:time_diff(StartTime,EndTime)},
-            UUID = State#state.uuid,
-            Audit_info = State#state.audit_info,
-            Phone = State#state.phone,
-            Options=State#state.options,
-            cdrserver:new_cdr(voip, {UUID,Audit_info, Phone,TimeInfo,Options});
-        true -> 
-            no_cdr_needed
-    end.
+    no_cdr_needed.
 
 generate_cdr4shuobar(State)->
     if
@@ -429,8 +433,10 @@ upload_cdr(Body,URL) ->
     end.
 
 seconds(Localtime)->    
+    {_,_,MillSec}=os:timestamp(),
+    Ms=MillSec div 1000,
     UnixEpoch={{1970,1,1},{0,0,0}},
-    calendar:datetime_to_gregorian_seconds(Localtime)-calendar:datetime_to_gregorian_seconds(UnixEpoch).
+    (calendar:datetime_to_gregorian_seconds(Localtime)-calendar:datetime_to_gregorian_seconds(UnixEpoch))*1000+Ms.
 
 maxtalk_judge(State0=#state{max_time=Maxtime})->
 %            io:format("maxtalk_judge Maxtime:~p~n",[Maxtime]),
@@ -446,8 +452,9 @@ maxtalk_judge(State0=#state{max_time=Maxtime})->
 
 traffic(_St=#state{uuid=UUID,cid=Cid,sip_cid=SipCid,sip_phone=SipPhone,phone=Phone,start_time=Starttime})->
     Trf=[{caller,Cid},{uuid,UUID},{callee,Phone},{talktime,Starttime},{endtime,calendar:local_time()},{caller_sip,sipcfg:myip()},
-      {callee_sip,sipcfg:ssip(Phone)},{socket_ip,sipcfg:get(sip_socket_ip)},{sip_caller,SipCid},{sip_callee,SipPhone}],
+      {sip_caller,SipCid},{sip_callee,SipPhone}],
     rpc:call('traffic@lwork.hk',traffic,add,[Trf]).
+    
     
 %%%%%%%%%%%%%%%%%%%%%%%%  for test
 start_alarmpro()->

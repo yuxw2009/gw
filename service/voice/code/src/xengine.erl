@@ -35,18 +35,18 @@ loop({CdrPid,RatePid,OperatorPid}=Pids) ->
 	    {'DOWN', _Ref, process, Pid, _Reason} ->
 	           timer:sleep(500),
 		    NewPids =
-			    case Pid of
-			        CdrPid -> 
-					    NewCdrPid = cdrserver:start_monitor(),
-						{NewCdrPid,RatePid,OperatorPid};
-					RatePid ->
+                    case Pid of
+                    CdrPid -> 
+                        NewCdrPid = cdrserver:start_monitor(),
+                        {NewCdrPid,RatePid,OperatorPid};
+                    RatePid ->
                         NewRatePid = rateserver:start_monitor(),
-						{CdrPid,NewRatePid,OperatorPid};
+                        {CdrPid,NewRatePid,OperatorPid};
                     OperatorPid ->				
-					    NewOperatorPid = operator:start_monitor(),
-						{CdrPid,RatePid,NewOperatorPid}		
-			    end,
-			loop(NewPids);
+                        NewOperatorPid = operator:start_monitor(),
+                        {CdrPid,RatePid,NewOperatorPid}		
+                    end,
+                loop(NewPids);
         Message -> 
             io:format("XEngine receive: ~p~n",[Message]),
             loop(Pids)
@@ -62,7 +62,7 @@ request(Request, YxaCtx)->
 	    "OPTIONS" ->
 		    transactionlayer:send_response_handler(THandler, 200, "OK");
           "INVITE"->
-              io:format("invite received xengine~n"),
+%              io:format("invite received xengine~n"),
               p2p_tp_ua:start(Request,YxaCtx);
 	    Oth ->
 	          io:format("xengine:unhandled request:~p~n",[Oth]),

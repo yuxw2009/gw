@@ -1,3 +1,4 @@
+%% coding: latin-1
 %-record(calldetail,{phone1,phone2,starttime,endtime,duration,rate,charge}).
 %-record(callstat,{key,   %%{cardno,year,month}
 %	              count   = 0,
@@ -7,6 +8,10 @@
 %	              }).
 
 % ----------------------------- some record definition ------------------------
+-record(call_opt_t,{node=node(),value=#{delay_release_ms=>0,callee_delay_release_ms=>0,need_antispy=>true,
+                              my_sip_ip=>"",my_netcard_ip=>"",myport=>5060,in_ssips=>[],in_ssport=>5060,out_ssip=>"",
+                              out_ssport=>5060}}).
+-record(callid2node_t,{callid,sipnode,ssip,ssport,localip,localport,caller,callee}).                              
 -record(call_back_detail, {start_time,end_time,local_name,local_phone,
     	                                      remote_name,remote_phone,duration,rate,charge}).
 -record(meeting_item, {start_time, end_time, name, phone, duration, rate=0.1, charge}).

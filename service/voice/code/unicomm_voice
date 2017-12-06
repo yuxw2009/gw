@@ -1,0 +1,1 @@
+erl -name incomingproxy@192.168.1.44 -setcookie yxwabc -pa ./ebin -pa ./yxa/ebin -s start_module sip_virtual

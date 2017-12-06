@@ -1,7 +1,7 @@
 -module(com).
 -compile(export_all).
 -include_lib("kernel/include/file.hrl").
--define(CODE_DIR, "../").
+-define(CODE_DIR, "./").
 
 set_code_dir(D)-> put(com_code_dir, D).
 get_code_dir()-> 
@@ -119,3 +119,13 @@ reload(MODS)->
 			_ when is_atom(MODS)-> [MODS]
 		end,
 	[F(I) || I<-MODS1].         
+
+batch_update(Files)->    
+    F=fun(File)->
+            Cmd=" ./cpallnodes.sh "++File++" "++File,
+            io:format("~p~n",[Cmd]),
+            os:cmd(Cmd)
+       end,
+    [F(File)|| File<-Files],
+    com:com_load(),
+    [rpc:call(Node,com,com_load,[])||Node<-nodes()].	

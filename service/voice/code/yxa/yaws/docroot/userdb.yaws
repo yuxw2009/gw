@@ -10,8 +10,8 @@
 %%--------------------------------------------------------------------
 %% Include files
 %%--------------------------------------------------------------------
--include("F:/work/xengine2/code/yxa/src/include/phone.hrl").
--include("F:/work/xengine2/code/yxa/src/include/siprecords.hrl").
+-include("phone.hrl").
+-include("siprecords.hrl").
 
 
 %%--------------------------------------------------------------------

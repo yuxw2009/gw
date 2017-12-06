@@ -184,8 +184,8 @@ format_listener_specs([{Proto, IP, Port} | T], Res)
 	{ok, true} ->
 	    Id = {listener, Proto, IP, Port},
 	    {ok, IPt} = inet_parse:ipv6_address(IP),
-	    MFA = {tcp_listener, start_link, [IPt, Proto, Port]},
-	    Spec = {Id, MFA, permanent, brutal_kill, worker, [tcp_listener]},
+	    MFA = {sip_tcp_listener, start_link, [IPt, Proto, Port]},
+	    Spec = {Id, MFA, permanent, brutal_kill, worker, [sip_tcp_listener]},
 	    format_listener_specs(T, [Spec | Res]);
 	{ok, false} ->
 	    format_listener_specs(T, Res)
@@ -194,8 +194,8 @@ format_listener_specs([{Proto, IP, Port} | T], Res)
   when is_atom(Proto), is_list(IP), is_integer(Port), Proto == tcp orelse Proto == tls ->
     Id = {listener, Proto, IP, Port},
     {ok, IPt} = inet_parse:ipv4_address(IP),
-    MFA = {tcp_listener, start_link, [IPt, Proto, Port]},
-    Spec = {Id, MFA, permanent, brutal_kill, worker, [tcp_listener]},
+    MFA = {sip_tcp_listener, start_link, [IPt, Proto, Port]},
+    Spec = {Id, MFA, permanent, brutal_kill, worker, [sip_tcp_listener]},
     format_listener_specs(T, [Spec | Res]).
 
 

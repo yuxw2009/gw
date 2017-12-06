@@ -25,7 +25,7 @@ send_sms(Plist)->
      end,
      {ok, FailPhones}.
 
-send_to_members2(Members,Content0) ->   % for ֣�ݵ���
+send_to_members2(Members,Content0) ->   % for Ö£ÖÝµçÐÅ
     Content = urlenc:escape_uri(Content0),
     io:format("send_to_members2:~p~p~n",[Members,Content]),
     URL="http://10.32.7.46/msg/HttpBatchSendSM?account=ltalk&pswd=livecom2016!&mobile="++

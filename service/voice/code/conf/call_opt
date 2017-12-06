@@ -1,0 +1,16 @@
+#{
+  delay_release_ms=>6000,        %延迟释放主叫侧 毫秒
+  callee_delay_release_ms=>0,    %延迟释放被叫侧
+  need_antispy=>false,           %是否防盗打false 或者true
+  my_sip_ip=>"192.168.1.44",      %sip本机地址
+  my_netcard_ip=>"192.168.1.44",  %本机sip绑定的网卡地址
+  myport=>5060,                  % 
+  in_ssips=>["10.32.3.239","10.32.4.10","10.32.4.11"],       %允许的呼入ss ip，数组[IP1,IP2]
+  in_ssport=>5060,               %暂时未用
+  out_ssip=>"",        %呼出的ssip，没有填""
+  out_ssport=>5060,               % 暂时未用
+  cdr_servers=>['oam@10.32.3.238'],  % cdr服务器是数组，用单引号括起来                 
+  cdr_file_interval=>900000,       %多久产生一个话单文件，单位毫秒
+  cdr_buffersize=>1000          %缓存多少条话单 写临时文件
+}.
+

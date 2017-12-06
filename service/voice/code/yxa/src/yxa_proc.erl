@@ -88,7 +88,11 @@ safe_spawn_child(Module, Function, Arguments) ->
 %% @end
 %%--------------------------------------------------------------------
 safe_is_process_alive(Pid) when is_pid(Pid) ->
-    {is_process_alive(Pid), Pid};
+    Res=case node(Pid) ==node() of
+           true-> is_process_alive(Pid);
+           _-> true
+           end,
+    {Res, Pid};
 safe_is_process_alive(Name) when is_atom(Name) ->
     case erlang:whereis(Name) of
 	Pid when is_pid(Pid) ->
