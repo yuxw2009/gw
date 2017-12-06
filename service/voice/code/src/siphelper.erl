@@ -1,10 +1,12 @@
 -module(siphelper).
 
--define(DEFAULT_TIMEOUT, 50).
+-define(DEFAULT_INVITE_TIMEOUT, 120).
 -define(DEFAULT_RETRY_AFTER, 1).
 
 -include("siprecords.hrl").
 -include("sipclient.hrl").
+-include("sipsocket.hrl").
+-include_lib("eunit/include/eunit.hrl").
 %% -include("sipsocket.hrl").
 %% -include("yate.hrl").
 %% -include("sdp.hrl").
@@ -19,11 +21,13 @@
 	 send_ack/2,
 	 send_ack/3,
 	 send_request/1,
+	 send_request/2,
 	 send_response/3, send_response/4, send_response/5, send_response/6,
 	 update_authentications/3,
 	 update_authentications/5,
 	 add_authorization/2,
 	 get_retry_after/1,
+	 send_ack_with_sipsocket/3,
 	 cseq/1
 	]).
 
@@ -48,7 +52,7 @@ start_generate_request_1(Method, From, To, ExtraHeaders, Body,UserInfos) ->
     {Megasec, Sec, Microsec} = now(),
 
     CallId = lists:concat([Megasec * 1000000 + Sec, "-", Microsec,
-			   "@", sipcfg:get(sip_socket_ip)
+			   "@", sipcfg:mylocalip()
 			  ]),
     CSeq = 1,
 
@@ -119,12 +123,16 @@ generate_new_request(Method, Dialog, Contact, CSeqNum, ExtraHeaders) ->
 
 
 
+send_ack_with_sipsocket(Request,Auths,SipSocket)->
+    Branch = siprequest:generate_branch(),
+    send_ack(Request, Auths, Branch,SipSocket).
 
 send_ack(Request, Auths) ->
     Branch = siprequest:generate_branch(),
     send_ack(Request, Auths, Branch).
 
-send_ack(Request, _Auths, Branch) ->
+send_ack(Request, _Auths, Branch) ->send_ack(Request, _Auths, Branch,undefined).
+send_ack(Request, _Auths, Branch,SipSocket) ->
     Route = keylist:fetch('route', Request#request.header),
     TargetURI = Request#request.uri,
     Dst = case Route of
@@ -142,7 +150,7 @@ send_ack(Request, _Auths, Branch) ->
     %%{ok, Request1} = siphelper:add_authorization(Request, Auths),
     Request1 = Request,
 
-    case transportlayer:send_proxy_request(none, Request1, Dst,
+    case transportlayer:send_proxy_request(none, Request1, Dst#sipdst{socket=SipSocket},
 					   ["branch=" ++ Branch]) of
 	{ok, SendingSocket, TLBranch} ->
 	    {ok, SendingSocket, Dst, TLBranch};
@@ -151,7 +159,8 @@ send_ack(Request, _Auths, Branch) ->
     end.
 
 
-send_request(Request) ->
+send_request(Request) ->send_request(Request,undefined).
+send_request(Request,SipSocket) ->
     Branch = siprequest:generate_branch(),
     Route = keylist:fetch('route', Request#request.header),
     TargetURI = Request#request.uri,
@@ -165,7 +174,7 @@ send_request(Request) ->
 		  [Dst1 | _] = sipdst:url_to_dstlist(FRURL, 500, TargetURI),
 		  Dst1
 	  end,
-    Pid = transactionlayer:start_client_transaction(Request, Dst, Branch, ?DEFAULT_TIMEOUT, self()),
+    Pid = transactionlayer:start_client_transaction(Request, Dst#sipdst{socket=SipSocket}, Branch, ?DEFAULT_INVITE_TIMEOUT, self()),
     {ok, Pid, Branch}.
 
 
@@ -466,4 +475,41 @@ generate_contact_str(User) ->
 
     URL = sipurl:new([{user, User}, {host, siprequest:myhostname()}, {port, Port}]),
     "<" ++ sipurl:print(URL) ++ ">".
+
+call_id_test()->
+  Examp=  <<"INVITE sip:2180246990@10.32.3.213:5060;user=phone SIP/2.0
+Via: SIP/2.0/UDP 10.32.4.11:5060;branch=z9hG4bK7037e123a903.0
+To: \"2180246990\"<sip:2180246990@10.32.4.11>
+From: \"13816461488\"<sip:13816461488@10.32.4.11>;tag=a20040b-neRKe123a703
+Call-ID: 5629e123a8-0003-0033@10.32.4.11
+CSeq: 28157 INVITE
+Contact: <sip:13816461488@10.32.4.11:5060>
+P-Asserted-Identity: <sip:13816461488@10.32.4.11>
+Allow: INVITE,ACK,OPTIONS,BYE,CANCEL,INFO,REFER,NOTIFY,SUBSCRIBE
+Max-Forwards: 68
+Record-Route: <sip:10.32.4.11:5060;lr>
+User-Agent: ZTE Softswitch/1.0.0
+P-Charging-Vector: icid-value=Netun-20170330205443-00035ff5
+Content-Type: application/sdp
+Content-Length: 329
+
+v=0
+o=root 303132604 4232 IN IP4 10.32.4.68
+s=OFFICETEN
+c=IN IP4 10.32.4.68
+t=0 0
+m=audio 38202 RTP/AVP 18 4 8 0 101
+a=rtpmap:18 G729/8000
+a=fmtp:18 annexb=no
+a=rtpmap:4 G723/8000
+a=fmtp:4 annexa=no
+a=rtpmap:8 PCMA/8000
+a=rtpmap:0 PCMU/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-16
+a=ptime:20
+a=sendrecv">>,
+    V=sippacket:parse_call_id(Examp),
+    ?assertEqual("5629e123a8-0003-0033@10.32.4.11",V),
+    ok.
 

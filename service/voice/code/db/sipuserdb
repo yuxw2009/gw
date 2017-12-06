@@ -1,0 +1,33 @@
+[
+ {user, [
+	 {name, "*008613816461488"},
+	 {password, "secret"},
+	 {classes, [internal,national,mobile]}
+	]},
+ {address, [
+	    {user, "*008613816461488"},
+	    {address, "sip:*008613816461488@10.32.7.37"}
+	   ]},
+ {user, [
+	 {name, "ft.sip1"},
+	 {password, "secret"},
+	 {classes, [internal,national,mobile]}
+	]},
+ {user, [
+	 {name, "foo@example.org"},
+	 {password, "secret2"},
+	 {classes, [internal]},
+	 {addresses, ["sip:info@example.org", "sip:all@example.org"]}
+	]},
+
+ {address, [
+	    {user, "ft.sip1"},
+	    {address, "sip:ft@example.org"}
+	   ]},
+ {address, [
+	    {user, "ft.sip1"},
+	    {address, "sip:all@example.org"}
+	   ]}
+
+].
+

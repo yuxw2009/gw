@@ -161,7 +161,12 @@ init([]) ->
 send(Socket, Proto, Host, Port, Message) when is_record(Socket, sipsocket), is_atom(Proto),
 					      is_list(Host), is_integer(Port) ->
     SipSocketM = Socket#sipsocket.module,
-    SipSocketM:send(Socket, Proto, Host, Port, Message).
+    case node(Socket#sipsocket.pid)==node() of
+    true-> SipSocketM:send(Socket, Proto, Host, Port, Message);
+    false-> 
+        Socket#sipsocket.pid !{send,udp,Socket, Host, Port, Message},
+        ok
+    end.
 
 %%--------------------------------------------------------------------
 %% @spec    (Dst) ->

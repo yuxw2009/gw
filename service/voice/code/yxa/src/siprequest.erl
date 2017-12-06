@@ -732,7 +732,7 @@ create_via(Proto, Parameters) ->
 %% @end
 %%--------------------------------------------------------------------
 add_record_route(URL, Header) when is_record(URL, sipurl) ->
-    add_record_route(URL#sipurl.proto, undefined, undefined, Header).
+    add_record_route(URL#sipurl.proto, URL#sipurl.host, URL#sipurl.port, Header).
 
 %%--------------------------------------------------------------------
 %% @spec    (Proto, Hostname, Port, Header) ->

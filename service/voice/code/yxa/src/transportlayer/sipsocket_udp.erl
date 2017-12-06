@@ -38,8 +38,8 @@
 	 close_socket/1,
 	 config_traced_ip/1,
 	 show_traced_ip/0,
-	 need_traced/3,
        recre/0,
+       show/0,
 	 test/0
 	]).
 
@@ -54,12 +54,13 @@
 	 terminate/2,
 	 code_change/3
 	]).
-
+-compile(export_all).
 %%--------------------------------------------------------------------
 %% Include files
 %%--------------------------------------------------------------------
 -include("sipsocket.hrl").
 -include("stun.hrl").
+-include("virtual.hrl").
 
 %%--------------------------------------------------------------------
 %% Records
@@ -70,13 +71,19 @@
 		inet6_socketlist = [],	%% list() of {Socket, SipSocket}
 		socketlist,
 		fd,
+		is_sip_nic=false,
+		sipnodes=[node()],
+		call_dispatcher,
+		tracePids=[],
+		tracefuns=[],
 		traced_ip=""
 	       }).
 
 %%--------------------------------------------------------------------
 %% Macros
 %%--------------------------------------------------------------------
--define(SOCKETOPTS, [{reuseaddr, true}, binary]).
+%-define(SOCKETOPTS, [{reuseaddr, true}, binary]).
+-define(SOCKETOPTS, [binary, {active, true}, {recbuf, 8192*125}]).   %1M  
 %% v6 sockets have a default receive buffer size of 1k in Erlang R9C-0
 -define(SOCKETOPTSv6, [{reuseaddr, true}, binary, inet6, {buffer, 8 * 1024}]).
 
@@ -104,15 +111,44 @@
 %% @end
 %%--------------------------------------------------------------------
 start_link() ->
-    gen_server:start_link({local, sipsocket_udp}, ?MODULE, [], []).
+    Node=node(),
+    Params=case catch mnesia:dirty_index_read(sip_nic_t,Node,#sip_nic_t.node) of
+                 P_ when is_list(P_)-> P_;
+                 _-> []
+                 end,
+    io:format("88888888888888888888~p~n",[{Node,Params}]),                 
+    gen_server:start_link({local, sipsocket_udp}, ?MODULE, Params, []).
 
 config_traced_ip(Ip)->
     F = fun(State)-> {ok, State#state{traced_ip = Ip}} end,
     gen_server:call(?MODULE, {command, F}).
 
+add_trace_pid(TracePid)->
+    F = fun(State)-> {ok, State#state{tracePids=[TracePid|State#state.tracePids]}} end,
+    gen_server:call(?MODULE, {command, F}).
+delete_trace_pid(TracePid)->
+    F = fun(State)-> {ok, State#state{tracePids=lists:delete(TracePid,State#state.tracePids)}} end,
+    gen_server:call(?MODULE, {command, F}).
+add_traced_func({Id,Func})->
+    F = fun(State=#state{tracefuns = Funcs0})-> 
+             {ok, State#state{tracefuns=lists:keystore(Id,1,Funcs0,{Id,Func})}} 
+         end,
+    gen_server:call(?MODULE, {command, F}).
+
+delete_traced_func(Id)->
+    F = fun(State=#state{tracefuns = Funcs0})-> 
+             {ok, State#state{tracefuns=proplists:delete(Id,Funcs0)}} 
+         end,
+    gen_server:call(?MODULE, {command, F}).
+
 show_traced_ip()->
     F = fun(State)-> {State#state.traced_ip, State} end,
     gen_server:call(?MODULE, {command, F}).
+
+show()->
+    F = fun(State)-> {State, State} end,
+    gen_server:call(?MODULE, {command, F}).
+
 
 recre()->
     F = fun(State=#state{fd=Handle})->
@@ -138,6 +174,30 @@ recre()->
 %% @hidden
 %% @end
 %%--------------------------------------------------------------------
+init([SipNic=#sip_nic_t{addr_info={LocalIp,_LocalPort,_RemoteIp,_RemotePort}}]) when is_binary(LocalIp)->
+    init([SipNic#sip_nic_t{addr_info={binary_to_list(LocalIp),_LocalPort,_RemoteIp,_RemotePort}}]);
+init([#sip_nic_t{nodes=SipNodes,addr_info={LocalIp,LocalPort,_RemoteIp,_RemotePort}}]) ->
+    {ok, Fd} = file:open(?SIGNALLOG, [write]),
+    Port = LocalPort,  %% same for UDP and UDPv6
+    IPv4Spec =
+	lists:foldl(fun(IP, Acc) ->
+			    case inet_parse:ipv4_address(IP) of
+				{ok, IPt} ->
+				    [{udp, IPt, Port} | Acc];
+				_ ->
+				    Acc
+			    end
+		    end, [], lists:reverse([LocalIp])),    % lists:reverse(siphost:myip_list())),
+    Spec =
+	case yxa_config:get_env(enable_v6) of
+	    {ok, true} ->
+		[{udp6, {0,0,0,0,0,0,0,0}, Port} | IPv4Spec];
+	    {ok, false} ->
+		IPv4Spec
+	end,
+    Dispatcher=sip_dispatch:start(),
+    start_listening(Spec, #state{socketlist = socketlist:empty(),fd=Fd,is_sip_nic=true,sipnodes=SipNodes,
+                                              call_dispatcher=Dispatcher});
 init([]) ->
     {ok, Fd} = file:open(?SIGNALLOG, [write]),
     Port = sipsocket:get_listenport(udp),  %% same for UDP and UDPv6
@@ -373,7 +433,7 @@ handle_call({send, SipSocket, "[" ++ HostT, Port, Message}, _From, State) when i
 handle_call({send, SipSocket, Host, Port, Message}, _From, State) when is_record(SipSocket, sipsocket),
 								       is_list(Host), is_integer(Port) ->
     SendRes = do_send(State#state.inet_socketlist, SipSocket, Host, Port, Message),
-    trace(send, Host, Port, binary_to_list(Message), State),
+    trace({send,udp,SipSocket, Host, Port, Message}, State),
     {reply, {send_result, SendRes}, State}.
 
 
@@ -428,8 +488,9 @@ handle_cast(Unknown, State) ->
 %% @hidden
 %% @end
 %%--------------------------------------------------------------------
-handle_info({udp, Socket, IPtuple, InPortNo, Packet}, State=#state{}) when is_integer(InPortNo) ->
-    trace(recv, siphost:makeip(IPtuple), InPortNo, Packet, State),
+handle_info({udp, _Socket, {A,_,_,_}, _InPortNo, _Packet}, State=#state{}) when A=/=10 ->{noreply, State};
+handle_info(RcvUdp={udp, Socket, IPtuple, InPortNo, Packet}, State=#state{}) when is_integer(InPortNo) ->
+    trace(RcvUdp, State),
     {Proto, SipSocket} =
 	case lists:keysearch(Socket, 1, State#state.inet_socketlist) of
 	    {value, {Socket, SipSocket4}} ->
@@ -447,7 +508,7 @@ handle_info({udp, Socket, IPtuple, InPortNo, Packet}, State=#state{}) when is_in
 	true ->
 	    IP = siphost:makeip(IPtuple),
 %%            io:format("UDP receive ~p ~n",[Packet]),
-	    received_packet(Packet, IPtuple, IP, InPortNo, Proto, Socket, SipSocket);
+	    received_packet(Packet, IPtuple, IP, InPortNo, Proto, Socket, SipSocket,State);
 	false ->
 	    logger:log(error, "Sipsocket UDP: Received gen_server info 'udp' "
 		       "from unknown source '~p', ignoring", [Socket])
@@ -455,6 +516,11 @@ handle_info({udp, Socket, IPtuple, InPortNo, Packet}, State=#state{}) when is_in
 
     {noreply, State};
 
+handle_info(SndUdp={send,udp,SipSocket, Host, Port, Message}, State) when is_record(SipSocket, sipsocket),
+								       is_list(Host), is_integer(Port) ->
+    do_send(State#state.inet_socketlist, SipSocket, Host, Port, Message),
+    trace(SndUdp, State),
+    {noreply, State};
 handle_info(Info, State) ->
     logger:log(error, "Sipsocket UDP: Received unknown gen_server info : ~p", [Info]),
     {noreply, State}.
@@ -684,10 +750,10 @@ get_localaddr(Socket, DefaultAddr) ->
 %%          necessary sipsocket and origin records.
 %% @end
 %%--------------------------------------------------------------------
-received_packet(<<"\r\n">>, _IPtuple, IP, Port, Proto, _Socket, _SipSocket) ->
+received_packet(<<"\r\n">>, _IPtuple, IP, Port, Proto, _Socket, _SipSocket,_) ->
     logger:log(debug, "Keepalive packet (CRLF) received from ~p:~s:~p", [Proto, IP, Port]),
     ok;
-received_packet(Packet, IPtuple, IP, Port, Proto, Socket, _SipSocket) when is_binary(Packet), size(Packet) =< 30 ->
+received_packet(Packet, IPtuple, IP, Port, Proto, Socket, _SipSocket,_) when is_binary(Packet), size(Packet) =< 30 ->
     %% Too short to be anywhere near a real SIP message
     %% STUN packets (or whatever they are) look like "\r111.222.333.444:pppp"
     case is_only_nulls(Packet) of
@@ -710,7 +776,7 @@ received_packet(Packet, IPtuple, IP, Port, Proto, Socket, _SipSocket) when is_bi
 	    end
     end,
     ok;
-received_packet(Packet, IPtuple, IP, Port, Proto, Socket, SipSocket)
+received_packet(Packet, IPtuple, IP, Port, Proto, Socket, SipSocket,#state{is_sip_nic=IsNic,call_dispatcher=Dispatcher,sipnodes=SipNodes})
   when is_binary(Packet), is_list(IP), is_integer(Port), is_atom(Proto), is_record(SipSocket, sipsocket) ->
     case Packet of
 	<<N:8, _Rest/binary>> when N == 0; N == 1 ->
@@ -729,7 +795,11 @@ received_packet(Packet, IPtuple, IP, Port, Proto, Socket, SipSocket)
 				receiver	= self(),
 				sipsocket	= SipSocket
 			       },
-	    yxa_proc:safe_spawn(sipserver, process, [Packet, Origin]),
+           if(IsNic andalso length(SipNodes)>0)-> 
+               sip_dispatch:asyn_process(Packet,Origin);
+               %sip_dispatch:asyn_process(Packet,Origin#siporigin{call_dispatcher=Dispatcher});
+           true-> sipserver:async_process(Packet,Origin)
+           end,
 	    ok
     end.
 
@@ -927,20 +997,20 @@ sort_sockets_laddr([], HP, _Res) ->
     logger:log(debug, "Sipsocket UDP: Found no match for local address+port ~s:~p", [HP#hp.l_ip, HP#hp.l_port]),
     none.
 
-need_traced(Ip,_Mess, Ip)-> true;
-need_traced(_Ip,_Mess, "")-> false;
-need_traced(_Ip,_Mess, Traced) when not is_list(Traced)-> false;
-need_traced(_Ip,_Mess, "255.255.255.255")-> true;
-need_traced(_Ip,Mess, TracedStr)->
-   not (re:run(Mess,TracedStr) == nomatch).
-
+trace(Msg, _State=#state{tracePids=Pids})->
+    [Pid ! Msg||Pid<-Pids].
+trace(Direction, Host, Port, Message, _State=#state{tracefuns=Funcs=[_|_]})->
+    {ok,Lport}=yxa_config:get_env(listenport),
+    LIpPort=sipcfg:myip()++":"++integer_to_list(Lport),
+    SsIpPort=Host++":"++integer_to_list(Port),
+    [Func({LIpPort,SsIpPort,Message,Direction})||{_Id,Func}<-Funcs];
 trace(send, Host, Port, Message, State)->
     trace("<=== ", Host, Port, Message, State);
 trace(recv, Host, Port, Message, State)->
     trace("===> ", Host, Port, Message, State);
 trace(Prefix, Host, Port, Message, _State=#state{traced_ip=TraceIp, fd=Fd})->
-    case need_traced(Host,Message, TraceIp) of
-    true->  io:format(Fd, "~p ~p ~p:~p:~n~s~n",[Prefix, calendar:local_time(), Host, Port, Message]);
+    case signal_trace:need_traced(Host,Message, TraceIp) of
+    true->  io:format(Fd, "~p ~p ~p:~p:~n~s~n",[Prefix, utility:ts(), Host, Port, Message]);
     _ -> void
     end.
     

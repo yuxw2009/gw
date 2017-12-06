@@ -35,6 +35,7 @@
 	  addr,     % string()
 	  port,     % integer()
 	  receiver, % pid(), pid of receiver process
+	  call_dispatcher,
 	  sipsocket % sipsocket record()
 	 }).
 

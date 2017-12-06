@@ -160,8 +160,7 @@
 			    ) -> ok | error |
 				     {duplicate, Dup :: transactionstate()}.
 
-add_client_transaction(Method, Branch, Pid, Desc)
-  when is_list(Method), is_list(Branch), is_pid(Pid), is_list(Desc) ->
+add_client_transaction(Method, Branch, Pid, Desc) when is_list(Method), is_list(Branch), is_pid(Pid), is_list(Desc) ->
     add_client_transaction(?DEFAULT_TABLES, Method, Branch, Pid, Desc).
 
 add_client_transaction(Tables, Method, Branch, Pid, Desc)
@@ -186,8 +185,7 @@ add_client_transaction(Tables, Method, Branch, Pid, Desc)
 %% @doc     Add a new transaction state entry to SocketList.
 %% @end
 %%--------------------------------------------------------------------
-add_server_transaction(Request, Pid, Desc)
-  when is_record(Request, request), is_pid(Pid), is_list(Desc) ->
+add_server_transaction(Request, Pid, Desc) when is_record(Request, request), is_pid(Pid), is_list(Desc) ->
     add_server_transaction(?DEFAULT_TABLES, Request, Pid, Desc).
 
 add_server_transaction(Tables, Request, Pid, Desc)

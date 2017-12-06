@@ -1,9 +1,28 @@
 -module(sipcfg).
 -compile(export_all).
 
-myip()->   "10.32.7.28".
-ssip() -> "10.32.4.11".
-get(sip_socket_ip)-> "10.32.7.28";
+myip() ->    
+    case catch mnesia:dirty_read(call_opt_t,node()) of
+        [#call_opt_t{value=#{my_sip_ip:=Ip}}]   ->  Ip;
+        _-> utility:make_ip_str(hd(utility:get_local_ips()))
+    end.
+mylocalip() ->    
+    utility:make_ip_str(hd(utility:get_local_ips())).
+inssips()-> 
+    case catch mnesia:dirty_read(call_opt_t,node()) of
+        [#call_opt_t{value=#{in_ssips:=InSSIps}}]   ->  InSSIps;
+        _-> ["10.32.4.11","10.32.4.10"]
+    end.
+outssip()-> 
+    case catch mnesia:dirty_read(call_opt_t,node()) of
+        [#call_opt_t{value=#{out_ssip:=SSIp}}]   ->  SSIp;
+        _-> "10.32.4.11"
+    end.
+get(sip_socket_ip)-> 
+    case catch mnesia:dirty_read(call_opt_t,node()) of
+        [#call_opt_t{value=#{my_netcard_ip:=MyIp_}}]   ->  MyIp_;
+        _-> "0.0.0.0"
+    end;
 get(www_node)-> 'www_dth@10.32.3.52'.
 service_id()-> "ml".
 callee_prefix()-> "00088818".

@@ -120,3 +120,15 @@ stats2file(Sid)->
     end,
     lists:foreach(F, get_stats(Sid)),
     file:close(IODev).
+
+statsphone2file(Sid)->
+    {ok, IODev} = file:open("./phone.txt", [write]),
+    F = fun(#cdr{details=#voip_detail{phone=Phone}})->
+            Phone;
+        (_)-> void
+    end,
+    Cdrs=get_stats(Sid),
+    Phones=[Phone||#cdr{details=#voip_detail{phone=Phone}}<-Cdrs],
+    Phones1=lists:usort(Phones),
+    io:format(IODev,"~p.",[Phones1]),
+    file:close(IODev).    
