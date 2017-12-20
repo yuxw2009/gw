@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -fPIC -shared -Wall
-INCLUDE = -I /usr/local/lib/erlang/usr/include 
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include
 
 top_srcdir = ..
 OC_BASE = $(top_srcdir)/opencore

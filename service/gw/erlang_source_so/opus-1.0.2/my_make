@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -pthread -fPIC -shared -Wall -DUSE_ALLOCA -DFIXED_POINT -DOPUS_BUILD 
-INCLUDE = -I /usr/local/lib/erlang/usr/include \
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include \
 		  -I ./include \
 		  -I ./src \
 		  -I ./celt

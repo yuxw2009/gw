@@ -1,1 +1,2 @@
-erl -name fzdvoice@ubuntu.livecom -setcookie hkabc -pa ./ebin -pa ./yxa/ebin -s xengine
+#cd /home/newlwk/new_wcg/voice/code
+erl -name voice@priv.x9water.com -setcookie yxwabc -pa ./ebin -pa ./yxa/ebin -s xengine

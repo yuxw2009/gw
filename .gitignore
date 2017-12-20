@@ -27,3 +27,4 @@ Mnesia.www@fc2fc.com
 *.LOG
 *.DCD
 *.DAT
+#service/gw/erlang_source_so/*

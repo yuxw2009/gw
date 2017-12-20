@@ -1,0 +1,8 @@
+CFLAGS = -fPIC -shared
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include
+
+rs:
+	gcc -fPIC -c erl_resample.c $(INCLUDE)
+
+nif:
+	gcc $(CFLAGS) erl_resample.o -o erl_resample.so

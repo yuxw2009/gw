@@ -2,7 +2,7 @@
 
 -compile(export_all).
 
--include("yaws_arg.hrl").
+-include("yaws_api.hrl").
   
 decode_json(Json, Spec) ->
     decode(Json, Spec, []).

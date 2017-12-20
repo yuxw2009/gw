@@ -6,10 +6,10 @@
 %% public IP
 get(host_ip) -> "112.74.96.171";
 get(internal_ip) -> "112.74.96.171";  % media server ip for internal media
-get(ip4sip) ->  "112.74.96.171";
+get(ip4sip) ->  mylocalip();
 
 get(web_socket_ip) -> "112.74.96.171";
-get(sip_socket_ip) -> "112.74.96.171";
+get(sip_socket_ip) -> mylocalip();
 
 
 get(sip_app_node) -> {voip_ua, 'voicezte@119.29.62.190'};%{voip_ua, 'qvoice@112.74.96.171'};%
@@ -42,7 +42,7 @@ get(qq_interval)->"1.175";  %  1.53
 get(_) -> "".
 
 get_vcr()->no_vcr.
-get_root()-> "/home/ubuntu/ttt/gw/applications/".
+get_root()-> "./".
 get_node(_)-> node().
 
 % for qvoice
@@ -59,3 +59,9 @@ get_mhost1(_RemoteIp)-> avscfg:get(host_ip).
 
 get_regco()->"/home/ubuntu/ttt/gw/applications/music_back/UnixReco".
 get_vcr_path()-> get_data_path()++"vcr_rec6/".
+mylocalip() ->    
+    utility1:make_ip_str(get_one_ip(utility1:get_local_ips())).
+
+get_one_ip([])->unknown;
+get_one_ip([Ip={192,168,_,_}|_])->    Ip;
+get_one_ip([_|T])-> get_one_ip(T).

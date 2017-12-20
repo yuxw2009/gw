@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -fPIC -shared -Wall -DVAR_ARRAYS -DOPUS_BUILD
-INCLUDE = -I /usr/local/lib/erlang/usr/include \
+INCLUDE = -I /otp/erlang/lib/erlang/usr/include \
 		  -I ./include \
 		  -I ./src \
 		  -I ./celt

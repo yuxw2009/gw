@@ -7,7 +7,7 @@ IPPCORE=u8
 
 CC_OPT=-fPIC -O3 -DIPPCORE_STATIC_INIT -fomit-frame-pointer -march=nocona -fno-exceptions
 
-INCLUDE=-I$(IPPBASE)/include -include "$(IPPBASE)/tools/staticlib/ipp_$(IPPCORE).h" -I /usr/local/lib/erlang/usr/include
+INCLUDE=-I$(IPPBASE)/include -include "$(IPPBASE)/tools/staticlib/ipp_$(IPPCORE).h" -I /otp/erlang/lib/erlang/usr/include
 
 
 LDFLAGS =-Wl,-static -L"$(IPPBASE)/lib" -avoid-version -module -lippscmerged$(LARCH) -lippsrmerged$(LARCH) -lippsmerged$(LARCH) -lippcore$(LARCH) -liomp5

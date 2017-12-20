@@ -148,8 +148,11 @@ get_cpu_usage() ->
    C = os:cmd("top -b -n 2 -d .5 | grep \"Cpu(s):\""),
    scan_cpu_usage(lists:nth(2,string:tokens(C,"\n"))).
 
+scan_cpu_usage("%Cpu(s):" ++ T) ->
+    scan_cpu_usage(T, in, []);
 scan_cpu_usage("Cpu(s):" ++ T) ->
     scan_cpu_usage(T, in, []).
 
 scan_cpu_usage("%us"++_Rest, in, Acc) -> string:strip(Acc);
+scan_cpu_usage("us"++_Rest, in, Acc) -> string:strip(Acc);
 scan_cpu_usage([A|T], in, Acc) -> scan_cpu_usage(T, in, Acc++[A]).
