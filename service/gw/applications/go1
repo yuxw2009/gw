@@ -1,2 +1,2 @@
 #ulimit -n 20480
-erl -name gw1@ubuntuvm1.yxw  -setcookie yxwabc  -pa  ../ebin  +K true -s voip -mnesia dir '"mnesia_dir1"'
+erl -name gw1@127.0.0.1  -setcookie yxwabc  -pa  ../ebin  +K true -s voip -mnesia dir '"mnesia_dir1"'

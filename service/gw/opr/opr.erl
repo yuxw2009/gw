@@ -18,11 +18,34 @@
                 tmr,
                 web_hb=given
                }).
-
+ % [oprstatus:status,                           //  ringing,hook_off,
+ %  activedBoard:ab,                            //  激活的窗口
+ %  boards:[{boardstatus:bs,                    //null,sidea,sideb,monitor,insert,split,
+ %           detail:{a:{phone:p,                // 如果左边没有呼叫 就没有a，右边没有 就没有b；没有坐席，就没有o
+ %                     talkstatus:us,
+ %                     starttime:st},
+ %                   b:{phone:p,
+ %                     talkstatus:us,
+ %                     starttime:st},
+ %                   o:{phone:p,
+ %                     talkstatus:us,
+ %                     starttime:st}
+ %                }
+ %                }]]    boardstatus:   
 %% extra APIs.
 % incomingSipWebcall(CallID, SipSDP, PhoneNo, WMGNode, SipPid) ->
 %     {ok, Pid} = my_server:start(?MODULE, [CallID], []),
 %     my_server:call(Pid, {incomingSipWebcall, SipSDP, PhoneNo, WMGNode, SipPid}).
+get_boardn_sidea(Seat,BoardIndex)->
+    board:get_sidea(opr:get_board(Seat,BoardIndex)).
+show(PidOrSeat)->
+    F=fun(State)->
+            {State,State}
+       end,
+    act(PidOrSeat,F).    
+get_board(PidOrSeat,Index)->
+    Boards=get_boards(PidOrSeat),
+    lists:nth(Index,Boards).
 get_ua(Pid)->
     F=fun(State=#state{ua=UA})->
             {UA,State}
@@ -59,10 +82,11 @@ get_boards(Pid)->
 %     end.
 start(SeatNo) ->
     {ok, Pid} = my_server:start(?MODULE, [SeatNo], []),
-    my_server:call(Pid, {make_call}).
+    my_server:call(Pid, {make_call}),
+    {ok,Pid}.
 
 stop(Pid) ->
-    my_server:cast(Pid, stop),
+    my_server:call(Pid, stop),
     ok.
 
 check(Pid) ->
@@ -78,8 +102,8 @@ init([SeatNo]) ->
     UANode = node_conf:get_voice_node(),
     [#opr{item=#{user:=OprPhone}}]=opr_sup:get_by_seatno(SeatNo),
     OprPid=self(),
-    BoardPidF=fun([SeatNo,BoardId,OprPid])->
-                 {ok,Pid}=board:start([SeatNo,SeatNo++"_"++integer_to_list(BoardId),OprPid]),
+    BoardPidF=fun([SeatNo_,BoardId,OprPid_])->
+                 {ok,Pid}=board:start([SeatNo_,SeatNo_++"_"++integer_to_list(BoardId),OprPid_]),
                  Pid
             end,
     Boards=[BoardPidF([SeatNo,BoardId,OprPid])||BoardId<-lists:seq(1,?BOARDNUM)],
@@ -87,6 +111,9 @@ init([SeatNo]) ->
 
 handle_call(get_status, _From, #state{sipstatus=Status}=ST) ->
     {reply, Status, ST#state{web_hb=given}};
+
+handle_call(stop, _From, ST) ->
+    {stop,normal, ok, ST};
 
 handle_call(rtp_stat, _From, #state{id=ID, wmg_node=WmgNode}=ST) ->
     {reply, get_rtp_stat(ID, WmgNode), ST};
@@ -96,7 +123,8 @@ handle_call({act,Act},_From, ST=#state{}) ->
     {reply,Res,NST};
 
 handle_call({make_call}, _From, #state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST) ->
-    make_call(ST).
+    {Res,NST}=make_call(ST),
+    {reply,Res,NST}.
 
 handle_cast({act,Act}, ST) ->
     {_,NST}=Act(ST),
@@ -117,7 +145,8 @@ handle_info(check_web_member_timer, #state{id=ID, web_hb=HB} = ST) ->
             {noreply, ST#state{web_hb=token}}
     end; 
 
-handle_info({callee_status, Status},#state{id=ID, wmg_node=WmgNode}=ST) ->
+handle_info({callee_status,_Status},ST)-> {noreply,ST};
+handle_info({callee_status,UA, Status},#state{id=ID,ua=UA, wmg_node=WmgNode}=ST) ->
     if  
         Status == hook_on; Status == released; Status == invalid ->
             call_terminated(ST),
@@ -146,23 +175,24 @@ handle_info({info_call,{dail,_Nu}},#state{id=_ID, wmg_node=_WmgNode}=ST) ->
 
 
 handle_info({'DOWN', _Ref, process, UA, _Reason},#state{id=ID, ua=UA}=ST) ->
-    call_terminated(ST),
+    NST=call_terminated(ST),
     io:format("seat:~p ua_crashed~n",[ID]),
-    make_call(ST),
-    {noreply, ST};
+    {_,NST1}=make_call(NST),
+    {noreply,NST1};
 handle_info({'DOWN', _Ref, process, _, _Reason},#state{id=ID}=ST) ->
-    call_terminated(ST),
+    NST=call_terminated(ST),
     %voip_sup:on_call_over(ID),
     io:format("seat:~p media_crashed~n",[ID]),
-    make_call(ST),
-    {noreply, ST};
-
+    {_,NST1}=make_call(NST),
+    {noreply,NST1};
 
 handle_info(_Msg, #state{id=ID}=ST) ->
-    io:format("voip[~p] received unknown message.~n",[ID]),
+    io:format("opr[~p] received unknown message.~n",[{ID,_Msg}]),
     {noreply, ST}.
 
-terminate(_,_) ->
+terminate(_,ST=#state{boards=Boards}) ->
+    call_terminated(ST),
+    [board:release(Board)||Board<-Boards],
     ok.
 
 
@@ -170,12 +200,18 @@ terminate(_,_) ->
 rbt(WmgNode, ID) ->
     rpc:call(WmgNode, voip, rbt, [ID]).
 
-call_terminated(#state{wmg_node=WmgNode,ua=UA,ua_ref=UARef,mediaPid=MediaPid,media_ref=MRef}) ->
-    erlang:demonitor(UARef),
-    erlang:demonitor(MRef),
-    rpc:call(WmgNode, sip_media, stop, [MediaPid]),
-    %rpc:call(UANode, voip_ua, stop, [UA]).
-    UA ! stop.
+call_terminated(St=#state{wmg_node=WmgNode,ua=UA,ua_ref=UARef,mediaPid=MediaPid,media_ref=MRef}) ->
+    if is_pid(UA)-> 
+        erlang:demonitor(UARef),
+        UA ! stop;
+    true-> void
+    end,
+    if is_pid(MediaPid)->
+        erlang:demonitor(MRef),
+        rpc:call(WmgNode, sip_media, stop, [MediaPid]);
+    true-> void
+    end,
+    St#state{ua=undefined,mediaPid=undefined,ua_ref=undefined,media_ref=undefined}.
 
 
 get_rtp_stat(ID, WmgNode) ->
@@ -185,16 +221,15 @@ get_rtp_stat(ID, WmgNode) ->
     end.
 
 % my utility function
-act(Act)->    act(whereis(?MODULE),Act).
+act(Seat,Act) when  is_list(Seat) ->    act(opr_sup:get_opr_pid(Seat),Act);
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 
 make_call(#state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST)->
     case make_call(#{id=>ID,wmg_node=>WMGNode,ua_node=>UANode,phone=>PhoneNo}) of
         {ok,#{ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef}}->
-            {reply, {ok, self()}, ST#state{ sipstatus=invite,
-                                   ua=UA,ua_ref=UARef,mediaPid=MediaPid,media_ref=MRef}};
+            {ok,ST#state{ sipstatus=invite,ua=UA,ua_ref=UARef,mediaPid=MediaPid,media_ref=MRef}};
         {failure, Reason} ->
-            {stop, normal, {failure, Reason}, ST}
+            {{fail,Reason},ST}
     end;
 make_call(#{id:=ID,wmg_node:=WMGNode,ua_node:=UANode,phone:=PhoneNo})->
     case sip_media:start(ID, self()) of

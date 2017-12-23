@@ -34,18 +34,14 @@ cast(Svr, Msg) ->
 call(undefined, _Msg) -> void;
 call(Svr, Msg) when is_atom(Svr)-> call(whereis(Svr),Msg);
 call(Svr, Msg) when is_pid(Svr)->
-    case is_process_alive(Svr) of
-    true->
-        Ref = make_ref(),
-        Svr ! {self(), {call, Ref, Msg}},
-        receive
-        	{reply, Ref, Reply} ->
-        		Reply
-        after ?CALLTIMEOUT ->
-            timeout
-        end;
-    false-> void
-    end;
+	Ref = make_ref(),
+	Svr ! {self(), {call, Ref, Msg}},
+	receive
+		{reply, Ref, Reply} ->
+			Reply
+	after ?CALLTIMEOUT ->
+	    timeout
+	end;
 call(_Svr, _Msg) ->	void.
 
 %% ---------------------------------------------	
@@ -58,41 +54,52 @@ loop(Module, State, TimeOut) ->
 	end.
 
 lprocess({_From, {cast, Msg}}, Module, State) ->
-			case Module:handle_cast(Msg, State) of
+			case catch Module:handle_cast(Msg, State) of
 				{noreply, NewState} ->
 					loop(Module, NewState, infinity);
-				{stop, Reason, NewState} ->
-					Module:terminate(Reason, NewState)
+                         {stop, Reason, NewState} -> Module:terminate(Reason, NewState);
+                          R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+                              Module:terminate(myserver_exception, State)
 			end;
 lprocess({From, {call, Tag, Msg}}, Module, State) ->			
-			case Module:handle_call(Msg, {From, Tag}, State) of
+			case  catch Module:handle_call(Msg, {From, Tag}, State) of
 				{reply, Reply, NewState} ->
 					reply({From, Tag}, Reply),
 					loop(Module, NewState, infinity);
-				{stop, Reason, Reply, NewState} ->
-				    Module:terminate(Reason, NewState),
-					reply({From, Tag}, Reply);
+%			      {'EXIT',Reason}-> Module:terminate(Reason, State);
 				{noreply, NewState} ->
-					loop(Module, NewState, infinity)
+					loop(Module, NewState, infinity);
+				{stop, Reason, Reply, NewState} ->
+					reply({From, Tag}, Reply),
+				    Module:terminate(Reason, NewState);
+                           R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+                               Module:terminate(myserver_exception, State)
 			end;
 lprocess({my_server_timeout, _T}, Module, State) ->
-	case Module:handle_info(timeout, State) of
+	case  catch Module:handle_info(timeout, State) of
 		{noreply, NewState, NewTime} ->
 			loop(Module, NewState,NewTime);
 		{noreply, NewState} ->
 			loop(Module, NewState, infinity);
-		{stop, Reason, NewState} ->
-			Module:terminate(Reason, NewState)
+		{stop, Reason, NewState} -> Module:terminate(Reason, NewState);
+	      R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+	          Module:terminate(myserver_exception, State)
 	end;
 lprocess(Msg, Module, State) ->
-	case Module:handle_info(Msg, State) of
+	case  catch Module:handle_info(Msg, State) of
 		{noreply, NewState, NewTime} ->
 			loop(Module, NewState,NewTime);
 		{noreply, NewState} ->
 			loop(Module, NewState, infinity);
-		{stop, Reason, NewState} ->
-			Module:terminate(Reason, NewState)
+		{stop, Reason, NewState} -> Module:terminate(Reason, NewState);
+	      R-> 
+                              utility:log("server_error.log","~p myserver excpt:~p~nmsg:~p",[Module,R,Msg]),
+	          Module:terminate(myserver_exception, State)
 	end.
 
 reply({Pid, Tag}, Reply) ->
 	Pid ! {reply, Tag, Reply}.
+

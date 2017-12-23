@@ -61,13 +61,14 @@
 
 -record(audio_frame,{
 	content        = audio, %%frame_content(),
-	owner,
+	owner=self(),
 	stream_id      = 0,         %%non_neg_integer(),
 	codec 	       = undefined, %%frame_codec()|undefined,
 	marker         = false,
 	samples,					%% number of samples in frame
 	addr,
 	port,
+	pcm,
 	body           = <<>>       %%binary()
 }).
 

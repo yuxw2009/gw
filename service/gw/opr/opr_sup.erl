@@ -92,6 +92,7 @@ exec_cmd(F)-> my_server:call(?MODULE, {cmd,F}).
     
 %% callbacks
 init([]) ->
+    erlang:group_leader(erlang:whereis(user),self()),
     {ok,#state{}}.
         
 
@@ -101,10 +102,9 @@ handle_call({act,Act},_From, ST=#state{}) ->
         {reply,Res,NST}
     catch 
     	error:Err ->
-            io:format("opr_sup act error ~p~n",[Err]),
+            %io:format("opr_sup act error ~p~n",[Err]),
             {reply,err,ST}
     end;
-    
 handle_call(_Call, _From, State) ->
     {reply,unhandled,State}.
 
