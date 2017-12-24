@@ -59,7 +59,7 @@ lprocess({_From, {cast, Msg}}, Module, State) ->
 					loop(Module, NewState, infinity);
                          {stop, Reason, NewState} -> Module:terminate(Reason, NewState);
                           R-> 
-                              utility:log("server_error.log","~p myserver excpt:~p",[Module,R]),
+                              utility:log("log/server_error.log","~p myserver excpt:~p",[Module,R]),
                               Module:terminate(myserver_exception, State)
 			end;
 lprocess({From, {call, Tag, Msg}}, Module, State) ->			

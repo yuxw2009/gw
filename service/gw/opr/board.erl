@@ -19,7 +19,7 @@
 % [callstatus:status,                           //  坐席软终端状态 ring 振铃,hook_off 通话, hook_on 释放
  %   oprstatus: os,                             //. logined,maintaining(维护),suspending(挂起)
  %  activedBoard:ab,                            //  激活的窗口
- %  boards:[{boardstatus:bs,                    // null空,sidea 前塞,sideb 后赛,monitor监听,inserta强插前塞,insertb强插后塞,third三方,splita分割前塞,splitb，分割后塞,
+ %  boards:[{boardstatus:bs,                    // null空,sidea 前塞,sideb 后赛,monitor监听,inserta强插前塞,insertb强插后塞,third三方,splita分割前塞,splitb，分割后塞,ab:前后塞通话
  %           detail:{a:{phone:p,                // 如果左边没有呼叫 就没有a，右边没有 就没有b；没有坐席，就没有o；
  %                     talkstatus:us,           // 前塞状态：ring振铃,busy-忙,hook_off通话，
  %                     starttime:st},           // 通话开始时间
@@ -130,16 +130,30 @@ handle_info({callee_sdp,From,SDP_FROM_SS},State=#state{id=Aid,seat=Seat,sidea=#{
     end,
 %   {noreply,State#state{status=hook_off}}; 
     {noreply,State};    
-handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{status=BoardStatus,seat=Seat,id=Id,sidea=SideA=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno}}) when From==UA; From==MediaPid->
-    llog("board side:~p ~p sip hangup",[sidea,{Seat,Id,Phno}]),
+handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{status=BoardStatus,seat=Seat,id=Id,sidea=SideA=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno},sideb=SideB}) when From==UA; From==MediaPid->
+    llog("board sidea:~p sip hangup",[{Seat,Id,Phno}]),
     release_side(SideA),
-    BoardStatus1=if BoardStatus==sidea; BoardStatus==inserta-> null; true-> BoardStatus end,
-    {noreply,State#state{sidea=?DEFAULTSIDE,status=BoardStatus1}};   
-handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{status=BoardStatus,seat=Seat,id=Id,sideb=Side=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno}}) when From==UA; From==MediaPid->
-    llog("board side:~p ~p sip hangup",[sideb,{Seat,Id,Phno}]),
+    NST=if BoardStatus==sidea; BoardStatus==inserta-> 
+                State#state{sidea=?DEFAULTSIDE,status=null}; 
+           BoardStatus==ab->
+                release_side(SideB),
+                State#state{sidea=?DEFAULTSIDE,status=null,sideb=?DEFAULTSIDE};
+           true-> 
+                State#state{sidea=?DEFAULTSIDE} 
+       end,
+    {noreply,NST};   
+handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{status=BoardStatus,seat=Seat,id=Id,sidea=SideA,sideb=Side=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno}}) when From==UA; From==MediaPid->
+    llog("board sideb:~p sip hangup",[{Seat,Id,Phno}]),
     release_side(Side),
-    BoardStatus1=if BoardStatus==sideb; BoardStatus==insertb-> null; true-> BoardStatus end,
-    {noreply,State#state{sideb=?DEFAULTSIDE,status=BoardStatus1}};   
+    NST=if BoardStatus==sideb; BoardStatus==insertb-> 
+                State#state{sideb=?DEFAULTSIDE,status=null}; 
+           BoardStatus==ab->
+                release_side(SideA),
+                State#state{sidea=?DEFAULTSIDE,status=null,sideb=?DEFAULTSIDE};
+           true-> 
+                State#state{sideb=?DEFAULTSIDE} 
+       end,
+    {noreply,NST};       
 handle_info(alive_timer,State=#state{id=Aid,seat=Seat, alive_count=AC}) ->
     if
         AC  =:= 0 ->
@@ -313,7 +327,7 @@ ab(BPid)->
                 sip_media:set_peer(AMedia,Mixer),
                 mixer:add(Mixer,BMedia),
                 sip_media:set_peer(BMedia,Mixer),
-                {ok,State#state{status=null}};
+                {ok,State#state{status=ab}};
             true-> 
                 {ok,State}
             end

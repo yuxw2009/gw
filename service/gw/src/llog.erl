@@ -65,7 +65,7 @@ chkfilesize(LogHd) ->
 			if
 				element(2, Finfo) > ?LOGMAXSIZE ->
 					file:close(LogHd),
-					file:rename(?SysLog, "wrtc-"++ts()++".log"),
+					file:rename(?SysLog, "log/wrtc-"++ts()++".log"),
 					{ok, NewHd} = file:open(?SysLog, [append]),
 					NewHd;
 				true ->

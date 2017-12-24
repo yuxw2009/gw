@@ -12,6 +12,14 @@
 
 
 
+mytest()->
+    callb_test(),
+    calla_test(),
+    callb_and_calla_test(),
+    unfocus_calla_test(),
+    callb_and_calla_sideb_test(),
+    mixer_2way_test(),
+    ok.
 
 % opr_logout_test()->
 %     {ok,OprPid}=opr_sup:login(?SeatNo),
@@ -295,15 +303,12 @@ login_test()->
     {ok,OprPid1}=opr_sup:login(?SeatNo),
     ?assertEqual(OprPid,OprPid1),
     ?assert(length(Boards)==16 andalso is_pid(hd(Boards)) andalso is_process_alive(hd(Boards))),
-    
-    % exit(OprPid,kill),
-    % utility1:delay(10),
-    % ?assert(not rpc:call(UANode,erlang,is_process_alive,[UA])),
-    % ?assert(not rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
-    % undefined=opr_sup:get_opr_pid(?SeatNo),
-
-    %[]=opr_sup:get_oprs_by_group_no(?GroupNo),
-    %siphelper:start_generate_request("REGISTER","a@1.1.1.1","b@2.2.2.2",[], []).
+    MediaPid=opr:get_mediaPid(OprPid),
+    opr:stop(OprPid),
+     utility1:delay(500),
+     ?assert(not rpc:call(UANode,erlang,is_process_alive,[UA])),
+     ?assert(not rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
+     undefined=opr_sup:get_opr_pid(?SeatNo),
     ok.
 ab_test()->
     opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
@@ -328,10 +333,10 @@ ab_test()->
     ?assert(mixer:has_media(Mixer,BMedia)),
     ?assert(mixer:has_media(Mixer,OprMedia)),
     %模拟B应答
-    % Board1 ! {callee_status,BUA, hook_off},  
-    % utility1:delay(20),
-    % ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
-    % ?assertEqual(sideb,board:get_status({"6",1})),
+    Board1 ! {callee_status,BUA, hook_off},  
+    utility1:delay(20),
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
+    ?assertEqual(sideb,board:get_status({"6",1})),
 
     % test calla
     board:calla(Board1,"8"),    
@@ -343,19 +348,19 @@ ab_test()->
     ?assert(mixer:has_media(Mixer,AMedia)),    
     % test ab
     board:ab(Board1),
-    ?assertEqual(null,board:get_status({"6",1})),
+    ?assertEqual(ab,board:get_status({"6",1})),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
     ?assert( mixer:has_media(Mixer,BMedia)),
     ?assert(not mixer:has_media(Mixer,OprMedia)),
     ?assert(mixer:has_media(Mixer,AMedia)),        
     ?assertEqual(Mixer,sip_media:get_media(AMedia)),
-    ?assertEqual(null,board:get_status({"6",1})),       
+    ?assertEqual(ab,board:get_status({"6",1})),       
     % test release sidea
-    % AUA ! stop,
-    % utility1:delay(50),
-    % #{ua:=undefined,mediaPid:=undefined}=board:get_sidea(Board1),
-    % ?assertEqual(null,board:get_status({"6",1})),   
-    % opr_sup:logout(?SeatNo),
+    AUA ! stop,
+    utility1:delay(50),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea(Board1),
+    ?assertEqual(null,board:get_status({"6",1})),   
+    opr_sup:logout(?SeatNo),
          ok.
 inserta_test()->
    todo.

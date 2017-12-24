@@ -53,6 +53,23 @@ stop()->
     P-> exit(P,kill)
     end.
 
+register_oprpid(Seat,OprPid)->
+   case whereis(opr_sup) of
+    undefined-> opr_sup:start();
+    _-> void
+    end,
+    F=fun(State=#state{opr_pids=OprPids,seats=Seats})->
+            case maps:get(Seat,Seats,undefined) of
+                undefined->
+                   utility1:log("notice! opr ~p register_oprpid!",[Seat]),
+                   {ok,State#state{seats=Seats#{Seat=>OprPid},opr_pids=OprPids#{OprPid=>#{seat=>Seat}}}};
+                OprPid->
+                   {ok,State};
+                OprPid0->
+                   {{error,OprPid0},State}
+            end
+       end,
+    act(F).
 login(Seat)->
    case whereis(opr_sup) of
     undefined-> opr_sup:start();
@@ -71,11 +88,15 @@ login(Seat)->
        end,
     act(F).
 logout(Seat)->
-    case get_opr_pid(Seat) of
-        OprPid when is_pid(OprPid)->
-            opr:stop(OprPid);
-        _-> void
-    end.
+    F=fun(State=#state{opr_pids=OprPids,seats=Seats})->
+        case maps:take(Seat,Seats) of
+            error->{ok,State};
+            {OprPid,Seats1} when is_pid(OprPid)->
+                opr:stop(OprPid),
+                {ok,State#state{seats=Seats1,opr_pids=maps:remove(OprPid,OprPids)}}
+       end
+    end,
+    act(F).
     
 get_opr_pid(Seat)->
     F=fun(State=#state{opr_pids=OprPids,seats=Seats})->

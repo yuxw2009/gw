@@ -1,7 +1,7 @@
 -module(opr).
 -compile(export_all).
 -include("opr.hrl").
--define(POOLTIME, 30000).
+-define(POOLTIME, 3000).
 -define(BOARDNUM,16).
 -record(state, {id,
                 phone,
@@ -107,13 +107,14 @@ init([SeatNo]) ->
                  Pid
             end,
     Boards=[BoardPidF([SeatNo,BoardId,OprPid])||BoardId<-lists:seq(1,?BOARDNUM)],
-    {ok, #state{id=SeatNo, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards}}.
+    {ok,TR} = my_timer:send_interval(?POOLTIME,check_orphan),
+    {ok, #state{id=SeatNo, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards,tmr=TR}}.
 
 handle_call(get_status, _From, #state{sipstatus=Status}=ST) ->
     {reply, Status, ST#state{web_hb=given}};
 
 handle_call(stop, _From, ST) ->
-    {stop,normal, ok, ST};
+    {stop,normal, ok, call_terminated(ST)};
 
 handle_call(rtp_stat, _From, #state{id=ID, wmg_node=WmgNode}=ST) ->
     {reply, get_rtp_stat(ID, WmgNode), ST};
@@ -132,26 +133,18 @@ handle_cast({act,Act}, ST) ->
 
 handle_cast(stop, #state{tmr=Tmr}=ST) ->
     my_timer:cancel(Tmr),
-    call_terminated(ST),
-    {stop, normal, ST}.
+    {stop, normal, call_terminated(ST)}.
 
-handle_info(check_web_member_timer, #state{id=ID, web_hb=HB} = ST) ->
-    if
-        HB == token ->
-            call_terminated(ST),
-            %voip_sup:on_call_over(ID),
-            {stop, normal, ST}; 
-        true ->
-            {noreply, ST#state{web_hb=token}}
-    end; 
-
+handle_info(check_orphan, #state{id=ID, web_hb=HB} = ST) ->
+    case opr_sup:register_oprpid(ID,self()) of
+        ok-> {noreply, ST};
+        {error,_Pid1}->
+            utility1:log("error! opr seat ~p is orphan,register_oprpid failed, quit!",[{ID,self()}]),
+            {stop,normal,ST}
+    end;
 handle_info({callee_status,_Status},ST)-> {noreply,ST};
 handle_info({callee_status,UA, Status},#state{id=ID,ua=UA, wmg_node=WmgNode}=ST) ->
     if  
-        Status == hook_on; Status == released; Status == invalid ->
-            call_terminated(ST),
-            voip_sup:on_call_over(ID),
-            {stop, normal, ST};
         Status == ring ->
             rbt(WmgNode, ID),
             {noreply, ST#state{sipstatus=Status}}; 
@@ -192,7 +185,7 @@ handle_info(_Msg, #state{id=ID}=ST) ->
 
 terminate(_,ST=#state{boards=Boards}) ->
     call_terminated(ST),
-    [board:release(Board)||Board<-Boards],
+    [board:stop(Board)||Board<-Boards],
     ok.
 
 
