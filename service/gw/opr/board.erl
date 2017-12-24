@@ -43,6 +43,7 @@
                 start_time={0,0,0}
                 }).
 
+get({Seat,BId})-> opr:get_board(Seat,BId).
 get_count(PidOrSeatBoardTuple)->
     F=fun(State=#state{owner=Owner,sidea=#{mediaPid:=AMedia},sideb=#{mediaPid:=BMedia}})->
             OprMedia=opr:get_mediaPid(Owner),
@@ -59,6 +60,11 @@ get_a_media(PidOrSeatBoardTuple)->
             {Media,State}
        end,
     act(PidOrSeatBoardTuple,F).   
+get_a_ua(PidOrSeatBoardTuple)->
+    F=fun(State=#state{sidea=#{ua:=UA}})->
+            {UA,State}
+       end,
+    act(PidOrSeatBoardTuple,F).  
 get_b_media(PidOrSeatBoardTuple)->
     F=fun(State=#state{sideb=#{mediaPid:=Media}})->
             {Media,State}
@@ -373,6 +379,21 @@ unfocus(Pid)->
             sip_media:unset_peer(OprMedia,Mixer),
             mixer:sub(Mixer,OprMedia),
             {ok,State#state{focused=false}}
+       end,
+    act(Pid,F). 
+third(Pid)->
+    F=fun(State=#state{owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                OprMedia=opr:get_mediaPid(Owner),
+                sip_media:set_peer(OprMedia,Mixer),
+                mixer:add(Mixer,OprMedia),
+                sip_media:set_peer(AMedia,Mixer),
+                sip_media:set_peer(BMedia,Mixer),
+                if AStatus==hook_off-> mixer:add(Mixer,AMedia); BStatus==hook_off-> mixer:add(Mixer,BMedia); true-> void end,
+                {ok,State#state{focused=false,status=third}};
+            true->
+                {failed,State}
+            end
        end,
     act(Pid,F). 
 sidea_hookoff(State1=#state{focused=Focused,mixer=Mixer,owner=Owner,status=Status,sidea=#{}}) ->

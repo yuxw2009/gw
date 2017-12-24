@@ -288,7 +288,6 @@ add_oprgroup_test()->
     [#oprgroup_t{key=_GroupNo,item=#{phone:=?GroupPhone}}]=opr_sup:get_oprgroup(?GroupNo),
     ok.
 login_test()->
-    opr_sup:stop(),
     add_opr_test(),
     %OprPid=spawn(fun()-> receive a-> wait end end),
     {ok,OprPid}=opr_sup:login(?SeatNo),
@@ -310,7 +309,7 @@ login_test()->
      ?assert(not rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
      undefined=opr_sup:get_opr_pid(?SeatNo),
     ok.
-ab_test()->
+ab_sample()->
     opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
@@ -337,6 +336,7 @@ ab_test()->
     utility1:delay(20),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
     ?assertEqual(sideb,board:get_status({"6",1})),
+    [{OSC,ORC},void,{BSC,BRC}]=board:get_count(Board1),
 
     % test calla
     board:calla(Board1,"8"),    
@@ -346,6 +346,7 @@ ab_test()->
     ?assert(not mixer:has_media(Mixer,BMedia)),
     ?assert(mixer:has_media(Mixer,OprMedia)),
     ?assert(mixer:has_media(Mixer,AMedia)),    
+    ?assertMatch([{_,_},{ASC,ARC},{BSC,BRC}],board:get_count(Board1)),
     % test ab
     board:ab(Board1),
     ?assertEqual(ab,board:get_status({"6",1})),
@@ -354,11 +355,15 @@ ab_test()->
     ?assert(not mixer:has_media(Mixer,OprMedia)),
     ?assert(mixer:has_media(Mixer,AMedia)),        
     ?assertEqual(Mixer,sip_media:get_media(AMedia)),
-    ?assertEqual(ab,board:get_status({"6",1})),       
+    ?assertEqual(ab,board:get_status({"6",1})),
+    ok.
+ab_test()->
+    ab_sample(),       
     % test release sidea
+    AUA=board:get_a_ua({?SeatNo,1}),
     AUA ! stop,
     utility1:delay(50),
-    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea(Board1),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea({?SeatNo,1}),
     ?assertEqual(null,board:get_status({"6",1})),   
     opr_sup:logout(?SeatNo),
          ok.
@@ -367,7 +372,13 @@ inserta_test()->
 insertb_test()->
    todo.
 third_test()->
-   todo.
+   ab_sample(),
+   Board1=board:get({?SeatNo,1}),
+   board:third(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(third,board:get_status(Board1)),
+   ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
+   ok.
 splita_test()->
    todo.
 splitb_test()->

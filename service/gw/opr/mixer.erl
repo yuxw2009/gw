@@ -107,9 +107,60 @@ mix_and_send(ST=#state{sides=Sides=#{},common_f=_CF})->
           Sides;
       []-> Sides;
       [{Media1,_}]->      
-          Sides#{Media1:=[]}
+          Sides#{Media1:=[]};
+
+      [{Media1,[]},{Media2,[]},{Media3,[]}]-> 
+          Sides;
+      [{Media1,[Frame=#audio_frame{}|T]},{Media2,[]},{Media3,[]}]-> 
+          Media2 ! Frame,
+          Media3 ! Frame,
+          Sides#{Media1:=T};
+      [{Media1,[]},{Media2,[Frame=#audio_frame{}|T]},{Media3,[]}]-> 
+          Media1 ! Frame,
+          Media3 ! Frame,
+          Sides#{Media2:=T};
+      [{Media1,[]},{Media2,[]},{Media3,[Frame=#audio_frame{}|T]}]-> 
+          Media1 ! Frame,
+          Media2 ! Frame,
+          Sides#{Media3:=T};
+      [{Media1,[Frame1=#audio_frame{}|T1]},{Media2,[Frame2=#audio_frame{}|T2]},{Media3,[]}]-> 
+          Media2 ! Frame1,
+          Media1 ! Frame2,
+          Media3 ! mix(Frame1,Frame2),
+          Sides#{Media1:=T1,Media2:=T2};
+      [{Media1,[]},{Media2,[Frame2=#audio_frame{}|T2]},{Media3,[Frame3=#audio_frame{}|T3]}]-> 
+          Media2 ! Frame3,
+          Media3 ! Frame2,
+          Media1 ! mix(Frame2, Frame3),
+          Sides#{Media2:=T2,Media3:=T3};
+      [{Media1,[Frame1=#audio_frame{}|T1]},{Media2,[]},{Media3,[Frame3=#audio_frame{}|T3]}]-> 
+          Media1 ! Frame3,
+          Media3 ! Frame1,
+          Media2 ! mix(Frame1,Frame3),
+          Sides#{Media1:=T1,Media3:=T3};
+      [{Media1,[Frame1=#audio_frame{}|T1]},{Media2,[Frame2=#audio_frame{}|T2]},{Media3,[Frame3=#audio_frame{}|T3]}]-> 
+          Media1 ! mix(Frame2, Frame3),
+          Media2 ! mix(Frame1,Frame3),
+          Media3 ! mix(Frame1,Frame2),
+          Sides#{Media1:=T1,Media2:=T2,Media3:=T3}
     end,
     ST#state{sides=NSides}.
+mix(Frame1,Frame2)->
+    PCM=mix_pcm(Frame1,Frame2),
+    {Codec,Pcmu}=sip_media:compress_voice(pcmu,PCM),
+    Frame1#audio_frame{body=Pcmu,pcm=PCM,owner=self(),codec=Codec}.
+mix_pcm(Frame1,Frame2)->    mix_pcm(Frame1,Frame2,<<>>).
+mix_pcm(#audio_frame{pcm= <<>>},#audio_frame{pcm= <<>>},Res)->
+    Res;
+mix_pcm(#audio_frame{pcm= PCM1},#audio_frame{pcm= <<>>},Res)->
+    llog:log("notice!!! mix 2 way size not same",[]),
+    <<Res/binary,PCM1/binary>>;
+mix_pcm(#audio_frame{pcm= <<>>},#audio_frame{pcm= PCM1},Res)->
+    llog:log("notice!!! mix 2 way size not same",[]),
+    <<Res/binary,PCM1/binary>>;
+mix_pcm(Frame1=#audio_frame{pcm= <<S1:16/signed-little, R1/binary>>},Frame2=#audio_frame{pcm= <<S2:16/signed-little, R2/binary>>},Res)->
+    S=(S1+S2)/2,
+    mix_pcm(Frame1#audio_frame{pcm=R1},Frame2#audio_frame{pcm=R2},<<Res/binary,S1:16/signed-little>>).
 %% Inner Methods.
 % mix_up(Ins0, Vad) ->
 %     {SmpLs, Ins} = collect_samples(Vad, Ins0),
