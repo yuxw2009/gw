@@ -224,12 +224,13 @@ callb_and_calla_sideb_test()->
 
     % sideb test
     board:sideb(Board1),
-    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
+    utility1:delay(100),
     ?assertEqual(sideb,board:get_status({"6",1})),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
     ?assert( mixer:has_media(Mixer,BMedia)),
     ?assert(mixer:has_media(Mixer,OprMedia)),
     ?assert(not mixer:has_media(Mixer,AMedia)),        
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
 
     % sidea test
     board:sidea(Board1),
@@ -368,27 +369,202 @@ ab_test()->
     opr_sup:logout(?SeatNo),
          ok.
 inserta_test()->
-   todo.
+   ab_sample(),
+   Board1=board:get({?SeatNo,1}),
+   board:inserta(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(inserta,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   ?assert(not mixer:has_media(Mixer,BMedia)),
+   ?assert(mixer:has_media(Mixer, AMedia)),
+   ?assert(mixer:has_media(Mixer, OprMedia)),
+
+   % test ab
+   board:ab(Board1),
+   ?assertEqual(ab,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   ?assert(not mixer:has_media(Mixer,OprMedia)),
+   ?assert(mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer,BMedia)),
+
+   %test inserta,a down
+   board:inserta(Board1),
+   AUA=board:get_a_ua(Board1),
+   AUA ! stop,
+   utility1:delay(50),
+   ?assertEqual(null,board:get_status(Board1)),
+   ?assertEqual(1,maps:size(mixer:get_sides(Mixer))),  
+   board:sideb(Board1), 
+   ?assertEqual(sideb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),  
+   opr_sup:logout("6"),
+   ok.
 insertb_test()->
-   todo.
+   ab_sample(),
+   Board1=board:get({?SeatNo,1}),
+
+   % test insertb
+   board:insertb(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(insertb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   ?assert(not mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer, BMedia)),
+   ?assert(mixer:has_media(Mixer, OprMedia)),
+
+   % test ab
+   board:ab(Board1),
+   ?assertEqual(ab,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   ?assert(not mixer:has_media(Mixer,OprMedia)),
+   ?assert(mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer,BMedia)),
+
+   %test insertb,a down
+   board:insertb(Board1),
+   AUA=board:get_a_ua(Board1),
+   AUA ! stop,
+   utility1:delay(50),
+   ?assertEqual(sideb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),  
+   opr_sup:logout("6"),
+   ok.
 third_test()->
    ab_sample(),
+   OprMedia=opr:get_mediaPid(?SeatNo),
    Board1=board:get({?SeatNo,1}),
    board:third(Board1),
    Mixer=board:get_mixer(Board1),
+   ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
    ?assertEqual(third,board:get_status(Board1)),
    ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
+   AUA=board:get_a_ua(Board1),
+   AUA ! stop,
+   utility1:delay(50),
+   ?assertEqual(sideb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),   
+   opr_sup:logout("6"),
    ok.
 splita_test()->
-   todo.
+   ab_sample(),
+   Board1=board:get({?SeatNo,1}),
+
+   board:splita(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(splita,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   ?assert(not mixer:has_media(Mixer,BMedia)),
+   ?assert(mixer:has_media(Mixer, AMedia)),
+   ?assert(mixer:has_media(Mixer, OprMedia)),
+
+   % test ab
+   board:ab(Board1),
+   ?assertEqual(ab,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   ?assert(not mixer:has_media(Mixer,OprMedia)),
+   ?assert(mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer,BMedia)),
+
+   %test splita,a down
+   board:splita(Board1),
+   AUA=board:get_a_ua(Board1),
+   AUA ! stop,
+   utility1:delay(50),
+   ?assertEqual(null,board:get_status(Board1)),
+   ?assertEqual(1,maps:size(mixer:get_sides(Mixer))),  
+   board:sideb(Board1), 
+   ?assertEqual(sideb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),  
+   opr_sup:logout("6"),
+   ok.
 splitb_test()->
-    todo.
+   ab_sample(),
+   Board1=board:get({?SeatNo,1}),
+
+   % test splitb
+   board:splitb(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(splitb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   ?assert(not mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer, BMedia)),
+   ?assert(mixer:has_media(Mixer, OprMedia)),
+
+   % test ab
+   board:ab(Board1),
+   ?assertEqual(ab,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   ?assert(not mixer:has_media(Mixer,OprMedia)),
+   ?assert(mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer,BMedia)),
+
+   %test insertb,a down
+   board:insertb(Board1),
+   AUA=board:get_a_ua(Board1),
+   AUA ! stop,
+   utility1:delay(50),
+   ?assertEqual(sideb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),  
+   opr_sup:logout("6"),
+   ok.
 monitor_test()->
-    todo.
+   ab_sample(),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   Board1=board:get({?SeatNo,1}),
+   board:monitor(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+   ?assertEqual(monitor,board:get_status(Board1)),
+   ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
+   AUA=board:get_a_ua(Board1),
+   AUA ! stop,
+   utility1:delay(50),
+   ?assertEqual(null,board:get_status(Board1)),
+   ?assertEqual(0,maps:size(mixer:get_sides(Mixer))),   
+   opr_sup:logout("6"),
+   ok.
 releasea_test()->
-    todo.
+   ab_sample(),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   Board1=board:get({?SeatNo,1}),
+   Mixer=board:get_mixer(Board1),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   board:insertb(Board1),
+   board:releasea(Board1),
+   ?assertEqual(sideb,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   ?assert(not mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer,BMedia)),
+   ?assert(mixer:has_media(Mixer,OprMedia)),
+   ok.
 releaseb_test()->
-    todo.
+   ab_sample(),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   Board1=board:get({?SeatNo,1}),
+   Mixer=board:get_mixer(Board1),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   board:inserta(Board1),
+   board:releaseb(Board1),
+   ?assertEqual(sidea,board:get_status(Board1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+   ?assert(not mixer:has_media(Mixer,BMedia)),
+   ?assert(mixer:has_media(Mixer,AMedia)),
+   ?assert(mixer:has_media(Mixer,OprMedia)),
+   ok.
 crossboard_test()->
     todo.             
 incomingcall_test()->

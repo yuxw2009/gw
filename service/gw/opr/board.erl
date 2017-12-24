@@ -14,8 +14,8 @@
 -define(G729,18).
 -define(CNU,13).
 -define(L16,107).
--define(OprSpeak2A_Status(Status),(Status==sidea orelse Status==inserta orelse Status==third orelse Status==splitb)).
--define(OprSpeak2B_Status(Status),(Status==sideb orelse Status==insertb orelse Status==third orelse Status==splita)).
+-define(OprSpeak2A_Status(Status),(Status==sidea orelse Status==inserta orelse Status==third orelse Status==splita)).
+-define(OprSpeak2B_Status(Status),(Status==sideb orelse Status==insertb orelse Status==third orelse Status==splitb)).
 % [callstatus:status,                           //  坐席软终端状态 ring 振铃,hook_off 通话, hook_on 释放
  %   oprstatus: os,                             //. logined,maintaining(维护),suspending(挂起)
  %  activedBoard:ab,                            //  激活的窗口
@@ -136,26 +136,32 @@ handle_info({callee_sdp,From,SDP_FROM_SS},State=#state{id=Aid,seat=Seat,sidea=#{
     end,
 %   {noreply,State#state{status=hook_off}}; 
     {noreply,State};    
-handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{status=BoardStatus,seat=Seat,id=Id,sidea=SideA=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno},sideb=SideB}) when From==UA; From==MediaPid->
+handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{mixer=Mixer,owner=Owner,status=BoardStatus,seat=Seat,id=Id,sidea=SideA=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno},sideb=SideB}) when From==UA; From==MediaPid->
     llog("board sidea:~p sip hangup",[{Seat,Id,Phno}]),
-    release_side(SideA),
-    NST=if BoardStatus==sidea; BoardStatus==inserta-> 
+    OprMedia=opr:get_mediaPid(Owner),
+    release_side(SideA,State),
+    NST=if BoardStatus==sidea; BoardStatus==inserta; BoardStatus==splita-> 
                 State#state{sidea=?DEFAULTSIDE,status=null}; 
-           BoardStatus==ab->
-                release_side(SideB),
+           BoardStatus==ab; BoardStatus==monitor->
+                release_side(SideB,State),
+                mixer:sub(Mixer,OprMedia),
                 State#state{sidea=?DEFAULTSIDE,status=null,sideb=?DEFAULTSIDE};
+           BoardStatus==third; BoardStatus==insertb->
+                State#state{sidea=?DEFAULTSIDE,status=sideb};
            true-> 
                 State#state{sidea=?DEFAULTSIDE} 
        end,
     {noreply,NST};   
 handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{status=BoardStatus,seat=Seat,id=Id,sidea=SideA,sideb=Side=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno}}) when From==UA; From==MediaPid->
     llog("board sideb:~p sip hangup",[{Seat,Id,Phno}]),
-    release_side(Side),
+    release_side(Side,State),
     NST=if BoardStatus==sideb; BoardStatus==insertb-> 
                 State#state{sideb=?DEFAULTSIDE,status=null}; 
            BoardStatus==ab->
-                release_side(SideA),
+                release_side(SideA,State),
                 State#state{sidea=?DEFAULTSIDE,status=null,sideb=?DEFAULTSIDE};
+           BoardStatus==third->
+                State#state{sideb=?DEFAULTSIDE,status=sidea};
            true-> 
                 State#state{sideb=?DEFAULTSIDE} 
        end,
@@ -173,9 +179,9 @@ handle_info(Msg,State) ->
      llog("app ~p receive unexpected message ~p.",[State, Msg]),
     {noreply, State}.
 
-terminate(_Reason, #state{sidea=SideA,sideb=SideB}) -> 
-    release_side(SideA),
-    release_side(SideB),
+terminate(_Reason, State=#state{sidea=SideA,sideb=SideB}) -> 
+    release_side(SideA,State),
+    release_side(SideB,State),
     ok. 
 
 act(Act)->    act(whereis(?MODULE),Act).
@@ -214,12 +220,12 @@ get_side(From,#state{sidea=SideA=#{ua:=UA},sideb=SideB=#{ua:=UB}})->
 
 release(BoardPidOrSeatBoardTuple)->
     Act=fun(State=#state{sidea=SideA,sideb=SideB})->
-            release_side(SideA),
-            release_side(SideB),
+            release_side(SideA,State),
+            release_side(SideB,State),
             {ok,State#state{status=null,sidea=?DEFAULTSIDE,sideb=?DEFAULTSIDE}}
         end,
     act(BoardPidOrSeatBoardTuple,Act).
-release_side(#{ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef,wmg_node:=WmgNode}) ->
+release_side(#{ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef,wmg_node:=WmgNode},State=#state{mixer=Mixer}) ->
     if is_pid(UA)-> 
         erlang:demonitor(UARef),
         UA ! stop;
@@ -227,6 +233,7 @@ release_side(#{ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef,wmg_node:
     end,
     if is_pid(MediaPid)->
         erlang:demonitor(MRef),
+        mixer:sub(Mixer,MediaPid),
         rpc:call(WmgNode, sip_media, stop, [MediaPid]);
     true-> void
     end.
@@ -382,15 +389,142 @@ unfocus(Pid)->
        end,
     act(Pid,F). 
 third(Pid)->
-    F=fun(State=#state{owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
             if is_pid(AMedia) andalso is_pid(BMedia)->
-                OprMedia=opr:get_mediaPid(Owner),
-                sip_media:set_peer(OprMedia,Mixer),
-                mixer:add(Mixer,OprMedia),
-                sip_media:set_peer(AMedia,Mixer),
-                sip_media:set_peer(BMedia,Mixer),
-                if AStatus==hook_off-> mixer:add(Mixer,AMedia); BStatus==hook_off-> mixer:add(Mixer,BMedia); true-> void end,
-                {ok,State#state{focused=false,status=third}};
+                if Focused==true->
+                    OprMedia=opr:get_mediaPid(Owner),
+                    sip_media:set_peer(OprMedia,Mixer),
+                    mixer:add(Mixer,OprMedia),
+                    sip_media:set_peer(AMedia,Mixer),
+                    sip_media:set_peer(BMedia,Mixer),
+                    if AStatus==hook_off-> mixer:add(Mixer,AMedia); BStatus==hook_off-> mixer:add(Mixer,BMedia); true-> void end;
+                true->
+                    void
+                end,
+                {ok,State#state{status=third}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+monitor(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                if Focused==true->
+                    OprMedia=opr:get_mediaPid(Owner),
+                    %sip_media:set_peer(OprMedia,Mixer),
+                    mixer:add(Mixer,OprMedia),
+                    sip_media:set_peer(AMedia,Mixer),
+                    sip_media:set_peer(BMedia,Mixer),
+                    if AStatus==hook_off-> mixer:add(Mixer,AMedia); BStatus==hook_off-> mixer:add(Mixer,BMedia); true-> void end;
+                true->
+                    void
+                end,
+                {ok,State#state{status=monitor}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+inserta(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                if Focused==true->
+                    OprMedia=opr:get_mediaPid(Owner),
+                    sip_media:set_peer(OprMedia,Mixer),
+                    mixer:add(Mixer,OprMedia),
+
+                    sip_media:set_peer(AMedia,Mixer),
+
+                    mixer:sub(Mixer,BMedia),
+                    if AStatus==hook_off-> mixer:add(Mixer,AMedia); true-> void end;
+                true->
+                    void
+                end,
+                {ok,State#state{status=inserta}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+insertb(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                if Focused==true->
+                    OprMedia=opr:get_mediaPid(Owner),
+                    sip_media:set_peer(OprMedia,Mixer),
+                    mixer:add(Mixer,OprMedia),
+
+                    sip_media:set_peer(BMedia,Mixer),
+
+                    mixer:sub(Mixer,AMedia),
+                    if BStatus==hook_off-> mixer:add(Mixer,BMedia); true-> void end;
+                true->
+                    void
+                end,
+                {ok,State#state{status=insertb}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+releasea(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                release_side(SideA,State),
+                {ok,State#state{status=sideb}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+releaseb(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=SideB=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                release_side(SideB,State),
+                {ok,State#state{status=sidea}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+splita(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                if Focused==true->
+                    OprMedia=opr:get_mediaPid(Owner),
+                    sip_media:set_peer(OprMedia,Mixer),
+                    mixer:add(Mixer,OprMedia),
+
+                    sip_media:set_peer(AMedia,Mixer),
+
+                    mixer:sub(Mixer,BMedia),
+                    if AStatus==hook_off-> mixer:add(Mixer,AMedia); true-> void end;
+                true->
+                    void
+                end,
+                {ok,State#state{status=splita}};
+            true->
+                {failed,State}
+            end
+       end,
+    act(Pid,F). 
+splitb(Pid)->
+    F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
+            if is_pid(AMedia) andalso is_pid(BMedia)->
+                if Focused==true->
+                    OprMedia=opr:get_mediaPid(Owner),
+                    sip_media:set_peer(OprMedia,Mixer),
+                    mixer:add(Mixer,OprMedia),
+
+                    sip_media:set_peer(BMedia,Mixer),
+
+                    mixer:sub(Mixer,AMedia),
+                    if BStatus==hook_off-> mixer:add(Mixer,BMedia); true-> void end;
+                true->
+                    void
+                end,
+                {ok,State#state{status=splitb}};
             true->
                 {failed,State}
             end
