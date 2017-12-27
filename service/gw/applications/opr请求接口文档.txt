@@ -1,0 +1,119 @@
+opr rest请求接口文档
+
+host: 127.0.0.1:8082
+url全部为 post http://127.0.0.1:8082/api
+一 所有窗口状态信息结构boardState如下：
+{callstatus:status,                           //  坐席软终端状态 ring 振铃,hook_off 通话, hook_on 释放
+   oprstatus: os,                             //. logined,maStringaining(维护),suspending(挂起)
+  activedBoard:ab,                            //  激活的窗口
+  boards:[{boardstatus:bs,                    // null空,sidea 前塞,sideb 后赛,monitor监听,inserta强插前塞,insertb强插后塞,third三方,splita分割前塞,splitb，分割后塞,
+           detail:{a:{phone:p,                // 如果左边没有呼叫 就没有a，右边没有 就没有b；没有坐席，就没有o；
+                     talkstatus:us,           // 前塞状态：ring振铃,busy-忙,hook_off通话，
+                     starttime:st},           // 通话开始时间
+                   b:{phone:p,
+                     talkstatus:us,
+                     starttime:st}
+           o:{phone:p,
+                     talkstatus:us,
+                     starttime:st}
+                }
+                }]}
+
+二 各消息参数如下：
+
+1 配置group：  json格式
+    req: {msgType:"seatgroup_config",groupPhone:n,seatGroupNo:G}
+    ack: {status:ok} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"seatgroup_config","groupPhone":"52300112","seatGroupNo":"112"}' http://127.0.0.1:8082/api
+
+2 配置seat：  json格式
+    req: {msgType:"seat_register",seatId:n,seatGroupNo:G,seatPhone:p,pwd:p}
+    ack: {status:ok} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"seat_register","seatPhone":"52300001","seatGroupNo":"112","seatId":"6"}' http://127.0.0.1:8082/api
+3 seat login  json格式
+    req: {msgType:"opr_login",seatId:n,operatorId:o}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"opr_login","seatId":"6","operatorId":"001"}' http://127.0.0.1:8082/api
+4 服务端发起 incoming broadcast：  json格式
+    req: {msgType:"call_broadcast",calls:[{phoneNumber:n,userId:G,callTime:c}]}
+    ack: {status:ok} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"call_broadcast","calls":[{"phoneNumber":"888","userId":"<0.666.0>","callTime":"156853545455"}]}' http://127.0.0.1:8082/api
+5 接收broadcast：  json格式
+    req: {msgType:"pickup_call",seatId:n,boardIndex:G,operatorId:o}
+    ack: {status:ok,call:{phoneNumber:n,userId:G,callTime:c},boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"pickup_call","boardIndex":"1","seatId":"6"}' http://127.0.0.1:8082/api
+6 前塞sidea/后塞sideb/inserta/insertb/splita/splitb/third(三方)/monitor(监听)/ab(退三方)/clean_board(释放窗口）/releasea(强拆主叫)/releaseb(强拆被叫)：  json格式
+    req: {msgType:"如上",boardIndex:b,seatId:S}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"sidea","boardIndex":"1","seatId":"6"}' http://127.0.0.1:8082/api
+7 切换窗口：  json格式
+    req: {msgType:"board_switch",seatId:n,curBoardIndex:G,nextBoardIndex:o}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"board_switch","curBoardIndex":"1","nextBoardIndex":"2","seatId":"6"}' http://127.0.0.1:8082/api
+8 倒塞：  json格式
+    req: {msgType:"cross_board",side:sidea or sideb,seatId:n,curBoardIndex:G,nextBoardIndex:o,userId:u}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"cross_board","side":"sidea","curBoardIndex":"1","nextBoardIndex":"2","seatId":"6","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+
+9 呼叫转移：  json格式
+    req: {msgType:"transfer_opr",side:sidea or sideb,seatId:n,BoardIndex:G,targetSeat:o,userId:u}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"transfer_opr","side":"sidea","BoardIndex":"1","targetSeat":"2","seatId":"6","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+10 撤前塞／撤后塞
+11席连
+    req: {msgType:"talk_to_opr",seat1Id:n,seat2Id:o}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"talk_to_opr","seat2Id":"2","seat1Id":"6"}' 
+11 消息
+    req: {msgType:"message",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","seat2Id":"2","seat1Id":"6","msg":"hello"}'
+
+12 重要用户订阅 
+    req: {msgType:"user_subscribe",seatId:n,phoneNumber:m,operatorId:o}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"user_subscribe","seat2Id":"2","seat1Id":"6","msg":"hello"}'
+
+13 重要用户推送
+    req: {msgType:"userstate_change",seatId:n,phoneNumber:m,operatorId:o,userState:s}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"push_user","seat2Id":"2","seat1Id":"6","msg":"hello"}'
+
+14 获取所有窗口状态  json格式 （和16重复，此项去掉）
+    req: {msgType:"getSeatState",seatId:n,operatorId:o}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"getSeatState","seatId":"6","operatorId":"001"}' http://127.0.0.1:8082/api
+
+15 配置sipuser
+    req: {msgType:"addSipUser",phones:[n1,n2],passwds:[o1,o2]}
+    ack: {status:ok,phones:[n1,n2]} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"addSipUser","phones":["6"],"passwds":["001"]}' http://127.0.0.1:8082/api
+16 握手消息  json格式
+    req: {msgType:"handShake",seatId:n,operatorId:o,boardIndex:bi}.  boardIndex为当前客户端的激活窗口号
+    ack: {status:ok,activeboardIndex:a,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"handShake","seatId":"6","operatorId":"001","boardIndex":"1"}' http://127.0.0.1:8082/api
+
+17 状态变更通知
+    req: {msgType:"boardStateChange",seatId:n,operatorId:o,boardIndex:bi}.  boardIndex为当前客户端的激活窗口号
+    ack: {status:ok,activeboardIndex:a,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"handShake","seatId":"6","operatorId":"001","boardIndex":"1"}' http://127.0.0.1:8082/api
+
+
+

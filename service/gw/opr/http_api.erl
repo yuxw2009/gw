@@ -1,4 +1,4 @@
--module(nhome_handler).
+-module(http_api).
 -compile(export_all).
 -include("db_op.hrl").
 -include("yaws_api.hrl").
@@ -49,29 +49,43 @@ handle(Arg, Method, ["api"|Params]) ->   %% remove old inteface
     %io:format("l_app.erl: method:~p. params:~p~n",[Method,Params]), 
     %io:format("clidata:~p~n",[Arg#arg.clidata]),
 %    Pls=handle_wafa(Arg, Method, Params),
-    utility1:pl2jso_br(handle(Arg,Method,Params));
+    utility1:pl2jso_br(handle_api(Arg,Method,Params));
+handle(_Arg,Method,Params) ->   
+    io:format("http_api.erl:unhandled method:~p. params:~p~n",[Method,Params]), 
+    [{status,failed},{reason,unhandled}].
 
-handle(Arg,'POST',_) -> 
+handle_api(Arg,'POST',_) -> 
     Clidata=Arg#arg.clidata,
 
     Map0=utility1:jsonbin2map(Clidata),
     Ip=utility1:client_ip(Arg),
-    Map-Map0#{"ip"=>Ip},
+    Map=Map0#{"ip"=>Ip},
     case handle_map(Map) of
         {failed,Reason}->
-            [{status,failed},{reason,Reason}];
-        Jsos=[_|_]->
-            [{status,ok},{result,Jsos}]
-    end;
-
-handle(_,_,_)->
-    [{status,failed},{reason,unhandled}].
+            [{errorCode,2},{errorInfo,Reason}];
+        Jso->
+            [{errorCode,0},{ackdata,Jso}]
+    end.
 
 
-handle_map(#{"msgType":=<<"login"})->
+handle_map(#{"msgType":= <<"group_register">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})->
+    todo;
+handle_map(#{"msgType":= <<"login">>})->
     todo;
 handle_map(_)->
     {failed,unhandled}.
 
 
+%% encode to json format
+encode_to_json([{status,405}]) -> [{status,405}];
+encode_to_json(JsonObj) ->
+    {content, "application/json", rfc4627:encode(JsonObj)}.
+  
+enc_json(Result)-> rfc4627:encode(utility:pl2jso_r(utility:v2b_r(Result))).   
+
+err_log(Arg,Reason)->
+    {ok, IODev} = file:open("./log/server_error.log", [append]),
+    io:format(IODev, "~p:  Arg: ~p~n Reason: ~p~n", [erlang:localtime(), Arg, Reason]),
+    io:format("~p:  Arg: ~p~n Reason: ~p~n", [erlang:localtime(), Arg, Reason]),
+    file:close(IODev).
 

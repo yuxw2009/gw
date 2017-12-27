@@ -2,7 +2,7 @@
 -compile(export_all).
 -include("opr.hrl").
 -define(POOLTIME, 3000).
--define(BOARDNUM,16).
+-define(BOARDNUM,14).
 -define(CientPort,"8082").
 -record(state, {id,
                 phone,
@@ -50,8 +50,10 @@ show(PidOrSeat)->
 get_board(PidOrSeat,Index)->
     Boards=get_boards(PidOrSeat),
     lists:nth(Index,Boards).
+incomingCallPushInfo(#{caller:=Caller,ua:=UA,callTime:=CallTime})->
+    #{"userId"=>pid_to_list(UA),"phoneNumber"=>Caller,"callTime"=>CallTime}.
 broadcast(PidOrSeat,QCs)->
-    CallsJson=[utility1:map2json(#{"userId"=>pid_to_list(UA),"phoneNumber"=>Caller,"callTime"=>CallTime})||#{caller:=Caller,ua:=UA,callTime:=CallTime}<-QCs],
+    CallsJson=utility1:maps2jsos([incomingCallPushInfo(QC)||QC<-QCs]),
     Paras=utility1:map2jsonbin(#{msgType=><<"broadcast">>,calls=>CallsJson}),
     F=fun(State=#state{client_host=ClientHost})->
             if is_pid(ClientHost)->  % for test

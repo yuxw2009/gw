@@ -18,6 +18,17 @@ get_group_pid_by_phone(GroupPhone)->
     [#oprgroup_t{key=GroupNo}|_]=oprgroup:get_by_phone(GroupPhone),
     opr_sup:get_group_pid(GroupNo).
 
+pickup_call(Pid)->                             
+    F=fun(State=#state{queued_calls=QC})->
+            %todo if(length(Oprs)==0)-> transfer
+            case QC of
+                [H|T]-> 
+                    {{ok,H},State#state{queued_calls=T}};
+                []->
+                    {undefined,State}
+            end
+       end,
+    act(Pid,F). 
 incoming(Pid,Caller,Callee,SDP,From)->                             %must cast not call
     F=fun(State=#state{queued_calls=QC,oprs=Oprs})->
             %todo if(length(Oprs)==0)-> transfer
@@ -29,7 +40,8 @@ incoming(Pid,Caller,Callee,SDP,From)->                             %must cast no
                     %todo play tone to MediaPid
                     % notice cast no return value
                     From ! {p2p_wcg_ack, self(), ToSipSDP},
-                    QC1=[#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>MediaPid,ua=>From,callTime=>utility1:timestamp_ms()}|QC],
+                    QC1=[#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>MediaPid,ua=>From,callTime=>utility1:timestamp_ms(),toSipSdp=>ToSipSDP}|QC],
+                    erlang:monitor(process,From),
                     [opr:broadcast(Opr,QC1)||Opr<-Oprs],
                     {{ok,ToSipSDP},State#state{queued_calls=QC1}}
             end
@@ -82,6 +94,7 @@ show(PidOrSeat)->
 start(GroupNo) ->
     {ok, _Pid} = my_server:start(?MODULE, [GroupNo], []).
 
+stop(GroupNo) when is_list(GroupNo)-> stop(opr_sup:get_group_pid(GroupNo));
 stop(Pid) ->
     my_server:call(Pid, stop),
     ok.
@@ -105,6 +118,9 @@ handle_cast({act,Act}, ST) ->
 handle_cast(stop, ST) ->
     {stop, normal, (ST)}.
 
+handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{queued_calls=Calls0})->
+    Calls=[Item||Item=#{ua:=UA}<-Calls0,UA=/=From],
+    {noreply,State#state{queued_calls=Calls}};
 handle_info(check_orphan, #state{id=ID} = ST) ->
     case opr_sup:register_oprgroup(ID,self()) of
         ok-> {noreply, ST};

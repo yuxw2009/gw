@@ -359,7 +359,7 @@ login_test()->
     Boards=opr:get_boards(OprPid),
     {ok,OprPid1}=opr_sup:login(?SeatNo),
     ?assertEqual(OprPid,OprPid1),
-    ?assert(length(Boards)==16 andalso is_pid(hd(Boards)) andalso is_process_alive(hd(Boards))),
+    ?assert(length(Boards)==14 andalso is_pid(hd(Boards)) andalso is_process_alive(hd(Boards))),
     MediaPid=opr:get_mediaPid(OprPid),
     opr:stop(OprPid),
      utility1:delay(500),
@@ -578,7 +578,8 @@ releaseb_test()->
    ok.
 crossboard_test()->
     todo.             
-incoming_test()->
+incoming_pickup_and_sidea_test()->
+    oprgroup:stop(?GroupNo),
     opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
@@ -589,20 +590,72 @@ incoming_test()->
     Boards=opr:get_boards(OprPid),
     Board1=hd(Boards),
     board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
 
     GroupPid=opr_sup:get_group_pid(?GroupNo),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     [OprPid]=oprgroup:get_oprs(GroupPid),
     SDP0=sdp_sample(),
-    R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,self()]),
+
+    MockUA=self(),
+    R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,MockUA]),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
-    [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=_MediaPid,ua:=_From}|_T]=oprgroup:get_queues(GroupPid),
+    [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid,ua:=From}|T]=oprgroup:get_queues(GroupPid),
     ?assertMatch({ok,GroupPid},R),
-  
+
     {broadcast,Jsonbin}=?REC_MatchMsg({broadcast,_Jsonbin}),
-    #{"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+    #{"calls":=Calls,"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+
+    ?assertMatch(#{"phoneNumber":="test_op"},board:pickup_call({?SeatNo,1})),
+    T=oprgroup:get_queues(GroupPid),
+    ?assertEqual(MediaPid, board:get_a_media({"6",1})),
+    ?assertEqual(From,board:get_a_ua({"6",1})),
+    ?assertMatch(#{status:=tpring},board:get_sidea({"6",1})),
+    board:sidea(Board1),
+    ?assertMatch(#{status:=hook_off},board:get_sidea({"6",1})),
+    {p2p_answer,Board1}=?REC_MatchMsg({p2p_answer,_}),
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(MediaPid)),
+  
 
     {p2p_wcg_ack,GroupPid,_}=?REC_MatchMsg({p2p_wcg_ack, _, _}),
+    ok.
+incoming_ua_quit_test()->
+    oprgroup:stop(?GroupNo),
+    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    TestClientHost=self(), % for test
+    {ok,OprPid}=opr_sup:login(?SeatNo,TestClientHost),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Boards=opr:get_boards(OprPid),
+    Board1=hd(Boards),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    GroupPid=opr_sup:get_group_pid(?GroupNo),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    [OprPid]=oprgroup:get_oprs(GroupPid),
+    SDP0=sdp_sample(),
+
+    Shell=self(),
+    F=fun(G)-> receive E-> Shell ! E, G(G) end end,
+    MockUA=spawn(fun()-> F(F) end),
+    R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,MockUA]),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid,ua:=From}|T]=oprgroup:get_queues(GroupPid),
+    ?assertMatch({ok,GroupPid},R),
+    {p2p_wcg_ack,GroupPid,_}=?REC_MatchMsg({p2p_wcg_ack, _, _}),
+
+    {broadcast,Jsonbin}=?REC_MatchMsg({broadcast,_Jsonbin}),
+    #{"calls":=Calls,"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+
+
+    exit(MockUA,kill),
+    utility1:delay(50),
+    CallQueues=oprgroup:get_queues(GroupPid),
+    ?assertEqual([],[Item||Item=#{ua:=UA}<-CallQueues,UA==MockUA]),
     ok.
 add_oprgroup_test()->
     opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
@@ -615,10 +668,16 @@ add_oprgroup_test()->
 
 sdp_sample()->
     "v=0
-o=yate 1514153146 1514153146 IN IP4 192.168.1.12
-s=SIP Call
-c=IN IP4 192.168.1.12
-t=0 0
-m=audio 29844 RTP/AVP 0 101
-a=rtpmap:0 PCMU/8000
-a=rtpmap:101 telephone-event/8000".
+    o=yate 1514153146 1514153146 IN IP4 192.168.1.12
+    s=SIP Call
+    c=IN IP4 192.168.1.12
+    t=0 0
+    m=audio 29844 RTP/AVP 0 101
+    a=rtpmap:0 PCMU/8000
+    a=rtpmap:101 telephone-event/8000".
+
+fprof_()->
+    fprof:apply(?MODULE, incoming_test, []),
+    fprof:profile(),
+    fprof:analyse({dest, "bar.analysis"}),
+    file:consult("bar.analysis").

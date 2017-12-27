@@ -21,7 +21,7 @@
  %  activedBoard:ab,                            //  激活的窗口
  %  boards:[{boardstatus:bs,                    // null空,sidea 前塞,sideb 后赛,monitor监听,inserta强插前塞,insertb强插后塞,third三方,splita分割前塞,splitb，分割后塞,ab:前后塞通话
  %           detail:{a:{phone:p,                // 如果左边没有呼叫 就没有a，右边没有 就没有b；没有坐席，就没有o；
- %                     talkstatus:us,           // 前塞状态：ring振铃,busy-忙,hook_off通话，
+ %                     talkstatus:us,           // 前塞状态：ring振铃,busy-忙,hook_off通话，tpring-呼入未接听
  %                     starttime:st},           // 通话开始时间
  %                   b:{phone:p,
  %                     talkstatus:us,
@@ -42,6 +42,22 @@
                 alive_count=0,
                 start_time={0,0,0}
                 }).
+
+pickup_call(PidOrSeatBoardTuple)->
+    F=fun(State=#state{seat=SeatNo,sidea=SideA=#{status:=null}})->
+            GroupPid=opr_sup:get_group_pid(opr:get_groupno(SeatNo)),
+            case oprgroup:pickup_call(GroupPid) of
+                {ok,Call=#{ua:=UA,mediaPid:=MediaPid,caller:=Phone,toSipSdp:=ToSipSdp}}->
+                    UARef = erlang:monitor(process, UA),
+                    MRef=erlang:monitor(process, MediaPid),
+                    CallInfoMap=opr:incomingCallPushInfo(Call),
+                    {CallInfoMap,State#state{sidea=SideA#{status:=tpring,ua_node:=node(UA),ua:=UA,ua_ref:=UARef,wmg_node:=node(MediaPid),
+                           mediaPid:=MediaPid,media_ref:=MRef}}};
+                undefined->
+                    {undefined,State}
+            end
+       end,
+    act(PidOrSeatBoardTuple,F).     
 
 get({Seat,BId})-> opr:get_board(Seat,BId).
 get_count(PidOrSeatBoardTuple)->
@@ -308,23 +324,32 @@ sideb(BPid)->
        end,
     act(BPid,F).  
 sidea(BPid)->
-    F=fun(State=#state{owner=Owner,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus},focused=Focused,sideb=SideB=#{mediaPid:=BMedia,status:=BStatus},mixer=Mixer})->
+    F=fun(State=#state{owner=Owner,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus,ua:=AUA},focused=Focused,sideb=SideB=#{mediaPid:=BMedia,status:=BStatus},mixer=Mixer})->
             OprMedia=opr:get_mediaPid(Owner),
             if is_pid(AMedia)->
                 mixer:sub(Mixer,BMedia),
                 sip_media:unset_peer(BMedia,Mixer),
                 mixer:add(Mixer,AMedia),
                 sip_media:set_peer(AMedia,Mixer),
+                State1=State#state{status=sidea},
+                State2=
                 case {Focused,AStatus} of
                 {true,hook_off}-> 
                     mixer:add(Mixer,OprMedia),
-                    sip_media:set_peer(OprMedia,Mixer);
+                    sip_media:set_peer(OprMedia,Mixer),
+                    State1;
+                {true,tpring}-> 
+                    AUA ! {p2p_answer, self()},
+                    mixer:add(Mixer,OprMedia),
+                    sip_media:set_peer(OprMedia,Mixer),
+                    State1#state{sidea=SideA#{status:=hook_off}};
                 {true,_}->
                     sip_media:unset_peer(OprMedia,Mixer),
-                    mixer:add(Mixer,OprMedia);
-                _-> void
+                    mixer:add(Mixer,OprMedia),
+                    State1;
+                _-> State1
                 end,
-                {ok,State#state{status=sidea}};
+                {ok,State2};
             true-> 
                 {ok,State}
             end
