@@ -3,11 +3,12 @@
 -include("opr.hrl").
 -define(POOLTIME, 3000).
 -define(BOARDNUM,16).
+-define(CientPort,"8082").
 -record(state, {id,
                 phone,
                 oprstatus,
                 sipstatus,      %% init | invite | ring | hook_on | hook_off | p2p_ring | p2p_answer
-                client_url,
+                client_host,
                 ua,
                 ua_ref,
                 boards=[],  %#{index=>i,pid=>Pid,}
@@ -36,6 +37,9 @@
 % incomingSipWebcall(CallID, SipSDP, PhoneNo, WMGNode, SipPid) ->
 %     {ok, Pid} = my_server:start(?MODULE, [CallID], []),
 %     my_server:call(Pid, {incomingSipWebcall, SipSDP, PhoneNo, WMGNode, SipPid}).
+get_groupno(SeatNo)->
+    [#opr{item=#{group_no:=GroupNo}}]=opr_sup:get_by_seatno(SeatNo),
+    GroupNo.
 get_boardn_sidea(Seat,BoardIndex)->
     board:get_sidea(opr:get_board(Seat,BoardIndex)).
 show(PidOrSeat)->
@@ -46,6 +50,24 @@ show(PidOrSeat)->
 get_board(PidOrSeat,Index)->
     Boards=get_boards(PidOrSeat),
     lists:nth(Index,Boards).
+broadcast(PidOrSeat,QCs)->
+    CallsJson=[utility1:map2json(#{"userId"=>pid_to_list(UA),"phoneNumber"=>Caller,"callTime"=>CallTime})||#{caller:=Caller,ua:=UA,callTime:=CallTime}<-QCs],
+    Paras=utility1:map2jsonbin(#{msgType=><<"broadcast">>,calls=>CallsJson}),
+    F=fun(State=#state{client_host=ClientHost})->
+            if is_pid(ClientHost)->  % for test
+                ClientHost ! {broadcast,Paras};
+            true->
+                case ClientHost of
+                    Ip={_A,_B,_C,_D}->
+                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+                    Ip when is_list(Ip)->
+                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+                    _-> void
+                end
+            end,
+            {ok,State}
+       end,
+    cast(PidOrSeat,F).    
 get_ua(Pid)->
     F=fun(State=#state{ua=UA})->
             {UA,State}
@@ -67,6 +89,16 @@ get_boards(Pid)->
             {Boards,State}
        end,
     act(Pid,F).
+get_client_host(Pid)->
+    F=fun(State=#state{client_host=Host})->
+            {Host,State}
+       end,
+    act(Pid,F).
+set_client_host(Pid,Host)->
+    F=fun(State=#state{})->
+            {ok,State#state{client_host=Host}}
+       end,
+    act(Pid,F).
 % call_opr(ConfID,SeatNo)->
 %     case opr_sup:get_user_by_seatno(SeatNo) of
 %     ""-> {failed,no_opr};
@@ -80,8 +112,8 @@ get_boards(Pid)->
 %         make_sip_call(OprPhone, UANode, ToSipSDP),
 %         ok
 %     end.
-start(SeatNo) ->
-    {ok, Pid} = my_server:start(?MODULE, [SeatNo], []),
+start(Paras={_SeatNo,_ClientIp}) ->
+    {ok, Pid} = my_server:start(?MODULE, [Paras], []),
     my_server:call(Pid, {make_call}),
     {ok,Pid}.
 
@@ -96,7 +128,7 @@ rtp_stat(Pid) ->
     my_server:call(Pid, rtp_stat).
 
 %% my_server callbacks
-init([SeatNo]) ->
+init([{SeatNo,ClientIp}]) ->
     process_flag(trap_exit, true),
     WmgNode=node_conf:get_wmg_node(),
     UANode = node_conf:get_voice_node(),
@@ -108,7 +140,7 @@ init([SeatNo]) ->
             end,
     Boards=[BoardPidF([SeatNo,BoardId,OprPid])||BoardId<-lists:seq(1,?BOARDNUM)],
     {ok,TR} = my_timer:send_interval(?POOLTIME,check_orphan),
-    {ok, #state{id=SeatNo, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards,tmr=TR}}.
+    {ok, #state{id=SeatNo,client_host=ClientIp, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards,tmr=TR}}.
 
 handle_call(get_status, _From, #state{sipstatus=Status}=ST) ->
     {reply, Status, ST#state{web_hb=given}};
@@ -183,9 +215,12 @@ handle_info(_Msg, #state{id=ID}=ST) ->
     io:format("opr[~p] received unknown message.~n",[{ID,_Msg}]),
     {noreply, ST}.
 
-terminate(_,ST=#state{boards=Boards}) ->
+terminate(_,ST=#state{id=ID,boards=Boards}) ->
     call_terminated(ST),
     [board:stop(Board)||Board<-Boards],
+    OprPid=self(),
+    GroupPid=opr_sup:get_group_pid(get_groupno(ID)),
+    oprgroup:remove_opr(GroupPid,OprPid),
     ok.
 
 
@@ -216,6 +251,8 @@ get_rtp_stat(ID, WmgNode) ->
 % my utility function
 act(Seat,Act) when  is_list(Seat) ->    act(opr_sup:get_opr_pid(Seat),Act);
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
+cast(Seat,Act) when  is_list(Seat) ->    cast(opr_sup:get_opr_pid(Seat),Act);
+cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
 
 make_call(#state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST)->
     case make_call(#{id=>ID,wmg_node=>WMGNode,ua_node=>UANode,phone=>PhoneNo}) of

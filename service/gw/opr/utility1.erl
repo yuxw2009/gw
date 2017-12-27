@@ -53,7 +53,7 @@ value2list(V) when is_atom(V) -> atom_to_list(V);
 value2list(V) when is_binary(V) -> binary_to_list(V).
 
 value2binary(V)->
-    list_to_binary(utility:value2list(V)).
+    list_to_binary(?MODULE:value2list(V)).
 
 get_binary(JsonObj, Key) ->
     get(JsonObj, Key).
@@ -233,7 +233,7 @@ v2b_r([{K,V}|T],R) when is_list(V)->
 v2b_r([H|T],R)-> v2b_r(T, [H|R]).
 
 pl2jso_br(Result)->
-    utility:pl2jso_r(utility:v2b_r(Result)).
+    ?MODULE:pl2jso_r(?MODULE:v2b_r(Result)).
 %%    
 o2pl({obj,PL}) ->
     o2pl(PL, []).
@@ -247,7 +247,7 @@ o2pl([{Tag, Value}|T], Acc) ->
 
 json2pl(Clidata)->
     {ok, Json, _} = rfc4627:decode(Clidata),
-    utility:o2pl(Json).
+    ?MODULE:o2pl(Json).
 
 record2pl(Fields,Rec)->
     [_|Vl]=tuple_to_list(Rec),
@@ -296,7 +296,7 @@ fb_decode_base64(Base64) when is_list(Base64) ->
      end.
 
 logbin(X)->logbin(X,[]).
-logbin(X,Y)-> list_to_binary(utility:logstr(X,Y)).
+logbin(X,Y)-> list_to_binary(?MODULE:logstr(X,Y)).
 
 logstr(Str, CmdList)->
     lists:flatten(io_lib:format("~s: "++Str++"~n",[d2s()|CmdList])).
@@ -363,13 +363,13 @@ jsonbin2plist(Bin)->
         {ok,{obj,Str2Bin_pls},_}-> Str2Bin_pls;
         _-> []
     end.    
-plist2json(Pls)-> rfc4627:encode(utility:pl2jso_br(Pls)).
+plist2json(Pls)-> rfc4627:encode(?MODULE:pl2jso_br(Pls)).
 map2jsonbin(Map)->list_to_binary(map2json(Map)).
 map2json(Map)->
     plist2json(maps:to_list(Map)).
 maps2jsos(Maps)->
     Plists=[maps:to_list(Map)||Map<-Maps],
-    utility:pl2jsos_br(Plists).
+    ?MODULE:pl2jsos_br(Plists).
 
 md5(S) ->
     Md5_bin =  erlang:md5(S),
@@ -412,7 +412,7 @@ table2file(Tab)->
     List=ets:tab2list(Tab),
     Fn=atom_to_list(Tab),
     file:delete(Fn),
-    utility:log(Fn,"~p",[List]),
+    ?MODULE:log(Fn,"~p",[List]),
     ok.
 
 float_minus(A,B)->float_minus(A,B,1).
@@ -427,7 +427,7 @@ json_http(Url,JsonStr)->
     inets:start(),  
     case httpc:request(post,{Url,[],"application/json", JsonStr},[],[]) of   
         {ok, {_,_,JsonBin}}-> 
-            Maps=utility:jsonbin2map(JsonBin),
+            Maps=?MODULE:jsonbin2map(JsonBin),
             {ok,Maps};
         {error, Reason}->
             io:format("json_http error cause ~p~n",[Reason]),
@@ -450,7 +450,7 @@ send_http(Url,Type,Str)->
     log("log/send_http.log","start send_http:~p",[{Url,Type,Str}]),
     Ack=case httpc:request(post,{Url,[],"application/x-www-form-urlencoded", Str},[{timeout,20000}],[]) of   
         {ok, {_,_,JsonBin}}-> 
-            Maps=utility:jsonbin2map(JsonBin),
+            Maps=?MODULE:jsonbin2map(JsonBin),
             {ok,Maps};
         {error, Reason}->
             io:format("json_http error cause ~p~n",[Reason]),
@@ -468,7 +468,7 @@ db_query(T,Cond)->
     ?DB_OP(qlc:e(QH2)).    
 
 mnesia_all_items(T=nhome_history)-> 
-    {atomic,Rs}=utility:db_query(nhome_history),
+    {atomic,Rs}=?MODULE:db_query(nhome_history),
     F=fun(DevId,Item)->
         L0=maps:to_list(Item),
         L1=[{binary_to_integer(K),V}||{K,V}<-L0,is_binary(K) andalso size(K)>0],
@@ -519,22 +519,22 @@ mnesia_to_plist1(Key,[Head=#{}|Tail],Res)->
     mnesia_to_plist1(Key,Tail,[ResItem|Res]).
 
 mnesia_to_plist2(Key,Item=#{})->
-    Item1=maps:map(fun(_,V) when is_float(V)-> utility:term_to_binary(utility:f2b(V,1));
-                      (date,Date={_A,_B,_C})-> utility:d2b(Date);
-                      (time,Date={{_A,_B,_C},_})-> utility:d2b(Date);
-                      (<<"time">>,Date={{_A,_B,_C},_})-> utility:d2b(Date);
-                      (first_time,Date={{_A,_B,_C},_})-> utility:d2b(Date);
-                      (last_time,Date={{_A,_B,_C},_})-> utility:d2b(Date);
-                      ("updatetime",Date={{_A,_B,_C},_})-> utility:d2b(Date);
-                      ("time_reset",Date={{_A,_B,_C},_})-> utility:d2b(Date);
-                      (_,V)-> utility:term_to_binary(V) 
+    Item1=maps:map(fun(_,V) when is_float(V)-> ?MODULE:term_to_binary(?MODULE:f2b(V,1));
+                      (date,Date={_A,_B,_C})-> ?MODULE:d2b(Date);
+                      (time,Date={{_A,_B,_C},_})-> ?MODULE:d2b(Date);
+                      (<<"time">>,Date={{_A,_B,_C},_})-> ?MODULE:d2b(Date);
+                      (first_time,Date={{_A,_B,_C},_})-> ?MODULE:d2b(Date);
+                      (last_time,Date={{_A,_B,_C},_})-> ?MODULE:d2b(Date);
+                      ("updatetime",Date={{_A,_B,_C},_})-> ?MODULE:d2b(Date);
+                      ("time_reset",Date={{_A,_B,_C},_})-> ?MODULE:d2b(Date);
+                      (_,V)-> ?MODULE:term_to_binary(V) 
                    end,Item),
     [{key,Key}|maps:to_list(Item1)].
 
 get_mnesia_items(Table,Key)->    
     mnesia:dirty_read(Table,Key).
 
-mnesia_items(T,Cond)->utility:db_query(T,Cond).
+mnesia_items(T,Cond)->?MODULE:db_query(T,Cond).
 
 compare(Val1,T) when is_atom(Val1)-> compare(list_to_binary(atom_to_list(Val1)),T);
 compare(Val1,[<<"like">>,Val2]) -> re:run(Val1,Val2)=/=nomatch;
@@ -546,7 +546,7 @@ compare(Val1,[<<"=<">>,Val2])-> Val1=<Val2;
 compare(Val1,[<<"between">>,Val2,Val3]) when is_binary(Val1)->  
     Val1>=Val2 andalso Val1=<Val3;
 compare(Val1,[<<"between">>,Val2,Val3])-> 
-    Val1>=utility:s2d(Val2) andalso Val1=<utility:s2d(Val3).
+    Val1>=?MODULE:s2d(Val2) andalso Val1=<?MODULE:s2d(Val3).
 
 condition_f(X={_T,Key,_},[<<"key">>|T])-> compare(Key,T);
 condition_f(X={_T,_,Item},Cond=[Key|T])-> 
@@ -566,12 +566,12 @@ page_items(Items,_PageNum,_CurPage)-> {Items,1}.
 
 handle_all_data_by_table(Arg)->
     Clidata=Arg#arg.clidata,
-    {Table,CurPage,PageNum}=utility:decode(Clidata, [{table,a},{curpage,i},{page_num,i}]),
+    {Table,CurPage,PageNum}=?MODULE:decode(Clidata, [{table,a},{curpage,i},{page_num,i}]),
     if is_integer(CurPage) andalso is_integer(PageNum)->
-        case utility:mnesia_to_plist(Table) of
+        case ?MODULE:mnesia_to_plist(Table) of
             {ok,Plss0}->
-                {Plss,Pages}= utility:page_items(Plss0,PageNum,CurPage),
-                Res=utility:pl2jsos(Plss),
+                {Plss,Pages}= ?MODULE:page_items(Plss0,PageNum,CurPage),
+                Res=?MODULE:pl2jsos(Plss),
                 %io:format("~p~n",[Res]),
                 [{status,ok},{pages,Pages},{result,Res}];
             _->

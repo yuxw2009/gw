@@ -3,7 +3,7 @@
 -include("db_op.hrl").
 -include("opr.hrl").
 
--record(state,{opr_pids=#{},seats=#{}}). %oprPid=> #{seat=>s}   seat=>pid
+-record(state,{opr_pids=#{},seats=#{},groups=#{}}). %oprPid=> #{seat=>s}   seat=>pid.      groupno=>GroupPid
 
 %interface api
 create_tables()->
@@ -14,10 +14,35 @@ create_tables()->
 add_oprgroup(GroupNo,GroupPhone)->
     Group0=#oprgroup_t{item=Item0}=#oprgroup_t{},
     Group=Group0#oprgroup_t{key=GroupNo,item=Item0#{phone=>GroupPhone}},
-    ?DB_WRITE(Group).
+    ?DB_WRITE(Group),
+    F=fun(State=#state{groups=Groups})->
+            GroupPid0=maps:get(GroupNo,Groups,undefined),
+            case is_pid(GroupPid0) andalso is_process_alive(GroupPid0) of
+                true -> 
+                    {GroupPid0,State};
+                _->
+                    {ok,GroupPid}=oprgroup:start(GroupNo),
+                    {GroupPid,State#state{groups=Groups#{GroupNo=>GroupPid}}}
+                end
+       end,
+    act(F).
+
+incoming(Caller,Callee,SDP,From)->
+    case oprgroup:get_group_pid_by_phone(Callee) of
+        GroupPid when is_pid(GroupPid)->
+            oprgroup:incoming(GroupPid,Caller,Callee,SDP,From),
+            {ok,GroupPid};
+        Other-> no_group_pid
+    end.
+
 get_oprgroup(GroupNo)->
     mnesia:dirty_read(oprgroup_t,GroupNo).
-
+get_group_pid(GroupNo)->
+    F=fun(State=#state{groups=Groups})->
+            GroupPid=maps:get(GroupNo,Groups,undefined),
+            {GroupPid,State}
+       end,
+    act(F).
 get_by_seatno(SeatNo)->
     mnesia:dirty_read(opr,SeatNo).
 get_user_by_seatno(SeatNo)->    
@@ -70,19 +95,25 @@ register_oprpid(Seat,OprPid)->
             end
        end,
     act(F).
-login(Seat)->
+login(Seat)-> login(Seat,undefined).
+
+login(Seat,ClientIp)->
    case whereis(opr_sup) of
     undefined-> opr_sup:start();
     _-> void
     end,
+    GroupNo=opr:get_groupno(Seat),
+    GroupPid=get_group_pid(GroupNo),
     F=fun(State=#state{opr_pids=OprPids,seats=Seats})->
             case maps:get(Seat,Seats,undefined) of
                 undefined->
-                   {ok,OprPid}=opr:start(Seat),
+                   {ok,OprPid}=opr:start({Seat,ClientIp}),
+                   oprgroup:add_opr(GroupPid,OprPid),
                    erlang:monitor(process,OprPid),
                    NSt=State#state{opr_pids=OprPids#{OprPid=>#{seat=>Seat}},seats=Seats#{Seat=>OprPid}},
                    {{ok,OprPid},NSt};
                 OprPid->
+                   opr:set_client_host(OprPid,ClientIp),
                    {{ok,OprPid},State}
             end
        end,

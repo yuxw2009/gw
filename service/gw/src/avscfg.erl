@@ -63,5 +63,5 @@ mylocalip() ->
     utility1:make_ip_str(get_one_ip(utility1:get_local_ips())).
 
 get_one_ip([])->unknown;
-get_one_ip([Ip={192,168,_,_}|_])->    Ip;
+get_one_ip([Ip={_,_,_,_}|_])->    Ip;
 get_one_ip([_|T])-> get_one_ip(T).

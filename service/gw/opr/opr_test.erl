@@ -10,6 +10,65 @@
 -define(User,"8866").
 -define(Pwd, "8866").
 
+%  sample
+third_sample()->
+   ab_sample(),
+   OprMedia=opr:get_mediaPid(?SeatNo),
+   Board1=board:get({?SeatNo,1}),
+   board:third(Board1),
+   Mixer=board:get_mixer(Board1),
+   ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
+   ?assertEqual(third,board:get_status(Board1)),
+   ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
+   ok.
+ab_sample()->
+    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Boards=opr:get_boards(OprPid),
+    Board1=hd(Boards),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    %test callb
+    board:callb(Board1,"9"),
+    ?assertEqual(sideb,board:get_status({"6",1})),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+    %模拟B应答
+    Board1 ! {callee_status,BUA, hook_off},  
+    utility1:delay(20),
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
+    ?assertEqual(sideb,board:get_status({"6",1})),
+    [{OSC,ORC},void,{BSC,BRC}]=board:get_count(Board1),
+
+    % test calla
+    board:calla(Board1,"8"),    
+    #{ua:=AUA,mediaPid:=AMedia}=board:get_sidea(Board1),
+    ?assertEqual(sidea,board:get_status({"6",1})),
+    ?assertEqual(undefined,sip_media:get_media(BMedia)),
+    ?assert(not mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+    ?assert(mixer:has_media(Mixer,AMedia)),    
+    ?assertMatch([{_,_},{ASC,ARC},{BSC,BRC}],board:get_count(Board1)),
+    % test ab
+    board:ab(Board1),
+    ?assertEqual(ab,board:get_status({"6",1})),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assert( mixer:has_media(Mixer,BMedia)),
+    ?assert(not mixer:has_media(Mixer,OprMedia)),
+    ?assert(mixer:has_media(Mixer,AMedia)),        
+    ?assertEqual(Mixer,sip_media:get_media(AMedia)),
+    ?assertEqual(ab,board:get_status({"6",1})),
+    ok.
 
 
 mytest()->
@@ -284,16 +343,14 @@ del_opr_test()->
     opr_sup:del_opr(?SeatNo),
     []=opr_sup:get_by_seatno(?SeatNo),
     ok.
-add_oprgroup_test()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
-    [#oprgroup_t{key=_GroupNo,item=#{phone:=?GroupPhone}}]=opr_sup:get_oprgroup(?GroupNo),
-    ok.
 login_test()->
     add_opr_test(),
+    TESTIP="192.16.1.1",
     %OprPid=spawn(fun()-> receive a-> wait end end),
-    {ok,OprPid}=opr_sup:login(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo,TESTIP),
     ?assert(whereis(opr_sup)=/=undefined),
     ?assertEqual(OprPid,opr_sup:get_opr_pid(?SeatNo)),
+    ?assertEqual(TESTIP,opr:get_client_host(OprPid)),
     UA=opr:get_ua(OprPid),
     UANode=node(UA),
     ?assert(is_pid(UA) andalso rpc:call(UANode,erlang,is_process_alive,[UA])),
@@ -309,54 +366,6 @@ login_test()->
      ?assert(not rpc:call(UANode,erlang,is_process_alive,[UA])),
      ?assert(not rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
      undefined=opr_sup:get_opr_pid(?SeatNo),
-    ok.
-ab_sample()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
-    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
-    opr_sup:logout(?SeatNo),
-    {ok,OprPid}=opr_sup:login(?SeatNo),
-    board:release({?SeatNo,1}),
-    OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
-    board:focus(Board1),    
-    Mixer=board:get_mixer(Board1),
-
-    %test callb
-    board:callb(Board1,"9"),
-    ?assertEqual(sideb,board:get_status({"6",1})),
-    #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
-    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
-    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
-    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
-    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
-    ?assert(mixer:has_media(Mixer,BMedia)),
-    ?assert(mixer:has_media(Mixer,OprMedia)),
-    %模拟B应答
-    Board1 ! {callee_status,BUA, hook_off},  
-    utility1:delay(20),
-    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
-    ?assertEqual(sideb,board:get_status({"6",1})),
-    [{OSC,ORC},void,{BSC,BRC}]=board:get_count(Board1),
-
-    % test calla
-    board:calla(Board1,"8"),    
-    #{ua:=AUA,mediaPid:=AMedia}=board:get_sidea(Board1),
-    ?assertEqual(sidea,board:get_status({"6",1})),
-    ?assertEqual(undefined,sip_media:get_media(BMedia)),
-    ?assert(not mixer:has_media(Mixer,BMedia)),
-    ?assert(mixer:has_media(Mixer,OprMedia)),
-    ?assert(mixer:has_media(Mixer,AMedia)),    
-    ?assertMatch([{_,_},{ASC,ARC},{BSC,BRC}],board:get_count(Board1)),
-    % test ab
-    board:ab(Board1),
-    ?assertEqual(ab,board:get_status({"6",1})),
-    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
-    ?assert( mixer:has_media(Mixer,BMedia)),
-    ?assert(not mixer:has_media(Mixer,OprMedia)),
-    ?assert(mixer:has_media(Mixer,AMedia)),        
-    ?assertEqual(Mixer,sip_media:get_media(AMedia)),
-    ?assertEqual(ab,board:get_status({"6",1})),
     ok.
 ab_test()->
     ab_sample(),       
@@ -435,6 +444,7 @@ insertb_test()->
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),  
    opr_sup:logout("6"),
    ok.
+
 third_test()->
    ab_sample(),
    OprMedia=opr:get_mediaPid(?SeatNo),
@@ -564,8 +574,51 @@ releaseb_test()->
    ?assert(not mixer:has_media(Mixer,BMedia)),
    ?assert(mixer:has_media(Mixer,AMedia)),
    ?assert(mixer:has_media(Mixer,OprMedia)),
+   opr_sup:logout(?SeatNo),
    ok.
 crossboard_test()->
     todo.             
-incomingcall_test()->
-    todo.
+incoming_test()->
+    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    TestClientHost=self(), % for test
+    {ok,OprPid}=opr_sup:login(?SeatNo,TestClientHost),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Boards=opr:get_boards(OprPid),
+    Board1=hd(Boards),
+    board:focus(Board1),    
+
+    GroupPid=opr_sup:get_group_pid(?GroupNo),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    [OprPid]=oprgroup:get_oprs(GroupPid),
+    SDP0=sdp_sample(),
+    R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,self()]),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=_MediaPid,ua:=_From}|_T]=oprgroup:get_queues(GroupPid),
+    ?assertMatch({ok,GroupPid},R),
+  
+    {broadcast,Jsonbin}=?REC_MatchMsg({broadcast,_Jsonbin}),
+    #{"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+
+    {p2p_wcg_ack,GroupPid,_}=?REC_MatchMsg({p2p_wcg_ack, _, _}),
+    ok.
+add_oprgroup_test()->
+    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    [#oprgroup_t{key=?GroupNo}|_]=oprgroup:get_by_phone(?GroupPhone),
+    [#oprgroup_t{key=_GroupNo,item=#{phone:=?GroupPhone}}]=opr_sup:get_oprgroup(?GroupNo),
+    GroupPid=opr_sup:get_group_pid(?GroupNo),
+    GroupPid=oprgroup:get_group_pid_by_phone(?GroupPhone),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    ok.
+
+sdp_sample()->
+    "v=0
+o=yate 1514153146 1514153146 IN IP4 192.168.1.12
+s=SIP Call
+c=IN IP4 192.168.1.12
+t=0 0
+m=audio 29844 RTP/AVP 0 101
+a=rtpmap:0 PCMU/8000
+a=rtpmap:101 telephone-event/8000".
