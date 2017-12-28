@@ -29,7 +29,8 @@
  %                }
  %                }]]    boardstatus:
 
--define(DEFAULTSIDE,#{id=>"",status=>null,ua_node=>node_conf:get_voice_node(),ua=>undefined,ua_ref=>undefined,phone=>"",wmg_node=>node_conf:get_wmg_node(),mediaPid=>undefined,media_ref=>undefined,lport=>undefined,rip=>"",rport=>undefined}).
+-define(DEFAULTSIDE,#{id=>"",status=>null,ua_node=>node_conf:get_voice_node(),ua=>undefined,ua_ref=>undefined,phone=>"",
+         wmg_node=>node_conf:get_wmg_node(),mediaPid=>undefined,media_ref=>undefined,starttime=>erlang:localtime(),lport=>undefined,rip=>"",rport=>undefined}).
 -record(state, {id,
                 seat,
                 owner,
@@ -39,9 +40,16 @@
                 sidea=?DEFAULTSIDE,
                 sideb=?DEFAULTSIDE,
                 alive_tref,
-                alive_count=0,
-                start_time={0,0,0}
-                }).
+                alive_count=0                }).
+
+get_all_status(PidOrSeatBoardTuple)->
+    F=fun(State=#state{seat=SeatNo,status=BoardStatus,sidea=SideA=#{status:=AStatus,phone:=APhone,starttime:=AStartTime},sideb=SideB=#{status:=BStatus,phone:=BPhone,starttime:=BStartTime}})->
+            AllStatus=#{boardstatus=>BoardStatus,detail=>#{a=>#{phone=>APhone,talkstatus=>AStatus,starttime=>utility1:d2s(AStartTime)},
+                                                           b=>#{phone=>BPhone,talkstatus=>BStatus,starttime=>utility1:d2s(BStartTime)}
+                                                           }},
+            {AllStatus,State}
+       end,
+    act(PidOrSeatBoardTuple,F).     
 
 pickup_call(PidOrSeatBoardTuple)->
     F=fun(State=#state{seat=SeatNo,sidea=SideA=#{status:=null}})->
@@ -203,6 +211,8 @@ terminate(_Reason, State=#state{sidea=SideA,sideb=SideB}) ->
 act(Act)->    act(whereis(?MODULE),Act).
 act({Seat,BIndex},Act) ->    act(opr:get_board(Seat,BIndex),Act);
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
+cast({Seat,BIndex},Act)  ->    cast(opr:get_board(Seat,BIndex),Act);
+cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
     
 %% helpers  
 get_port_from_sdp(SDP_FROM_SS) when is_binary(SDP_FROM_SS)->

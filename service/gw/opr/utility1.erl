@@ -366,10 +366,12 @@ jsonbin2plist(Bin)->
 plist2json(Pls)-> rfc4627:encode(?MODULE:pl2jso_br(Pls)).
 map2jsonbin(Map)->list_to_binary(map2json(Map)).
 map2json(Map)->
-    plist2json(maps:to_list(Map)).
+    rfc4627:encode(map2jso(Map)).
+map2jso(Map0)->    
+    Map=maps:map(fun(_,V) when is_map(V)-> map2jso(V); (_,V=[H|_]) when is_map(H)->maps2jsos(V) ; (_,V)-> V end,Map0),
+    pl2jso_br(maps:to_list(Map)).
 maps2jsos(Maps)->
-    Plists=[maps:to_list(Map)||Map<-Maps],
-    ?MODULE:pl2jsos_br(Plists).
+    [map2jso(Map)||Map<-Maps].
 
 md5(S) ->
     Md5_bin =  erlang:md5(S),

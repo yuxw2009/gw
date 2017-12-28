@@ -52,28 +52,127 @@ handle(Arg, Method, ["api"|Params]) ->   %% remove old inteface
     utility1:pl2jso_br(handle_api(Arg,Method,Params));
 handle(_Arg,Method,Params) ->   
     io:format("http_api.erl:unhandled method:~p. params:~p~n",[Method,Params]), 
-    [{status,failed},{reason,unhandled}].
+    utility1:pl2jso_br([{status,failed},{reason,unhandled}]).
 
 handle_api(Arg,'POST',_) -> 
     Clidata=Arg#arg.clidata,
 
     Map0=utility1:jsonbin2map(Clidata),
+    Map1=maps:map(fun("msgType",V)->V;  
+                     ("boardIndex",V)-> list_to_integer(binary_to_list(V));
+                     (_,V) when is_binary(V)-> binary_to_list(V);  
+                     (_,V)-> V end, Map0),
     Ip=utility1:client_ip(Arg),
-    Map=Map0#{"ip"=>Ip},
-    case handle_map(Map) of
-        {failed,Reason}->
-            [{errorCode,2},{errorInfo,Reason}];
-        Jso->
-            [{errorCode,0},{ackdata,Jso}]
+    Map=Map1#{"ip"=>Ip},
+    Res0 = handle_map(Map),
+    case proplists:get_value(seatId,Res0) of
+        undefined-> Res0;
+        SeatId-> [{boardState,utility1:map2jso(opr:get_all_status(SeatId))}|Res0]
     end.
 
 
-handle_map(#{"msgType":= <<"group_register">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})->
-    todo;
-handle_map(#{"msgType":= <<"login">>})->
-    todo;
+
+handle_map(#{"msgType":= <<"seatgroup_config">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})-> 
+    opr_sup:add_oprgroup(GroupNo,Phone),
+    [{status,ok}];
+handle_map(#{"msgType":= <<"seat_register">>,"seatId":=SeatId,"seatPhone":=Phone,"seatGroupNo":=GroupNo,"pwd":=Pwd})-> 
+    opr_sup:add_opr(GroupNo,SeatId,Phone,Pwd),
+    [{status,ok},{seatId,SeatId}];
+
+%curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"opr_login","seatId":"6","operatorId":"001"}' http://127.0.0.1:8082/api    
+handle_map(#{"msgType":= <<"opr_login">>,"seatId":=SeatId,"operatorId":=OprId,"ip":=Ip})-> 
+    opr_sup:login(SeatId,Ip,OprId),
+    [{status,ok},{seatId,SeatId}];
+%curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"opr_logout","seatId":"6"}' http://127.0.0.1:8082/api    
+handle_map(#{"msgType":= <<"opr_logout">>,"seatId":=SeatId})-> 
+    opr_sup:logout(SeatId),
+    [{status,ok},{seatId,SeatId}];
+%服务端到客户端handle_map(#{"msgType":= <<"call_broadcast">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})-> 
+%    [{status,ok}];
+handle_map(#{"msgType":= <<"pickup_call">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:pickup_call({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"sidea">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:sidea({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"sideb">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:sideb({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"inserta">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:inserta({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"insertb">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:insertb({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"splita">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:splita({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"splitb">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:splitb({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"third">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:third({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"monitor">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:monitor({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"ab">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:ab({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"clean_board">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:release({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"releasea">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:releasea({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"releaseb">>,"seatId":=SeatId,"boardIndex":=BI})-> 
+    board:releaseb({SeatId,BI}),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"board_switch">>,"seatId":=SeatId,"curBoardIndex":=_CBI,"nextBoardIndex":=NBI})-> 
+    opr:focus(SeatId,NBI),
+    [{status,ok},{seatId,SeatId}];
+% handle_map(#{"msgType":= <<"cross_board">>,"seatId":=SeatId,"curBoardIndex":=CBI,"nextBoardIndex":=NBI,"side":=Side,"useId":=UserId})-> 
+%     board:inserta({SeatId,BI}),  todo
+%     [{status,ok}];
+% handle_map(#{"msgType":= <<"transfer_opr">>,"seatId":=SeatId,"BoardIndex":=CBI,"targetSeat":=NBI,"side":=Side,"useId":=UserId})-> 
+%     board:inserta({SeatId,BI}),
+%     [{status,ok}];
+% handle_map(#{"msgType":= <<"talk_to_opr">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id})-> 
+%     board:inserta({SeatId,BI}),
+%     [{status,ok}];
+% handle_map(#{"msgType":= <<"message">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id,"msg":=Msg})-> 
+%     board:inserta({SeatId,BI}),
+%     [{status,ok}];
+% handle_map(#{"msgType":= <<"user_subscribe">>,"seatId":=SeatId,"operatorId":=OperatorId,"phoneNumber":=Phone})-> 
+%     board:inserta({SeatId,BI}),
+%     [{status,ok}];
+% handle_map(#{"msgType":= <<"getSeatState">>,"seatId":=SeatId,"operatorId":=OperatorId})-> 
+%     board:inserta({SeatId,BI}),
+%     [{status,ok}];
+
+%curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"addSipUser","phones":["999"],"passwds":["999"]}' http://127.0.0.1:8082/api
+handle_map(#{"msgType":= <<"addSipUser">>,"phones":=Phones,"passwds":=Pwds})-> 
+    F=fun(G,[User|T1],[Pwd|T2])->
+            io:format("addsipuser:~p~n",[{node_conf:get_voice_node(),phone,insert_user_or_password,[User,Pwd]}]),
+            rpc:call(node_conf:get_voice_node(),phone,insert_user_or_password,[binary_to_list(User),binary_to_list(Pwd)]),
+            G(G,T1,T2);
+         (_,_,_)-> void
+     end,
+    F(F,Phones,Pwds),
+    [{status,ok}];
+handle_map(#{"msgType":= <<"handShake">>,"seatId":=SeatId,"boardIndex":=ClientActiveBI})->   %boardIndex为当前客户端的激活窗口号
+    opr:handshake(SeatId,ClientActiveBI),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"calla">>,"seatId":=SeatId,"boardIndex":=BI,"phone":=Phone})-> 
+    board:calla({SeatId,BI},Phone),
+    [{status,ok},{seatId,SeatId}];
+handle_map(#{"msgType":= <<"callb">>,"seatId":=SeatId,"boardIndex":=BI,"phone":=Phone})-> 
+    board:callb({SeatId,BI},Phone),
+    [{status,ok},{seatId,SeatId}];
+% handle_map(#{"msgType":= <<"query_phone">>,"seatId":=SeatId,"boardIndex":=BI,"phoneNumber":=Phone,"isCall":=IsCall})-> 
+%     [{status,ok}];
 handle_map(_)->
-    {failed,unhandled}.
+    [{status,failed},{reason,unhandled}].
 
 
 %% encode to json format

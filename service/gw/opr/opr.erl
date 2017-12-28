@@ -6,8 +6,10 @@
 -define(CientPort,"8082").
 -record(state, {id,
                 phone,
-                oprstatus,
-                sipstatus,      %% init | invite | ring | hook_on | hook_off | p2p_ring | p2p_answer
+                oprstatus=logined,
+                activedBoard=0,
+                oprId,   %% 
+                sipstatus=init,      %% init | invite | ring | hook_on | hook_off | p2p_ring | p2p_answer
                 client_host,
                 ua,
                 ua_ref,
@@ -32,13 +34,38 @@
  %                     talkstatus:us,
  %                     starttime:st}
  %                }
- %                }]]    boardstatus:   
+ %                }]]   
 %% extra APIs.
 % incomingSipWebcall(CallID, SipSDP, PhoneNo, WMGNode, SipPid) ->
 %     {ok, Pid} = my_server:start(?MODULE, [CallID], []),
 %     my_server:call(Pid, {incomingSipWebcall, SipSDP, PhoneNo, WMGNode, SipPid}).
+get_all_status(SeatId)->
+    F=fun(State=#state{oprstatus=OprStatus,activedBoard=ActiveBoard,boards=Boards,sipstatus=CallStatus})->
+                AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>[board:get_all_status(Board)||Board<-Boards]},
+                {AllStatus,State}
+       end,
+    act(SeatId,F).    
+
+handshake(SeatId,ClientActiveBI)->
+    focus(SeatId,ClientActiveBI).
+
+focus(PidOrSeat,BoardIndex)->
+    Boards=get_boards(PidOrSeat),
+    if BoardIndex>0 andalso BoardIndex=<length(Boards)->
+        {List1,List2=[Board|Tail]}=lists:split(BoardIndex-1,Boards),
+        UnfocusedList=List1++Tail,
+        [board:unfocus(Board)||Board<-UnfocusedList],
+        board:focus(Board),
+        F=fun(State=#state{})->
+                {ok,State#state{activedBoard=BoardIndex}}
+           end,
+        act(PidOrSeat,F),
+        ok;
+    true->
+        {failed,boardindex_error}
+    end.    
 get_groupno(SeatNo)->
-    [#opr{item=#{group_no:=GroupNo}}]=opr_sup:get_by_seatno(SeatNo),
+    [#seat_t{item=#{group_no:=GroupNo}}]=opr_sup:get_by_seatno(SeatNo),
     GroupNo.
 get_boardn_sidea(Seat,BoardIndex)->
     board:get_sidea(opr:get_board(Seat,BoardIndex)).
@@ -134,7 +161,7 @@ init([{SeatNo,ClientIp}]) ->
     process_flag(trap_exit, true),
     WmgNode=node_conf:get_wmg_node(),
     UANode = node_conf:get_voice_node(),
-    [#opr{item=#{user:=OprPhone}}]=opr_sup:get_by_seatno(SeatNo),
+    [#seat_t{item=#{user:=OprPhone}}]=opr_sup:get_by_seatno(SeatNo),
     OprPid=self(),
     BoardPidF=fun([SeatNo_,BoardId,OprPid_])->
                  {ok,Pid}=board:start([SeatNo_,SeatNo_++"_"++integer_to_list(BoardId),OprPid_]),

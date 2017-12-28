@@ -6,6 +6,7 @@
 -include("opr.hrl").
 -define(GroupNo,"112").
 -define(GroupPhone,"52300112").
+-define(OPRID,"001").
 -define(SeatNo,"6").
 -define(User,"8866").
 -define(Pwd, "8866").
@@ -28,9 +29,11 @@ ab_sample()->
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
+    OprUA=opr:get_ua(OprPid),
     Boards=opr:get_boards(OprPid),
     Board1=hd(Boards),
-    board:focus(Board1),    
+    opr:focus(OprPid,1),    
+    %board:focus(Board1),
     Mixer=board:get_mixer(Board1),
 
     %test callb
@@ -45,7 +48,7 @@ ab_sample()->
     ?assert(mixer:has_media(Mixer,OprMedia)),
     %模拟B应答
     Board1 ! {callee_status,BUA, hook_off},  
-    utility1:delay(20),
+    utility1:delay(50),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
     ?assertEqual(sideb,board:get_status({"6",1})),
     [{OSC,ORC},void,{BSC,BRC}]=board:get_count(Board1),
@@ -336,7 +339,7 @@ add_opr_test()->
     User= ?User,
     Pwd= ?Pwd,
     opr_sup:add_opr(GroupNo,SeatNo,User,Pwd),
-    [_Opr=#opr{seat_no=SeatNo,item=#{user:=User,group_no:=GroupNo}}]=opr_sup:get_by_seatno(SeatNo),
+    [_Opr=#seat_t{seat_no=SeatNo,item=#{user:=User,group_no:=GroupNo}}]=opr_sup:get_by_seatno(SeatNo),
     {atomic, [_]}=opr_sup:get_user(User).
 
 del_opr_test()->
@@ -347,7 +350,8 @@ login_test()->
     add_opr_test(),
     TESTIP="192.16.1.1",
     %OprPid=spawn(fun()-> receive a-> wait end end),
-    {ok,OprPid}=opr_sup:login(?SeatNo,TESTIP),
+    {ok,OprPid}=opr_sup:login(?SeatNo,TESTIP,?OPRID),
+    ?assertEqual(OprPid,opr_sup:get_oprpid_by_oprid(?OPRID)),
     ?assert(whereis(opr_sup)=/=undefined),
     ?assertEqual(OprPid,opr_sup:get_opr_pid(?SeatNo)),
     ?assertEqual(TESTIP,opr:get_client_host(OprPid)),
@@ -665,7 +669,33 @@ add_oprgroup_test()->
     GroupPid=oprgroup:get_group_pid_by_phone(?GroupPhone),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     ok.
-
+get_board_status_test()->
+    ab_sample(),
+    ?assertMatch(#{boardstatus:=ab,                   
+              detail:=#{a:=#{phone:="8",               
+                     talkstatus:=_,
+                     starttime:=_st},
+                   b:=#{phone:="9",
+                     talkstatus:=_,
+                     starttime:=_st}
+                }},board:get_all_status({?SeatNo,1})),
+    ok.
+get_opr_status_test()->
+    ab_sample(),
+    ?assertMatch(
+      #{oprstatus:=logined,callstatus:=_,activedBoard:=1,boards:=[
+      #{boardstatus:=ab,                   
+              detail:=#{a:=#{phone:="8",               
+                     talkstatus:=_,
+                     starttime:=_st},
+                   b:=#{phone:="9",
+                     talkstatus:=_,
+                     starttime:=_st}
+                }}|_]},opr:get_all_status(?SeatNo)),
+    ok.
+oprstatus_to_jso_test()->
+    ?assertMatch({obj,_},utility1:map2jso(opr:get_all_status(?SeatNo))),
+    ok.
 sdp_sample()->
     "v=0
     o=yate 1514153146 1514153146 IN IP4 192.168.1.12
