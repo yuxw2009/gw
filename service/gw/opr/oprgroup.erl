@@ -7,22 +7,24 @@
 -record(state, {id,
                 mergedto=[],
                 oprs=[],
-                queued_calls=[],  %#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>Media,ua=>UA}
+                queued_calls=[],  %#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>Media,ua=>UA,ua_ref=>ur}
                 unused
                }).
  
+ incoming(Caller,Callee,SDP,From)-> oprgroup_sup:incoming(Caller,Callee,SDP,From).
  get_by_phone(GroupPhone)->
     {atomic,Res}=?DB_QUERY(oprgroup_t,{item=#{phone:=Phone}},Phone==GroupPhone),
     Res. 
 get_group_pid_by_phone(GroupPhone)->
     [#oprgroup_t{key=GroupNo}|_]=oprgroup:get_by_phone(GroupPhone),
-    opr_sup:get_group_pid(GroupNo).
+    oprgroup_sup:get_group_pid(GroupNo).
 
 pickup_call(Pid)->                             
     F=fun(State=#state{queued_calls=QC})->
             %todo if(length(Oprs)==0)-> transfer
             case QC of
-                [H|T]-> 
+                [H=#{ua_ref:=UARef}|T]-> 
+                    erlang:demonitor(UARef),
                     {{ok,H},State#state{queued_calls=T}};
                 []->
                     {undefined,State}
@@ -37,11 +39,19 @@ incoming(Pid,Caller,Callee,SDP,From)->                             %must cast no
                     {already_incoming_unbelievable,State};
                 []->
                     {ok, MediaPid, ToSipSDP}=sip_media:start(Callee, self()),
+
+                    case  board:get_port_from_sdp(SDP) of
+                    Addr={_PeerIp,_PeerPort}->
+                      sip_media:set_peer_addr(MediaPid, Addr);
+                    _-> void
+                    end,                    
+                    
                     %todo play tone to MediaPid
                     % notice cast no return value
                     From ! {p2p_wcg_ack, self(), ToSipSDP},
-                    QC1=[#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>MediaPid,ua=>From,callTime=>utility1:timestamp_ms(),toSipSdp=>ToSipSDP}|QC],
-                    erlang:monitor(process,From),
+                    opr_rbt:add(MediaPid),
+                    UARef=erlang:monitor(process,From),
+                    QC1=[#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>MediaPid,ua=>From,callTime=>utility1:timestamp_ms(),toSipSdp=>ToSipSDP,ua_ref=>UARef}|QC],
                     [opr:broadcast(Opr,QC1)||Opr<-Oprs],
                     {{ok,ToSipSDP},State#state{queued_calls=QC1}}
             end
@@ -94,7 +104,7 @@ show(PidOrSeat)->
 start(GroupNo) ->
     {ok, _Pid} = my_server:start(?MODULE, [GroupNo], []).
 
-stop(GroupNo) when is_list(GroupNo)-> stop(opr_sup:get_group_pid(GroupNo));
+stop(GroupNo) when is_list(GroupNo)-> stop(oprgroup_sup:get_group_pid(GroupNo));
 stop(Pid) ->
     my_server:call(Pid, stop),
     ok.
@@ -119,6 +129,9 @@ handle_cast(stop, ST) ->
     {stop, normal, (ST)}.
 
 handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{queued_calls=Calls0})->
+    io:format("oprgroup.erl ua down ~p~n",[From]),
+    [#{mediaPid:=MediaPid}]=[Item||Item=#{ua:=UA}<-Calls0,UA==From],
+    sip_media:stop(MediaPid),
     Calls=[Item||Item=#{ua:=UA}<-Calls0,UA=/=From],
     {noreply,State#state{queued_calls=Calls}};
 handle_info(check_orphan, #state{id=ID} = ST) ->
@@ -140,9 +153,9 @@ terminate(_,ST=#state{}) ->
 
 %% inner methods.
 % my utility function
-act(GroupNo,Act) when  is_list(GroupNo) ->    act(opr_sup:get_group_pid(GroupNo),Act);
+act(GroupNo,Act) when  is_list(GroupNo) ->    act(oprgroup_sup:get_group_pid(GroupNo),Act);
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 
-cast(GroupNo,Act) when  is_list(GroupNo) ->    cast(opr_sup:get_group_pid(GroupNo),Act);
+cast(GroupNo,Act) when  is_list(GroupNo) ->    cast(oprgroup_sup:get_group_pid(GroupNo),Act);
 cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
 

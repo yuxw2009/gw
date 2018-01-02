@@ -3,7 +3,7 @@
 -include("db_op.hrl").
 -include("opr.hrl").
 
--record(state,{opr_pids=#{},seats=#{},groups=#{},oprIds=#{}}). %oprPid=> #{seat=>s,opr_id=>OprId}   seat=>pid.      groupno=>GroupPid,oprIds: #{OprId=>OprPid}
+-record(state,{opr_pids=#{},seats=#{},oprIds=#{}}). %oprPid=> #{seat=>s,opr_id=>OprId}   seat=>pid.      groupno=>GroupPid,oprIds: #{OprId=>OprPid}
 
 %interface api
 create_tables()->
@@ -12,43 +12,11 @@ create_tables()->
     mnesia:create_table(opr_t,[{type,ordered_set},{attributes,record_info(fields,opr_t)},{disc_copies ,[node()]}]),
     ok.
 
-add_oprgroup(GroupNo,GroupPhone) when is_binary(GroupNo)-> add_oprgroup(binary_to_list(GroupNo),GroupPhone);
-add_oprgroup(GroupNo,GroupPhone) when is_binary(GroupPhone)-> add_oprgroup((GroupNo),binary_to_list(GroupPhone));
-add_oprgroup(GroupNo,GroupPhone)->
-    Group0=#oprgroup_t{item=Item0}=#oprgroup_t{},
-    Group=Group0#oprgroup_t{key=GroupNo,item=Item0#{phone=>GroupPhone}},
-    ?DB_WRITE(Group),
-    F=fun(State=#state{groups=Groups})->
-            GroupPid0=maps:get(GroupNo,Groups,undefined),
-            case is_pid(GroupPid0) andalso is_process_alive(GroupPid0) of
-                true -> 
-                    {GroupPid0,State};
-                _->
-                    {ok,GroupPid}=oprgroup:start(GroupNo),
-                    {GroupPid,State#state{groups=Groups#{GroupNo=>GroupPid}}}
-                end
-       end,
-    act(F).
-
-incoming(Caller,Callee,SDP,From)->
-    case oprgroup:get_group_pid_by_phone(Callee) of
-        GroupPid when is_pid(GroupPid)->
-            oprgroup:incoming(GroupPid,Caller,Callee,SDP,From),
-            {ok,GroupPid};
-        Other-> no_group_pid
-    end.
+incoming(Caller,Callee,SDP,From)->oprgroup_sup:incoming(Caller,Callee,SDP,From).
 get_oprpid_by_oprid(OprId)->
     F=fun(State=#state{oprIds=OprIds})->
             OprPid=maps:get(OprId,OprIds,undefined),
             {OprPid,State}
-       end,
-    act(F).
-get_oprgroup(GroupNo)->
-    mnesia:dirty_read(oprgroup_t,GroupNo).
-get_group_pid(GroupNo)->
-    F=fun(State=#state{groups=Groups})->
-            GroupPid=maps:get(GroupNo,Groups,undefined),
-            {GroupPid,State}
        end,
     act(F).
 get_by_seatno(SeatNo)->
@@ -113,7 +81,7 @@ login(Seat,ClientIp,OprId)->
     _-> void
     end,
     GroupNo=opr:get_groupno(Seat),
-    GroupPid=get_group_pid(GroupNo),
+    GroupPid=oprgroup_sup:get_group_pid(GroupNo),
     F=fun(State=#state{opr_pids=OprPids,seats=Seats,oprIds=OprIds0})->
             case maps:get(Seat,Seats,undefined) of
                 undefined->
@@ -130,12 +98,13 @@ login(Seat,ClientIp,OprId)->
        end,
     act(F).
 logout(Seat)->
-    F=fun(State=#state{opr_pids=OprPids,seats=Seats})->
+    F=fun(State=#state{opr_pids=OprPids,seats=Seats,oprIds=OprIds})->
         case maps:take(Seat,Seats) of
             error->{ok,State};
             {OprPid,Seats1} when is_pid(OprPid)->
                 opr:stop(OprPid),
-                {ok,State#state{seats=Seats1,opr_pids=maps:remove(OprPid,OprPids)}}
+                OprIds1=maps:filter(fun(_,OprPid)-> false;(_,_)-> true end,OprIds),
+                {ok,State#state{seats=Seats1,opr_pids=maps:remove(OprPid,OprPids),oprIds=OprIds1}}
        end
     end,
     act(F).
@@ -193,3 +162,5 @@ terminate(_Reason, _State) ->
 % my utility function
 act(Act)->    act(whereis(?MODULE),Act).
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
+
+

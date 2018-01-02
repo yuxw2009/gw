@@ -25,13 +25,13 @@ url全部为 post http://127.0.0.1:8082/api
     req: {msgType:"seatgroup_config",groupPhone:n,seatGroupNo:G}
     ack: {status:ok} or {status:failed,reason:r}
 
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"seatgroup_config","groupPhone":"52300112","seatGroupNo":"112"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"seatgroup_config","groupPhone":"52300112","seatGroupNo":"912"}' http://127.0.0.1:8082/api
 
 2 配置seat：  json格式
     req: {msgType:"seat_register",seatId:n,seatGroupNo:G,seatPhone:p,pwd:p}
     ack: {status:ok} or {status:failed,reason:r}
 
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"seat_register","seatPhone":"52300001","seatGroupNo":"112","seatId":"6"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"seat_register","seatPhone":"52300001","seatGroupNo":"912","seatId":"6","pwd":"1"}' http://127.0.0.1:8082/api
 3 seat login  json格式
     req: {msgType:"opr_login",seatId:n,operatorId:o}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
@@ -63,16 +63,28 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"sidea","boar
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"board_switch","curBoardIndex":"1","nextBoardIndex":"2","seatId":"6"}' http://127.0.0.1:8082/api
 8 倒塞：  json格式
-    req: {msgType:"cross_board",side:sidea or sideb,seatId:n,curBoardIndex:G,nextBoardIndex:o,userId:u}
+    req: {msgType:"cross_board",seatId:n,curBoardIndex:G,nextBoardIndex:o}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"cross_board","side":"sidea","curBoardIndex":"1","nextBoardIndex":"2","seatId":"6","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
 
 9 呼叫转移：  json格式
-    req: {msgType:"transfer_opr",side:sidea or sideb,seatId:n,BoardIndex:G,targetSeat:o,userId:u}
+    req: {msgType:"transfer_opr",side:sidea or sideb,seatId:n,boardIndex:G,targetSeat:o,userId:u}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
 
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"transfer_opr","side":"sidea","BoardIndex":"1","targetSeat":"2","seatId":"6","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"transfer_opr","side":"sidea","boardIndex":"1","targetSeat":"2","seatId":"6","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+9 呼叫转移推送：  server=>client
+    req: {msgType:"push_transfer_to_opr",FromSeatId:n,ToSeatId:o,userId:u,phone:Phone}
+    ack: {status:ok} {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"push_transfer_to_opr","FromSeatId":"6","ToSeatId":"8","phone":"888","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+
+9 呼叫转移接收：  json格式
+    req: {msgType:"accept_transfer_opr",seatId:n,boardIndex:G,userId:u}
+    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"accept_transfer_opr","side":"sidea","boardIndex":"1","seatId":"8","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+
 10 撤前塞／撤后塞
 11席连
     req: {msgType:"talk_to_opr",seat1Id:n,seat2Id:o}

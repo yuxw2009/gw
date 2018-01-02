@@ -73,11 +73,11 @@ handle_api(Arg,'POST',_) ->
 
 
 handle_map(#{"msgType":= <<"seatgroup_config">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})-> 
-    opr_sup:add_oprgroup(GroupNo,Phone),
+    oprgroup_sup:add_oprgroup(GroupNo,Phone),
     [{status,ok}];
 handle_map(#{"msgType":= <<"seat_register">>,"seatId":=SeatId,"seatPhone":=Phone,"seatGroupNo":=GroupNo,"pwd":=Pwd})-> 
     opr_sup:add_opr(GroupNo,SeatId,Phone,Pwd),
-    [{status,ok},{seatId,SeatId}];
+    [{status,ok}];
 
 %curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"opr_login","seatId":"6","operatorId":"001"}' http://127.0.0.1:8082/api    
 handle_map(#{"msgType":= <<"opr_login">>,"seatId":=SeatId,"operatorId":=OprId,"ip":=Ip})-> 
@@ -86,7 +86,7 @@ handle_map(#{"msgType":= <<"opr_login">>,"seatId":=SeatId,"operatorId":=OprId,"i
 %curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"opr_logout","seatId":"6"}' http://127.0.0.1:8082/api    
 handle_map(#{"msgType":= <<"opr_logout">>,"seatId":=SeatId})-> 
     opr_sup:logout(SeatId),
-    [{status,ok},{seatId,SeatId}];
+    [{status,ok}];
 %服务端到客户端handle_map(#{"msgType":= <<"call_broadcast">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})-> 
 %    [{status,ok}];
 handle_map(#{"msgType":= <<"pickup_call">>,"seatId":=SeatId,"boardIndex":=BI})-> 
@@ -128,15 +128,22 @@ handle_map(#{"msgType":= <<"releasea">>,"seatId":=SeatId,"boardIndex":=BI})->
 handle_map(#{"msgType":= <<"releaseb">>,"seatId":=SeatId,"boardIndex":=BI})-> 
     board:releaseb({SeatId,BI}),
     [{status,ok},{seatId,SeatId}];
-handle_map(#{"msgType":= <<"board_switch">>,"seatId":=SeatId,"curBoardIndex":=_CBI,"nextBoardIndex":=NBI})-> 
+handle_map(#{"msgType":= <<"board_switch">>,"seatId":=SeatId,"curBoardIndex":=_CBI,"nextBoardIndex":=NBI_str})-> 
+    NBI=list_to_integer(NBI_str),
     opr:focus(SeatId,NBI),
     [{status,ok},{seatId,SeatId}];
-% handle_map(#{"msgType":= <<"cross_board">>,"seatId":=SeatId,"curBoardIndex":=CBI,"nextBoardIndex":=NBI,"side":=Side,"useId":=UserId})-> 
-%     board:inserta({SeatId,BI}),  todo
-%     [{status,ok}];
-% handle_map(#{"msgType":= <<"transfer_opr">>,"seatId":=SeatId,"BoardIndex":=CBI,"targetSeat":=NBI,"side":=Side,"useId":=UserId})-> 
-%     board:inserta({SeatId,BI}),
-%     [{status,ok}];
+ handle_map(#{"msgType":= <<"cross_board">>,"seatId":=SeatId,"curBoardIndex":=CBI_str,"nextBoardIndex":=NBI_str,"seatId":=SeatId})-> 
+     CBI=list_to_integer(CBI_str),
+     NBI=list_to_integer(NBI_str),
+     board:cross_board({SeatId,CBI},{SeatId,NBI}),  
+    [{status,ok},{seatId,SeatId}];
+ handle_map(#{"msgType":= <<"transfer_opr">>,"seatId":=SeatId,"boardIndex":=BI,"targetSeat":=TargetSeat})-> 
+     board:transfer_opr({SeatId,BI},TargetSeat),
+    [{status,ok},{seatId,SeatId}];
+ handle_map(#{"msgType":= <<"accept_transfer_opr">>,"seatId":=SeatId,"boardIndex":=BI,"userId":=UserId})-> 
+    io:format("accept_transfer_opr ~p~n",[{SeatId,BI}]),
+     opr:accept_transfer_opr(SeatId,BI,UserId),
+    [{status,ok}];
 % handle_map(#{"msgType":= <<"talk_to_opr">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id})-> 
 %     board:inserta({SeatId,BI}),
 %     [{status,ok}];
@@ -171,7 +178,8 @@ handle_map(#{"msgType":= <<"callb">>,"seatId":=SeatId,"boardIndex":=BI,"phone":=
     [{status,ok},{seatId,SeatId}];
 % handle_map(#{"msgType":= <<"query_phone">>,"seatId":=SeatId,"boardIndex":=BI,"phoneNumber":=Phone,"isCall":=IsCall})-> 
 %     [{status,ok}];
-handle_map(_)->
+handle_map(O)->
+    io:format("unhandled map ~p~n",[O]),
     [{status,failed},{reason,unhandled}].
 
 

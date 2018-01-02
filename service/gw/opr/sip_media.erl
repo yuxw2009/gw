@@ -112,7 +112,6 @@ start_dual_record(Rrp,Vcr)->    if is_pid(Rrp)-> Rrp ! {start_dual_record,Vcr}; 
 
 init([Session,Socket,_Vcr,Port,Owner]) ->
     SipCdc=rrp_get_sip_codec(),
-io:format("sip_media:init~n"),
     Noise = tone:cn_pcm(),
     ST1=#st{noise=Noise},
     SipC=SipCdc,
@@ -294,19 +293,6 @@ handle_info(AudioFrame=#audio_frame{},ST=#st{}) ->
     R=handle_audio_frame(AudioFrame,ST),
     R;
 %
-handle_info(send_sample_interval,#st{peerok=false} = ST) ->
-    {noreply,ST};
-handle_info(send_sample_interval,#st{snd_pev=#ev{actived=false},peerok=true,in_stream=BaseRTP,socket=Socket,peer={IP,Port},u2sip=U2Sip} = ST) ->
-    io:format("*"),
-    {Body,Rest} = if size(U2Sip)>=160 -> split_binary(U2Sip,160);
-                 true -> {get_random_160s(ST#st.noise),U2Sip}
-                 end,
-    {PN,Enc} = if ST#st.sipcodec==pcmu -> {?PCMU,Body};
-               true -> PCM=?APPLY(erl_isac_nb, udec, [Body]), compress_voice(ST#st.sipcodec,PCM)
-               end,
-    {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
-    send_udp(Socket,IP,Port,RTP),
-    {noreply, ST#st{in_stream = NewBaseRTP,u2sip=Rest}};
 handle_info({'DOWN', _Ref, process, Media, _Reason}, ST=#st{media=Media}) ->
     {noreply,ST#st{media=undefined}};
 handle_info({'DOWN', _Ref, process, Owner, _Reason}, ST=#st{owner=Owner}) ->
@@ -350,12 +336,13 @@ record_ip_port(St=#st{udp_froms=Froms,peer=Peer,monitor=Mon,localport=LocalPort}
 handle_audio_frame(#audio_frame{codec=Codec},#st{webcodec=pcmu,peerok=false} = ST) when Codec==?PCMU;Codec==?CN ->
     io:format("2"),
     {noreply,ST};
-handle_audio_frame(#audio_frame{codec=?PCMU,body=Body}, #st{}=ST) ->
-    NST=send_pcmu(Body,ST),
+handle_audio_frame(Frame=#audio_frame{codec=?PCMU,body=_Body}, #st{}=ST) ->
+    % io:format("a"),
+    NST=send_pcmu(Frame,ST),
     {noreply, NST};
-handle_audio_frame(#audio_frame{codec=?CN}, #st{noise=Noise}=ST) ->
+handle_audio_frame(Frame=#audio_frame{codec=?CN}, #st{noise=Noise}=ST) ->
     Body=get_random_160s(Noise),
-    NST=send_pcmu(Body,ST),
+    NST=send_pcmu(Frame#audio_frame{body=Body},ST),
     {noreply, NST};
 handle_audio_frame(#audio_frame{}=Frame,ST) ->
     llog1(ST,"rrp unexcept audio_frame ~p #st.webcodec:~p.~n",[Frame, ST#st.webcodec]),
@@ -973,10 +960,10 @@ get_local_sdp(LPort) ->
             },
     {Sess,Stream}.      
 
-send_pcmu(Body,#st{peer=undefined} = ST)-> ST;
-send_pcmu(Body,#st{snd_pev=#ev{actived=false},in_stream=BaseRTP,socket=Socket,peer={IP,Port},sendcount=SC} = ST)->
+send_pcmu(_,#st{peer=undefined} = ST)-> ST;
+send_pcmu(#audio_frame{body=Body,marker=M},#st{in_stream=BaseRTP,socket=Socket,peer={IP,Port},sendcount=SC} = ST)->
     {PN,Enc} = {?PCMU,Body},
-    {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP,?PSIZE),PN,Enc),
+    {NewBaseRTP, RTP} = compose_rtp(inc_timecode(BaseRTP#base_rtp{marker=M},?PSIZE),PN,Enc),
     send_udp(Socket,IP,Port,RTP),
     ST#st{in_stream = NewBaseRTP,sendcount=SC+1}.
 
@@ -987,6 +974,11 @@ show(Pid)->
     act(Pid,F).
 
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
+get_peer(Pid)->
+    F=fun(State=#st{peer=Peer})->
+            {Peer,State}
+       end,
+    act(Pid,F).    
 get_media(Pid)->
     F=fun(State=#st{media=Media})->
             {Media,State}
@@ -1001,7 +993,8 @@ cutoff_temporary(OprMedia)->
             {Media,State#st{media=undefined}}
        end,
     act(OprMedia,F).    
-set_peer(Pid,Peer) when is_pid(Pid)-> Pid ! {play,Peer};
+set_peer(Pid,Peer) when is_pid(Pid)-> 
+    case is_process_alive(Pid) of true-> Pid ! {play,Peer}; _-> void end;
 set_peer(_,_)-> void.
 
 unset_peer(Pid,Peer)when is_pid(Pid)-> Pid ! {deplay,Peer};

@@ -50,8 +50,13 @@ init([]) ->
     {ok, #state{tmr=TRef}}.
 
 handle_call({act,Act}, _, State) ->
-    {Res,State1} = Act(State),
-    {reply,Res,State1};
+    try Act(State) of
+      {Res,State1}-> {reply,Res,State1}
+    catch
+      Error:Reason->
+          io:format("mixer: act error:~p~n",[{Error,Reason}]),
+          {reply,Error,State}
+    end;
 handle_call(_Call, _From, State) ->
     {noreply,State}.
 handle_cast({add, MediaPid}, #state{sides=Sides}=ST) ->

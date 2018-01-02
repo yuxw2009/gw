@@ -25,13 +25,15 @@ start() ->
     application:start(ssl),
     
     mnesia:start(),
+    opr_sup:start(),
+    oprgroup_sup:start(),
 
     spawn(fun pinging/0),
     new_rbt:start(),
     ok.
     
 pinging()->
-    {_,SipNode}=avscfg:get(sip_app_node),
+    SipNode=node_conf:get_voice_node(),
     R=net_adm:ping(SipNode),
 %    io:format("pinging ~p...~n",[R]),
     receive

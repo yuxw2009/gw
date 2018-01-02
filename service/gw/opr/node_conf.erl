@@ -15,6 +15,7 @@ get_voice_node()->
 get_wras_node()->
     R=rpc:call(config_node(),node_reg,get_wras_node,[]),
     R.
+get_wmg_node()-> node();
 get_wmg_node()->
     R=rpc:call(config_node(),node_reg,get_wmg_node,[]),
     R.    

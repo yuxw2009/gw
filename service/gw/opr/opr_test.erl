@@ -4,34 +4,41 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("db_op.hrl").
 -include("opr.hrl").
--define(GroupNo,"112").
+-define(GroupNo,"912").
 -define(GroupPhone,"52300112").
+-define(SeatPhone,"52300001").
 -define(OPRID,"001").
 -define(SeatNo,"6").
 -define(User,"8866").
 -define(Pwd, "8866").
+-define(OPRID1,"002").
+-define(SeatNo1,"8").
+-define(User1,"888").
+-define(Pwd1, "888").
 
 %  sample
 third_sample()->
    ab_sample(),
    OprMedia=opr:get_mediaPid(?SeatNo),
    Board1=board:get({?SeatNo,1}),
-   board:third(Board1),
+   %board:third(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"third","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
    Mixer=board:get_mixer(Board1),
    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
    ?assertEqual(third,board:get_status(Board1)),
    ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
    ok.
 ab_sample()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
     OprUA=opr:get_ua(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     opr:focus(OprPid,1),    
     %board:focus(Board1),
     Mixer=board:get_mixer(Board1),
@@ -63,7 +70,10 @@ ab_sample()->
     ?assert(mixer:has_media(Mixer,AMedia)),    
     ?assertMatch([{_,_},{ASC,ARC},{BSC,BRC}],board:get_count(Board1)),
     % test ab
-    board:ab(Board1),
+    %board:ab(Board1),
+   {ok,#{"status":=<<"ok">>,"boardState":=_}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"ab","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
     ?assertEqual(ab,board:get_status({"6",1})),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
     ?assert( mixer:has_media(Mixer,BMedia)),
@@ -83,22 +93,14 @@ mytest()->
     mixer_2way_test(),
     ok.
 
-% opr_logout_test()->
-%     {ok,OprPid}=opr_sup:login(?SeatNo),
-%     opr_sup:logout(?SeatNo),
-%     utility1:delay(1000),
-%     ?assert(not is_process_alive(OprPid)),
-%     ok.
-
 callb_test()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),    
     Mixer=board:get_mixer(Board1),
     %test callb
@@ -123,13 +125,12 @@ callb_test()->
     opr_sup:logout(?SeatNo),
          ok.
 calla_test()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),
     #{ua:=AUA0,mediaPid:=AMedia0}=board:get_sidea(Board1),
     ?assert((not is_pid(AUA0)) andalso (not is_pid(AMedia0))),
@@ -182,14 +183,13 @@ calla_test()->
     ok.
 
 callb_and_calla_test()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),    
     Mixer=board:get_mixer(Board1),
 
@@ -248,14 +248,13 @@ unfocus_calla_test()->
     opr_sup:logout(?SeatNo),
     ok.
 callb_and_calla_sideb_test()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),    
     Mixer=board:get_mixer(Board1),
 
@@ -285,8 +284,11 @@ callb_and_calla_sideb_test()->
     ?assertEqual(sidea,board:get_status({"6",1})),
 
     % sideb test
-    board:sideb(Board1),
-    utility1:delay(100),
+    %board:sideb(Board1),
+    %utility1:delay(100),
+    {ok,#{"status":=<<"ok">>}}=
+        utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"sideb","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
     ?assertEqual(sideb,board:get_status({"6",1})),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
     ?assert( mixer:has_media(Mixer,BMedia)),
@@ -316,8 +318,7 @@ mixer_2way_test()->
     {ok,OprPid}=opr_sup:login(?SeatNo),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),    
 
     %test callb
@@ -360,10 +361,11 @@ login_test()->
     ?assert(is_pid(UA) andalso rpc:call(UANode,erlang,is_process_alive,[UA])),
     MediaPid=opr:get_mediaPid(OprPid),
     ?assert(is_pid(MediaPid) andalso rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
+    Board1=opr:get_board(OprPid,1),
     Boards=opr:get_boards(OprPid),
     {ok,OprPid1}=opr_sup:login(?SeatNo),
     ?assertEqual(OprPid,OprPid1),
-    ?assert(length(Boards)==14 andalso is_pid(hd(Boards)) andalso is_process_alive(hd(Boards))),
+    ?assert(length(Boards)==14 andalso is_pid(Board1) andalso is_process_alive(Board1)),
     MediaPid=opr:get_mediaPid(OprPid),
     opr:stop(OprPid),
      utility1:delay(500),
@@ -371,6 +373,32 @@ login_test()->
      ?assert(not rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
      undefined=opr_sup:get_opr_pid(?SeatNo),
     ok.
+clean_board_test()->
+    third_sample(),       
+    % test release sidea
+    Mixer=board:get_mixer({?SeatNo,1}),
+    ?assertEqual(third,board:get_status({?SeatNo,1})),
+    ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
+    BMedia=board:get_b_media({?SeatNo,1}),
+    AMedia=board:get_a_media({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(?SeatNo),
+    ?assertEqual(Mixer,sip_media:get_media(AMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
+  
+    {ok,#{"status":=<<"ok">>}}=
+        utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"clean_board","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+    Mixer=board:get_mixer({?SeatNo,1}),
+    ?assertEqual(null,board:get_status({?SeatNo,1})),
+    ?assertEqual(0,maps:size(mixer:get_sides(Mixer))),
+    undefined=board:get_b_media({?SeatNo,1}),
+    undefined=board:get_a_media({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(?SeatNo),
+    utility1:delay(100),
+    ?assert(not is_process_alive(AMedia)),
+    ?assert(not is_process_alive(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    AMedia.
 ab_test()->
     ab_sample(),       
     % test release sidea
@@ -381,10 +409,46 @@ ab_test()->
     ?assertEqual(null,board:get_status({"6",1})),   
     opr_sup:logout(?SeatNo),
          ok.
+board_mixer_exit_test()->
+   ab_sample(),
+   Board1=board:get({?SeatNo,1}),
+   Mixer=board:get_mixer(Board1),
+   BMedia=board:get_b_media(Board1),
+   AMedia=board:get_a_media(Board1),
+   ?assert( mixer:has_media(Mixer,BMedia)),
+   ?assert( mixer:has_media(Mixer,AMedia)),
+   mixer:stop(Mixer),
+   utility1:delay(30),
+   Mixer1=board:get_mixer(Board1),
+   ?assert(is_pid(Mixer1) andalso Mixer1=/=Mixer andalso is_process_alive(Mixer1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer1))),  
+   ?assert( mixer:has_media(Mixer1,BMedia)),
+   ?assert( mixer:has_media(Mixer1,AMedia)),
+   ok.
+
+board_exit_test()->
+   ab_sample(),
+   Board=board:get({?SeatNo,1}),
+   Mixer=board:get_mixer(Board),
+   BMedia=board:get_b_media(Board),
+   AMedia=board:get_a_media(Board),
+   ?assert( mixer:has_media(Mixer,BMedia)),
+   ?assert( mixer:has_media(Mixer,AMedia)),
+   board:stop(Board),
+   utility1:delay(30),
+   Board1=board:get({?SeatNo,1}),
+   ?assert(is_pid(Board1) andalso Board1=/=Board andalso is_process_alive(Board1)),
+   Mixer1=board:get_mixer(Board1),
+   ?assert(is_pid(Mixer1) andalso Mixer1=/=Mixer andalso is_process_alive(Mixer1)),
+   ok.
+
 inserta_test()->
    ab_sample(),
    Board1=board:get({?SeatNo,1}),
-   board:inserta(Board1),
+   %board:inserta(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"inserta","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
    Mixer=board:get_mixer(Board1),
    ?assertEqual(inserta,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
@@ -413,6 +477,13 @@ inserta_test()->
    board:sideb(Board1), 
    ?assertEqual(sideb,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),  
+   %test mixer exit
+   mixer:stop(Mixer),
+   utility1:delay(30),
+   Mixer1=board:get_mixer(Board1),
+   ?assert(is_pid(Mixer1) andalso Mixer1=/=Mixer andalso is_process_alive(Mixer1)),
+   ?assertEqual(2,maps:size(mixer:get_sides(Mixer1))),  
+
    opr_sup:logout("6"),
    ok.
 insertb_test()->
@@ -420,7 +491,8 @@ insertb_test()->
    Board1=board:get({?SeatNo,1}),
 
    % test insertb
-   board:insertb(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"insertb","seatId"=>?SeatNo,"boardIndex"=>"1"}),
    Mixer=board:get_mixer(Board1),
    ?assertEqual(insertb,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
@@ -469,7 +541,9 @@ splita_test()->
    ab_sample(),
    Board1=board:get({?SeatNo,1}),
 
-   board:splita(Board1),
+   %board:splita(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"splita","seatId"=>?SeatNo,"boardIndex"=>"1"}),
    Mixer=board:get_mixer(Board1),
    ?assertEqual(splita,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
@@ -505,7 +579,9 @@ splitb_test()->
    Board1=board:get({?SeatNo,1}),
 
    % test splitb
-   board:splitb(Board1),
+   %board:splitb(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"splitb","seatId"=>?SeatNo,"boardIndex"=>"1"}),
    Mixer=board:get_mixer(Board1),
    ?assertEqual(splitb,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
@@ -537,7 +613,9 @@ monitor_test()->
    ab_sample(),
    OprMedia=opr:get_mediaPid(?SeatNo),
    Board1=board:get({?SeatNo,1}),
-   board:monitor(Board1),
+   %board:monitor(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"monitor","seatId"=>?SeatNo,"boardIndex"=>"1"}),
    Mixer=board:get_mixer(Board1),
    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
    ?assertEqual(monitor,board:get_status(Board1)),
@@ -557,7 +635,10 @@ releasea_test()->
    BMedia=board:get_b_media(Board1),
    AMedia=board:get_a_media(Board1),
    board:insertb(Board1),
-   board:releasea(Board1),
+   %board:releasea(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"releasea","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
    ?assertEqual(sideb,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
    ?assert(not mixer:has_media(Mixer,AMedia)),
@@ -572,7 +653,8 @@ releaseb_test()->
    BMedia=board:get_b_media(Board1),
    AMedia=board:get_a_media(Board1),
    board:inserta(Board1),
-   board:releaseb(Board1),
+   {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"releaseb","seatId"=>?SeatNo,"boardIndex"=>"1"}),
    ?assertEqual(sidea,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
    ?assert(not mixer:has_media(Mixer,BMedia)),
@@ -580,65 +662,108 @@ releaseb_test()->
    ?assert(mixer:has_media(Mixer,OprMedia)),
    opr_sup:logout(?SeatNo),
    ok.
-crossboard_test()->
-    todo.             
+cross_board_test()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+    %board1 callb
+    board:callb(Board1,"8"),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea(Board1),
+    SideB1=board:get_sideb(Board1),
+   ?assertEqual(sideb,board:get_status(Board1)),
+    %board2 calla
+    Board2=opr:get_board(OprPid,2),
+    board:focus(Board2),    
+    board:calla(Board2,"8"),
+    #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    ?assertEqual(ok, board:cross_board(Board2,Board1)),
+    #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board1),
+    SideB1=board:get_sideb(Board1),
+   ?assertEqual(sidea,board:get_status(Board1)),
+    ok.             
 incoming_pickup_and_sidea_test()->
     oprgroup:stop(?GroupNo),
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
     TestClientHost=self(), % for test
     {ok,OprPid}=opr_sup:login(?SeatNo,TestClientHost),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),    
     Mixer=board:get_mixer(Board1),
 
-    GroupPid=opr_sup:get_group_pid(?GroupNo),
+    GroupPid=oprgroup_sup:get_group_pid(?GroupNo),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     [OprPid]=oprgroup:get_oprs(GroupPid),
     SDP0=sdp_sample(),
 
+    % callopr with mockua
     MockUA=self(),
     R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,MockUA]),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid,ua:=From}|T]=oprgroup:get_queues(GroupPid),
+    io:format("grouppid:~p mediaPid:~p~n",[GroupPid,MediaPid]),
+    {_,_}=sip_media:get_peer(MediaPid),
     ?assertMatch({ok,GroupPid},R),
 
     {broadcast,Jsonbin}=?REC_MatchMsg({broadcast,_Jsonbin}),
-    #{"calls":=Calls,"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+    #{"calls":=[{obj,CallPlist}],"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+    #{"phoneNumber":=GroupPhoneBin,"userId":=UserId,"callTime":=_}=maps:from_list(CallPlist),
+    ?assertEqual(<<"test_op">>,GroupPhoneBin),
+    ?assertEqual(UserId,list_to_binary(pid_to_list(MockUA))),
 
-    ?assertMatch(#{"phoneNumber":="test_op"},board:pickup_call({?SeatNo,1})),
+    % assert rbt
+    ?assert(opr_rbt:has_media(MediaPid)),
+
+    % simu opr pickup
+%    ?assertMatch({ok,#{"phoneNumber":="test_op"}},board:pickup_call({?SeatNo,1})),
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"pickup_call","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
+    ?assertMatch({failed,board_seized},board:pickup_call({?SeatNo,1})),
+    ?assertMatch({failed,no_call},board:pickup_call({?SeatNo,2})),
     T=oprgroup:get_queues(GroupPid),
-    ?assertEqual(MediaPid, board:get_a_media({"6",1})),
-    ?assertEqual(From,board:get_a_ua({"6",1})),
-    ?assertMatch(#{status:=tpring},board:get_sidea({"6",1})),
-    board:sidea(Board1),
-    ?assertMatch(#{status:=hook_off},board:get_sidea({"6",1})),
+    ?assertEqual(MediaPid, board:get_a_media({?SeatNo,1})),
+    ?assertEqual(From,board:get_a_ua({?SeatNo,1})),
+    ?assertMatch(#{status:=tpring},board:get_sidea({?SeatNo,1})),
+
+    % simu opr answer
+    %board:sidea(Board1),
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"sidea","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
+    ?assertMatch(#{status:=hook_off},board:get_sidea({?SeatNo,1})),
     {p2p_answer,Board1}=?REC_MatchMsg({p2p_answer,_}),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
     ?assertEqual(Mixer,sip_media:get_media(MediaPid)),
   
+    ?assert(not opr_rbt:has_media(MediaPid)),
+
 
     {p2p_wcg_ack,GroupPid,_}=?REC_MatchMsg({p2p_wcg_ack, _, _}),
     ok.
 incoming_ua_quit_test()->
     oprgroup:stop(?GroupNo),
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
     TestClientHost=self(), % for test
     {ok,OprPid}=opr_sup:login(?SeatNo,TestClientHost),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
-    Boards=opr:get_boards(OprPid),
-    Board1=hd(Boards),
+    Board1=opr:get_board(OprPid,1),
     board:focus(Board1),    
     Mixer=board:get_mixer(Board1),
 
-    GroupPid=opr_sup:get_group_pid(?GroupNo),
+    GroupPid=oprgroup_sup:get_group_pid(?GroupNo),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     [OprPid]=oprgroup:get_oprs(GroupPid),
     SDP0=sdp_sample(),
@@ -658,14 +783,15 @@ incoming_ua_quit_test()->
 
     exit(MockUA,kill),
     utility1:delay(50),
+    ?assert(not is_process_alive(MediaPid)),
     CallQueues=oprgroup:get_queues(GroupPid),
     ?assertEqual([],[Item||Item=#{ua:=UA}<-CallQueues,UA==MockUA]),
     ok.
 add_oprgroup_test()->
-    opr_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     [#oprgroup_t{key=?GroupNo}|_]=oprgroup:get_by_phone(?GroupPhone),
-    [#oprgroup_t{key=_GroupNo,item=#{phone:=?GroupPhone}}]=opr_sup:get_oprgroup(?GroupNo),
-    GroupPid=opr_sup:get_group_pid(?GroupNo),
+    [#oprgroup_t{key=_GroupNo,item=#{phone:=?GroupPhone}}]=oprgroup_sup:get_oprgroup(?GroupNo),
+    GroupPid=oprgroup_sup:get_group_pid(?GroupNo),
     GroupPid=oprgroup:get_group_pid_by_phone(?GroupPhone),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     ok.
@@ -696,18 +822,238 @@ get_opr_status_test()->
 oprstatus_to_jso_test()->
     ?assertMatch({obj,_},utility1:map2jso(opr:get_all_status(?SeatNo))),
     ok.
+
+
 sdp_sample()->
     "v=0
-    o=yate 1514153146 1514153146 IN IP4 192.168.1.12
-    s=SIP Call
-    c=IN IP4 192.168.1.12
-    t=0 0
-    m=audio 29844 RTP/AVP 0 101
-    a=rtpmap:0 PCMU/8000
-    a=rtpmap:101 telephone-event/8000".
+o=yate 1514602552 1514602552 IN IP4 192.168.1.14
+s=SIP Call
+c=IN IP4 192.168.1.14
+t=0 0
+m=audio 30182 RTP/AVP 0 8 3 11 98 97 102 103 104 105 106 101
+a=rtpmap:0 PCMU/8000
+a=rtpmap:8 PCMA/8000
+a=rtpmap:3 GSM/8000
+a=rtpmap:11 L16/8000
+a=rtpmap:98 iLBC/8000
+a=fmtp:98 mode=20
+a=rtpmap:97 iLBC/8000
+a=fmtp:97 mode=30
+a=rtpmap:102 SPEEX/8000
+a=rtpmap:103 SPEEX/16000
+a=rtpmap:104 SPEEX/32000
+a=rtpmap:105 iSAC/16000
+a=rtpmap:106 iSAC/32000
+a=rtpmap:101 telephone-event/8000
+a=ptime:30".
 
 fprof_()->
-    fprof:apply(?MODULE, incoming_test, []),
+    fprof:apply(?MODULE, transfer_opr_test, []),
     fprof:profile(),
     fprof:analyse({dest, "bar.analysis"}),
     file:consult("bar.analysis").
+
+opr_rbt_media_exit_test()->
+    if_mixer_no_rec_audio_frame_and_timeout_120s__then_kickout_it,
+    todo.
+% for http interface for client
+seatgroup_config_test()->
+    oprgroup_sup:del_oprgroup(?GroupNo),
+    []=oprgroup_sup:get_oprgroup(?GroupNo),
+    undefined=oprgroup_sup:get_group_pid(?GroupNo),
+    {ok,Res1=#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"seatgroup_config","groupPhone"=>"52300112","seatGroupNo"=>"912"}),
+    [_]=oprgroup_sup:get_oprgroup(?GroupNo),
+    GroupPid=oprgroup_sup:get_group_pid(?GroupNo),
+    ?assert(is_pid(GroupPid)),
+    ok.
+seat_register_test_1()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    [_]=oprgroup_sup:get_oprgroup(?GroupNo),
+    ?assert(is_pid(oprgroup_sup:get_group_pid(?GroupNo))),
+    {ok,Res1=#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"seat_register","seatId"=>?SeatNo,"seatGroupNo"=>?GroupNo,"seatPhone"=>?SeatPhone,pwd=>?Pwd}),
+    [_Opr=#seat_t{seat_no=SeatNo,item=#{user:=?SeatPhone,group_no:=?GroupNo}}]=opr_sup:get_by_seatno(?SeatNo),
+    {atomic, [_]}=opr_sup:get_user(?SeatPhone),
+    ok.
+opr_login_test()->
+    seat_register_test_1(),
+    {ok,Res1=#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"opr_login","seatId"=>?SeatNo,"operatorId"=>?OPRID}),
+    OprPid=opr_sup:get_oprpid_by_oprid(?OPRID),
+    ?assert(is_pid(OprPid) andalso is_process_alive(OprPid)),
+    ?assert(whereis(opr_sup)=/=undefined),
+    ?assertEqual(OprPid,opr_sup:get_opr_pid(?SeatNo)),
+    ?assertEqual({127,0,0,1},opr:get_client_host(OprPid)),
+    UA=opr:get_ua(OprPid),
+    UANode=node(UA),
+    ?assert(is_pid(UA) andalso rpc:call(UANode,erlang,is_process_alive,[UA])),
+    MediaPid=opr:get_mediaPid(OprPid),
+    ?assert(is_pid(MediaPid) andalso rpc:call(node(MediaPid),erlang,is_process_alive,[MediaPid])),
+    %Boards=opr:get_boards(OprPid),
+    ok.
+
+opr_logout_test()->
+    opr_login_test(),
+    {ok,Res1=#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"opr_logout","seatId"=>?SeatNo,"operatorId"=>?OPRID}),
+    utility1:delay(200),
+    undefined=opr_sup:get_oprpid_by_oprid(?OPRID),
+    ?assert(whereis(opr_sup)=/=undefined),
+    ?assertEqual(undefined,opr_sup:get_opr_pid(?SeatNo)),
+    %Boards=opr:get_boards(OprPid),
+    ok.
+
+pickup_call_test_notrun()->
+    has_test_in_incoming_pickup_and_sidea_test, %simu opr pickup
+    ok.
+
+sidea_sideb_inserta_insertb_splita_splitb_third_monitor_ab_clean_board_releasea_releaseb_test_notrun()->
+    has_test_before,
+    ok.
+
+board_switch_test()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    Board2=opr:get_board(OprPid,2),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    %test callb
+    board:callb(Board1,"9"),
+    ?assertEqual(sideb,board:get_status({"6",1})),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+% board_switch    
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"board_switch","curBoardIndex"=>1,"nextBoardIndex"=>"2","seatId"=>?SeatNo}),
+    ?assertEqual(sideb,board:get_status({"6",1})),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(1,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(not mixer:has_media(Mixer,OprMedia)),
+
+    % test sidea
+    board:calla(Board2,"8"),    
+    Mixer2=board:get_mixer(Board2),
+    #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    ?assertEqual(sidea,board:get_status({"6",2})),
+    ?assertEqual(Mixer2,sip_media:get_media(AMedia2)),
+    ?assert(mixer:has_media(Mixer2,OprMedia)),
+    ?assert(mixer:has_media(Mixer2,AMedia2)),    
+    opr_sup:logout("6"),
+    ok.
+cross_board_api_test()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    Board2=opr:get_board(OprPid,2),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    %test callb
+    board:callb(Board1,"9"),
+    ?assertEqual(sideb,board:get_status({"6",1})),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+    % cross_board    
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"cross_board","curBoardIndex"=>"1","nextBoardIndex"=>"2","seatId"=>?SeatNo}),
+    utility1:delay(20),
+    ?assertEqual(null,board:get_status({"6",1})),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sideb(Board1),
+    ?assert(not board:focused({"6",1})),
+    ?assertEqual(0,maps:size(mixer:get_sides(Mixer))),
+
+    ?assertEqual(sidea,board:get_status({"6",2})),
+    ?assert(is_process_alive(BMedia)),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sidea({"6",2}),
+    Mixer2=board:get_mixer({"6",2}),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer2))),
+    ?assert(mixer:has_media(Mixer2,BMedia)),
+    ?assert(mixer:has_media(Mixer2,OprMedia)),
+    % % test sidea
+    % board:calla(Board2,"8"),    
+    % Mixer2=board:get_mixer(Board2),
+    % #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    % ?assertEqual(sidea,board:get_status({"6",2})),
+    % ?assertEqual(Mixer2,sip_media:get_media(AMedia2)),
+    % ?assert(mixer:has_media(Mixer2,OprMedia)),
+    % ?assert(mixer:has_media(Mixer2,AMedia2)),    
+    % opr_sup:logout("6"),
+    ok.
+transfer_opr_test()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    Board2=opr:get_board(OprPid,2),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    %callb
+    board:callb(Board1,"9"),
+    ?assertEqual(sideb,board:get_status({"6",1})),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+    % transfer_opr    
+    opr_sup:add_opr(?GroupNo,?SeatNo1,?User1,?Pwd1),
+    opr_sup:logout(?SeatNo1),
+    {ok,OprPid1}=opr_sup:login(?SeatNo1,self(),?OPRID1),
+    OprMedia1=opr:get_mediaPid(OprPid1),
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"transfer_opr","boardIndex"=>"1","targetSeat"=>?SeatNo1,"seatId"=>?SeatNo}),
+    utility1:delay(20),
+    ?assertEqual(null,board:get_status({"6",1})),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sideb(Board1),
+    ?assert(not board:focused({"6",1})),
+    ?assertEqual(0,maps:size(mixer:get_sides(Mixer))),
+
+    UserId=(pid_to_list(BUA)),
+    {push_transfer_to_opr,Jsonbin}=?REC_MatchMsg({push_transfer_to_opr,_Jsonbin}),
+    #{"phone":=<<"9">>,"msgType":=<<"push_transfer_to_opr">>,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserIdBin}=utility1:jsonbin2map(Jsonbin),
+    ?assertEqual(?SeatNo,binary_to_list(FromSeatId)),
+    ?assertEqual(?SeatNo1,binary_to_list(ToSeatId)),
+    ?assertEqual(UserId,binary_to_list(UserIdBin)),
+    ?assertMatch(#{UserId:=#{ua:=BUA,mediaPid:=BMedia}},opr:get_transfer_sides(?SeatNo1)),
+
+    % client rec_transfer_opr
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"accept_transfer_opr","boardIndex"=>"2","userId"=>UserId,"seatId"=>?SeatNo1}),
+     ?assertEqual(sidea,board:get_status({?SeatNo1,2})),
+    ?assert(is_process_alive(BMedia)),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sidea({?SeatNo1,2}),
+    Mixer1=board:get_mixer({?SeatNo1,2}),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer1))),
+    ?assert(mixer:has_media(Mixer1,BMedia)),
+    ?assert(mixer:has_media(Mixer1,OprMedia1)),
+    ok.

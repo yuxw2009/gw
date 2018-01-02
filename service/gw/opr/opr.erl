@@ -13,7 +13,8 @@
                 client_host,
                 ua,
                 ua_ref,
-                boards=[],  %#{index=>i,pid=>Pid,}
+                transfer_sides=#{},
+                boards=#{},  %#{BoardPid=>#{no=>No}}
                 mediaPid,
                 media_ref,
                 wmg_node,
@@ -41,7 +42,7 @@
 %     my_server:call(Pid, {incomingSipWebcall, SipSDP, PhoneNo, WMGNode, SipPid}).
 get_all_status(SeatId)->
     F=fun(State=#state{oprstatus=OprStatus,activedBoard=ActiveBoard,boards=Boards,sipstatus=CallStatus})->
-                AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>[board:get_all_status(Board)||Board<-Boards]},
+                AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>[board:get_all_status(Board)||Board<-maps:keys(Boards)]},
                 {AllStatus,State}
        end,
     act(SeatId,F).    
@@ -52,8 +53,8 @@ handshake(SeatId,ClientActiveBI)->
 focus(PidOrSeat,BoardIndex)->
     Boards=get_boards(PidOrSeat),
     if BoardIndex>0 andalso BoardIndex=<length(Boards)->
-        {List1,List2=[Board|Tail]}=lists:split(BoardIndex-1,Boards),
-        UnfocusedList=List1++Tail,
+        Board=get_board(PidOrSeat,BoardIndex),
+        UnfocusedList=Boards--[Board],
         [board:unfocus(Board)||Board<-UnfocusedList],
         board:focus(Board),
         F=fun(State=#state{})->
@@ -97,6 +98,48 @@ broadcast(PidOrSeat,QCs)->
             {ok,State}
        end,
     cast(PidOrSeat,F).    
+send_transfer_to_client(DestOprPid,Side=#{"phone":=Phone,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserId})->
+    Paras=utility1:map2jsonbin(#{msgType=><<"push_transfer_to_opr">>,"phone"=>Phone,"FromSeatId"=>FromSeatId,"ToSeatId"=>ToSeatId,"userId"=>UserId}),
+    F=fun(State=#state{client_host=ClientHost,transfer_sides=TransferSides})->
+            if is_pid(ClientHost)->  % for test
+                ClientHost ! {push_transfer_to_opr,Paras};
+            true->
+                case ClientHost of
+                    Ip={_A,_B,_C,_D}->
+                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+                    Ip when is_list(Ip)->
+                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+                    _-> void
+                end
+            end,
+            {ok,State#state{transfer_sides=TransferSides#{UserId=>Side}}}
+       end,
+    cast(DestOprPid,F).   
+fetch_transfer_call(SeatIdOrPid,UserId)->
+    Fetch_TransferSide=fun(State=#state{transfer_sides=TransferSides})->
+        case maps:take(UserId,TransferSides) of
+            error-> {{failed,no_transfer_userId},State};
+            {Side,NTransfer}-> 
+                {{ok,Side},State#state{transfer_sides=NTransfer}}
+        end
+      end,
+    act(SeatIdOrPid,Fetch_TransferSide).
+
+accept_transfer_opr(SeatId,BoardIndex,UserId)->
+    BoardPid=get_board(SeatId,BoardIndex),
+    case fetch_transfer_call(SeatId,UserId) of
+        {ok,Side}->
+            board:accept_transfer_opr(BoardPid,Side),
+            ok;
+        _->
+            void
+        end,
+    ok.
+get_transfer_sides(DestOprPid)->    
+    F=fun(State=#state{transfer_sides=TransferSides})->
+            {TransferSides,State}
+       end,
+    act(DestOprPid,F).
 get_ua(Pid)->
     F=fun(State=#state{ua=UA})->
             {UA,State}
@@ -115,7 +158,7 @@ get_mediaPid(Pid)->
     act(Pid,F).
 get_boards(Pid)->
     F=fun(State=#state{boards=Boards})->
-            {Boards,State}
+            {maps:keys(Boards),State}
        end,
     act(Pid,F).
 get_client_host(Pid)->
@@ -165,9 +208,11 @@ init([{SeatNo,ClientIp}]) ->
     OprPid=self(),
     BoardPidF=fun([SeatNo_,BoardId,OprPid_])->
                  {ok,Pid}=board:start([SeatNo_,SeatNo_++"_"++integer_to_list(BoardId),OprPid_]),
-                 Pid
+                 erlang:monitor(process,Pid),
+                 {Pid,#{no=>BoardId}}
             end,
-    Boards=[BoardPidF([SeatNo,BoardId,OprPid])||BoardId<-lists:seq(1,?BOARDNUM)],
+    BoardPairs=[BoardPidF([SeatNo,BoardId,OprPid])||BoardId<-lists:seq(1,?BOARDNUM)],
+    Boards=maps:from_list(BoardPairs),
     {ok,TR} = my_timer:send_interval(?POOLTIME,check_orphan),
     {ok, #state{id=SeatNo,client_host=ClientIp, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards,tmr=TR}}.
 
@@ -233,12 +278,24 @@ handle_info({'DOWN', _Ref, process, UA, _Reason},#state{id=ID, ua=UA}=ST) ->
     io:format("seat:~p ua_crashed~n",[ID]),
     {_,NST1}=make_call(NST),
     {noreply,NST1};
-handle_info({'DOWN', _Ref, process, _, _Reason},#state{id=ID}=ST) ->
+handle_info({'DOWN', _Ref, process, MediaPid, _Reason},#state{id=ID,mediaPid=MediaPid}=ST) ->
     NST=call_terminated(ST),
     %voip_sup:on_call_over(ID),
     io:format("seat:~p media_crashed~n",[ID]),
     {_,NST1}=make_call(NST),
     {noreply,NST1};
+handle_info({'DOWN', _Ref, process, OneBoardPid, _Reason},#state{id=ID,boards=Boards}=ST) ->
+    io:format("seat:~p board down~n",[ID]),
+    case maps:get(OneBoardPid,Boards,undefined) of
+        undefined->
+            io:format("opr: unknown process down ~p~n",[OneBoardPid]),
+            {noreply,ST};
+        Val=#{no:=No}->
+            {ok,Pid}=board:start([ID,ID++"_"++integer_to_list(No),self()]),
+            erlang:monitor(process,Pid),
+            NBoards=maps:remove(OneBoardPid,Boards),
+            {noreply,ST#state{boards=NBoards#{Pid=>Val}}}
+    end;
 
 handle_info(_Msg, #state{id=ID}=ST) ->
     io:format("opr[~p] received unknown message.~n",[{ID,_Msg}]),
@@ -246,9 +303,9 @@ handle_info(_Msg, #state{id=ID}=ST) ->
 
 terminate(_,ST=#state{id=ID,boards=Boards}) ->
     call_terminated(ST),
-    [board:stop(Board)||Board<-Boards],
+    [board:stop(Board)||Board<-maps:keys(Boards)],
     OprPid=self(),
-    GroupPid=opr_sup:get_group_pid(get_groupno(ID)),
+    GroupPid=oprgroup_sup:get_group_pid(get_groupno(ID)),
     oprgroup:remove_opr(GroupPid,OprPid),
     ok.
 
@@ -290,10 +347,11 @@ make_call(#state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST)->
         {failure, Reason} ->
             {{fail,Reason},ST}
     end;
-make_call(#{id:=ID,wmg_node:=WMGNode,ua_node:=UANode,phone:=PhoneNo})->
+make_call(M=#{id:=ID,phone:=PhoneNo})->
     case sip_media:start(ID, self()) of
         {ok, MediaPid, ToSipSDP} ->
             CallInfo = make_info(PhoneNo),
+            UANode=maps:get(ua_node,M,node_conf:get_voice_node()),
             UA = rpc:call(UANode,voip_ua, start, [self(), PhoneNo, CallInfo]),
             UARef = erlang:monitor(process, UA),
             MRef=erlang:monitor(process, MediaPid),
