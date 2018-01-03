@@ -140,22 +140,17 @@ handle_map(#{"msgType":= <<"board_switch">>,"seatId":=SeatId,"curBoardIndex":=_C
  handle_map(#{"msgType":= <<"transfer_opr">>,"seatId":=SeatId,"boardIndex":=BI,"targetSeat":=TargetSeat})-> 
      board:transfer_opr({SeatId,BI},TargetSeat),
     [{status,ok},{seatId,SeatId}];
- handle_map(#{"msgType":= <<"accept_transfer_opr">>,"seatId":=SeatId,"boardIndex":=BI,"userId":=UserId})-> 
-    io:format("accept_transfer_opr ~p~n",[{SeatId,BI}]),
-     opr:accept_transfer_opr(SeatId,BI,UserId),
-    [{status,ok}];
 % handle_map(#{"msgType":= <<"talk_to_opr">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id})-> 
 %     board:inserta({SeatId,BI}),
 %     [{status,ok}];
-% handle_map(#{"msgType":= <<"message">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id,"msg":=Msg})-> 
-%     board:inserta({SeatId,BI}),
-%     [{status,ok}];
+ handle_map(Message=#{"msgType":= <<"message">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id,"msg":=_Msg})-> 
+     Res=opr:message(Seat1Id,{Seat2Id,Message}),
+     [{status,ok},{seatId,Seat1Id}];
 % handle_map(#{"msgType":= <<"user_subscribe">>,"seatId":=SeatId,"operatorId":=OperatorId,"phoneNumber":=Phone})-> 
 %     board:inserta({SeatId,BI}),
 %     [{status,ok}];
-% handle_map(#{"msgType":= <<"getSeatState">>,"seatId":=SeatId,"operatorId":=OperatorId})-> 
-%     board:inserta({SeatId,BI}),
-%     [{status,ok}];
+ handle_map(#{"msgType":= <<"getSeatState">>,"seatId":=SeatId,"operatorId":=OperatorId})-> 
+     [{status,ok},{seatId,SeatId}];
 
 %curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"addSipUser","phones":["999"],"passwds":["999"]}' http://127.0.0.1:8082/api
 handle_map(#{"msgType":= <<"addSipUser">>,"phones":=Phones,"passwds":=Pwds})-> 

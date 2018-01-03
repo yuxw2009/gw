@@ -1040,20 +1040,42 @@ transfer_opr_test()->
 
     UserId=(pid_to_list(BUA)),
     {push_transfer_to_opr,Jsonbin}=?REC_MatchMsg({push_transfer_to_opr,_Jsonbin}),
-    #{"phone":=<<"9">>,"msgType":=<<"push_transfer_to_opr">>,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserIdBin}=utility1:jsonbin2map(Jsonbin),
+    #{"phone":=<<"9">>,"msgType":=<<"push_transfer_to_opr">>,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserIdBin,"boardIndex":=BoardIndexBin}=utility1:jsonbin2map(Jsonbin),
     ?assertEqual(?SeatNo,binary_to_list(FromSeatId)),
     ?assertEqual(?SeatNo1,binary_to_list(ToSeatId)),
     ?assertEqual(UserId,binary_to_list(UserIdBin)),
-    ?assertMatch(#{UserId:=#{ua:=BUA,mediaPid:=BMedia}},opr:get_transfer_sides(?SeatNo1)),
+    BIndex=list_to_integer(binary_to_list(BoardIndexBin)),
+    % ?assertMatch(#{UserId:=#{ua:=BUA,mediaPid:=BMedia}},opr:get_transfer_sides(?SeatNo1)),
 
     % client rec_transfer_opr
-    {ok,#{"status":=<<"ok">>}}=
-       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"accept_transfer_opr","boardIndex"=>"2","userId"=>UserId,"seatId"=>?SeatNo1}),
-     ?assertEqual(sidea,board:get_status({?SeatNo1,2})),
+    % {ok,#{"status":=<<"ok">>}}=
+    %    utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"accept_transfer_opr","boardIndex"=>"2","userId"=>UserId,"seatId"=>?SeatNo1}),
+     ?assertEqual(sidea,board:get_status({?SeatNo1,BIndex})),
     ?assert(is_process_alive(BMedia)),
-    #{ua:=BUA,mediaPid:=BMedia}=board:get_sidea({?SeatNo1,2}),
-    Mixer1=board:get_mixer({?SeatNo1,2}),
+    #{ua:=BUA,mediaPid:=BMedia}=board:get_sidea({?SeatNo1,BIndex}),
+    Mixer1=board:get_mixer({?SeatNo1,BIndex}),
     ?assertEqual(2,maps:size(mixer:get_sides(Mixer1))),
     ?assert(mixer:has_media(Mixer1,BMedia)),
     ?assert(mixer:has_media(Mixer1,OprMedia1)),
+    ok.
+board_if_free_test()->
+    opr_logout_test(),
+    opr_login_test(),
+    opr:get_board(?SeatNo,1),
+    ?assert(board:is_free({?SeatNo,1})),
+     ab_sample(),
+    ?assert(not board:is_free({?SeatNo,1})),
+     board:release({?SeatNo,1}),
+     ?assert(board:is_free({?SeatNo,1})),
+     Board=opr:get_free_board(?SeatNo),
+     ?assertEqual(opr:get_board(?SeatNo,1),Board),
+    ok.    
+message_test()->
+    opr_sup:logout(?SeatNo),
+    opr_sup:logout(?SeatNo1),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    MsgMap=#{"msgType"=> <<"message">>,"seat1Id"=>?SeatNo,"seat2Id"=>?SeatNo1,"msg"=>"Hello","time"=>utility1:timestamp_ms()},
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
+    [#opr_t{item=#{msg_rcv:=[MsgMap|_]}}]=mnesia:dirty_read(opr_t,?SeatNo1),
     ok.

@@ -1,6 +1,7 @@
 -module(opr).
 -compile(export_all).
 -include("opr.hrl").
+-include("db_op.hrl").
 -define(POOLTIME, 3000).
 -define(BOARDNUM,14).
 -define(CientPort,"8082").
@@ -49,13 +50,24 @@ get_all_status(SeatId)->
 
 handshake(SeatId,ClientActiveBI)->
     focus(SeatId,ClientActiveBI).
-
+message(Seat1Id,{Seat2Id,Message})->
+    case opr_sup:get_opr_pid(Seat2Id) of
+        undefined->
+            case mnesia:dirty_read(opr_t,Seat2Id) of
+                []-> {failed, opr_not_exist};
+                [OprItem=#opr_t{item=Item=#{msg_rcv:=Msgs}}]-> 
+                    ?DB_WRITE(OprItem#opr_t{item=Item#{msg_rcv:=[Message|Msgs]}}),
+                    ok
+            end;
+        OprPid2 ->
+            send_message(OprPid2,Message)
+    end.
 focus(PidOrSeat,BoardIndex)->
     Boards=get_boards(PidOrSeat),
     if BoardIndex>0 andalso BoardIndex=<length(Boards)->
         Board=get_board(PidOrSeat,BoardIndex),
         UnfocusedList=Boards--[Board],
-        [board:unfocus(Board)||Board<-UnfocusedList],
+        [board:unfocus(Board_)||Board_<-UnfocusedList],
         board:focus(Board),
         F=fun(State=#state{})->
                 {ok,State#state{activedBoard=BoardIndex}}
@@ -75,11 +87,36 @@ show(PidOrSeat)->
             {State,State}
        end,
     act(PidOrSeat,F).    
+get_free_board(PidOrSeat)->
+    Boards=get_boards(PidOrSeat),
+    get_free_board1(Boards).
+get_free_board1([])-> undefined;
+get_free_board1([Board|T])->
+    case board:is_free(Board) of
+        true-> Board;
+        _->get_free_board1(T)
+    end.
 get_board(PidOrSeat,Index)->
     Boards=get_boards(PidOrSeat),
     lists:nth(Index,Boards).
 incomingCallPushInfo(#{caller:=Caller,ua:=UA,callTime:=CallTime})->
     #{"userId"=>pid_to_list(UA),"phoneNumber"=>Caller,"callTime"=>CallTime}.
+send_message(PidOrSeat,Paras)->
+    F=fun(State=#state{client_host=ClientHost})->
+            if is_pid(ClientHost)->  % for test
+                ClientHost ! Paras;
+            true->
+                case ClientHost of
+                    Ip={_A,_B,_C,_D}->
+                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+                    Ip when is_list(Ip)->
+                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+                    _-> void
+                end
+            end,
+            {ok,State}
+       end,
+    cast(PidOrSeat,F).    
 broadcast(PidOrSeat,QCs)->
     CallsJson=utility1:maps2jsos([incomingCallPushInfo(QC)||QC<-QCs]),
     Paras=utility1:map2jsonbin(#{msgType=><<"broadcast">>,calls=>CallsJson}),
@@ -98,8 +135,8 @@ broadcast(PidOrSeat,QCs)->
             {ok,State}
        end,
     cast(PidOrSeat,F).    
-send_transfer_to_client(DestOprPid,Side=#{"phone":=Phone,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserId})->
-    Paras=utility1:map2jsonbin(#{msgType=><<"push_transfer_to_opr">>,"phone"=>Phone,"FromSeatId"=>FromSeatId,"ToSeatId"=>ToSeatId,"userId"=>UserId}),
+send_transfer_to_client(DestOprPid,Side=#{"phone":=Phone,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserId,"boardIndex":=BoardIndex})->
+    Paras=utility1:map2jsonbin(#{msgType=><<"push_transfer_to_opr">>,"phone"=>Phone,"FromSeatId"=>FromSeatId,"ToSeatId"=>ToSeatId,"userId"=>UserId,"boardIndex"=>BoardIndex}),
     F=fun(State=#state{client_host=ClientHost,transfer_sides=TransferSides})->
             if is_pid(ClientHost)->  % for test
                 ClientHost ! {push_transfer_to_opr,Paras};
@@ -154,6 +191,18 @@ get_seatno(Pid)->
 get_mediaPid(Pid)->
     F=fun(State=#state{mediaPid=MediaPid})->
             {MediaPid,State}
+       end,
+    act(Pid,F).
+get_board_no(Pid,BoardPid)->
+    F=fun(State=#state{boards=Boards})->
+        BoardIndex=
+        case maps:get(BoardPid,Boards,undefined) of
+            #{no:=No}->No;
+            _O->
+            io:foramt("get_board_no other ~p~n",[{_O,Boards}]), 
+            undefined
+        end,
+        {BoardIndex,State}
        end,
     act(Pid,F).
 get_boards(Pid)->

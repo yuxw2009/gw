@@ -35,7 +35,7 @@
                 seat,
                 owner,
                 mixer,
-                status=null, % null,sidea,sideb,monitor,insert
+                status=null, % null,sidea,sideb,monitor,inserta,
                 focused=false,
                 sidea=?DEFAULTSIDE,
                 sideb=?DEFAULTSIDE,
@@ -69,6 +69,11 @@ pickup_call(PidOrSeatBoardTuple)->
     act(PidOrSeatBoardTuple,fun do_pickup_call/1).     
 
 get({Seat,BId})-> opr:get_board(Seat,BId).
+is_free(PidOrSeatBoardTuple)->
+    F=fun(State=#state{status=Status,sidea=#{ua:=AUA},sideb=#{ua:=BUA}})->
+            {Status==null andalso AUA==undefined andalso BUA==undefined,State}
+       end,
+    act(PidOrSeatBoardTuple,F).   
 get_count(PidOrSeatBoardTuple)->
     F=fun(State=#state{owner=Owner,sidea=#{mediaPid:=AMedia},sideb=#{mediaPid:=BMedia}})->
             OprMedia=opr:get_mediaPid(Owner),
@@ -671,12 +676,17 @@ cross_board(FromBoard,TpBoard)->
         _->
             {failed,cannot_cross_in}
     end.
+
 transfer_opr(SrcBoard={SrcSeat,_Board},DestSeat)->
     DestOprPid=opr_sup:get_opr_pid(DestSeat),
-    case is_pid(DestOprPid) andalso is_process_alive(DestOprPid) of
-        true->
+    case {is_pid(DestOprPid) andalso is_process_alive(DestOprPid),opr:get_free_board(DestSeat)} of
+        {true,DestBoard} when is_pid(DestBoard)->
             #{ua:=UA,phone:=Phone}=Side=cross_away(SrcBoard),
-            opr:send_transfer_to_client(DestOprPid,Side#{"FromSeatId"=>SrcSeat,"ToSeatId"=>DestSeat,"userId"=>pid_to_list(UA),"phone"=>Phone});
+            BoardIndex=opr:get_board_no(DestOprPid,DestBoard),
+            BoardIndex1= if is_integer(BoardIndex)-> integer_to_list(BoardIndex); true-> BoardIndex end,
+            NSide=Side#{"FromSeatId"=>SrcSeat,"ToSeatId"=>DestSeat,"userId"=>pid_to_list(UA),"phone"=>Phone,"boardIndex"=>BoardIndex1},
+            cross_in(DestBoard,NSide),
+            opr:send_transfer_to_client(DestOprPid,NSide);
         _->
             {failed,no_dest_opr}
     end.

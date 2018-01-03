@@ -74,16 +74,10 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"cross_board"
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"transfer_opr","side":"sidea","boardIndex":"1","targetSeat":"2","seatId":"6","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
 9 呼叫转移推送：  server=>client
-    req: {msgType:"push_transfer_to_opr",FromSeatId:n,ToSeatId:o,userId:u,phone:Phone}
+    req: {msgType:"push_transfer_to_opr",FromSeatId:n,ToSeatId:o,userId:u,phone:Phone,,"boardIndex":"2"}
     ack: {status:ok} {status:failed,reason:r}
 
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"push_transfer_to_opr","FromSeatId":"6","ToSeatId":"8","phone":"888","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
-
-9 呼叫转移接收：  json格式
-    req: {msgType:"accept_transfer_opr",seatId:n,boardIndex:G,userId:u}
-    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
-
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"accept_transfer_opr","side":"sidea","boardIndex":"1","seatId":"8","userId":"<0.666.1>"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"push_transfer_to_opr","FromSeatId":"6","ToSeatId":"8","phone":"888","userId":"<0.666.1>","boardIndex":"2"}' http://127.0.0.1:8082/api
 
 10 撤前塞／撤后塞
 11席连
@@ -91,9 +85,14 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"accept_trans
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"talk_to_opr","seat2Id":"2","seat1Id":"6"}' 
-11 消息
-    req: {msgType:"message",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2}
+11 消息。client=>server
+    req: {msgType:"message",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2,time:time}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","seat2Id":"2","seat1Id":"6","msg":"hello"}'
+11 消息推送。server=>client
+    req: {msgType:"message_arrival",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2,time:time}
+    ack: {status:ok} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","seat2Id":"2","seat1Id":"6","msg":"hello"}'
 
