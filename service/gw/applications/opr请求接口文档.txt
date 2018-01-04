@@ -80,16 +80,29 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"transfer_opr
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"push_transfer_to_opr","FromSeatId":"6","ToSeatId":"8","phone":"888","userId":"<0.666.1>","boardIndex":"2"}' http://127.0.0.1:8082/api
 
 10 撤前塞／撤后塞
+
 11席连
-    req: {msgType:"talk_to_opr",seat1Id:n,seat2Id:o}
-    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+  //发起席连，operator1发起
+    req: {msgType:"talk_to_opr",operator1Id:n,operator2Id:o}  
+    ack: {status:ok} or {status:failed,reason:r}
+11  //接收席连请求//服务端发起，发送给operator2
+  req: {msgType:"talk_to_opr",operator1Id:n,operator2Id:o} 
+  ack: {status:ok,reponse:accept} or {status:failed,reason:r} //operator2回应 reponse:接听， reject:拒绝
+12  //席连通话挂断  由席连任意一方发起,服务器收到后转发给另一方. 发给谁？问题
+  req: {msgType:"hangup_to_opr",operator1Id:n,operator2Id:o} 
+  ack: {status:ok} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"talk_to_opr","seat2Id":"2","seat1Id":"6"}' 
 11 消息。client=>server
-    req: {msgType:"message",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2,time:time}
-    ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
+  //发送消息
+  req: {msgType:"message",source:n,target:o,msg:m} //source:发送话务员号  target:私聊为接收话务员号， 群内发送填group,发送给所有人填all
+    ack: {status:ok} or {status:failed,reason:r}
+ 11 查询历史消息
+  req: {msgType:"queryhistorymsg",operatorId:n,number:n} //operatorId:查询话务员号  Number:查询条数.   问题 查询的是已发送的？不包含接收的？
+  ack: {status:ok,msgType:"queryhistorymsg",msgs:[{msg:m,type:type}]} or {status:failed,reason:r} //type:私聊为接收话务员号， 群内发送填group,发送给所有人填all
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","seat2Id":"2","seat1Id":"6","msg":"hello"}'
+
 11 消息推送。server=>client
     req: {msgType:"message_arrival",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2,time:time}
     ack: {status:ok} or {status:failed,reason:r}
