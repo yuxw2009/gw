@@ -38,6 +38,7 @@ stop(Pid) ->
     my_server:cast(Pid, stop).
 
 add(Pid,MediaPid) ->
+    opr_rbt:sub(MediaPid),
     my_server:cast(Pid, {add, MediaPid}).
 
 sub(Pid, MediaPid) ->
@@ -165,7 +166,7 @@ mix_pcm(#audio_frame{pcm= <<>>},#audio_frame{pcm= PCM1},Res)->
     <<Res/binary,PCM1/binary>>;
 mix_pcm(Frame1=#audio_frame{pcm= <<S1:16/signed-little, R1/binary>>},Frame2=#audio_frame{pcm= <<S2:16/signed-little, R2/binary>>},Res)->
     S=(S1+S2)/2,
-    mix_pcm(Frame1#audio_frame{pcm=R1},Frame2#audio_frame{pcm=R2},<<Res/binary,S1:16/signed-little>>).
+    mix_pcm(Frame1#audio_frame{pcm=R1},Frame2#audio_frame{pcm=R2},<<Res/binary,S:16/signed-little>>).
 %% Inner Methods.
 % mix_up(Ins0, Vad) ->
 %     {SmpLs, Ins} = collect_samples(Vad, Ins0),

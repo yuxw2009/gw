@@ -19,6 +19,20 @@ get_oprpid_by_oprid(OprId)->
             {OprPid,State}
        end,
     act(F).
+get_seatno_by_oprid(OprId)->
+    F=fun(State=#state{oprIds=OprIds,opr_pids=OprPids})->
+            SeatNo=
+            case maps:get(OprId,OprIds,undefined) of
+                OprPid when is_pid(OprPid)->
+                    case maps:get(OprPid,OprPids,undefined) of
+                        #{seat:=SeatNo_}-> SeatNo_;
+                        _-> undefined
+                    end;
+                _-> undefined
+            end,
+            {SeatNo,State}
+       end,
+    act(F).
 get_by_seatno(SeatNo)->
     mnesia:dirty_read(seat_t,SeatNo).
 get_user_by_seatno(SeatNo)->    
@@ -85,7 +99,7 @@ login(Seat,ClientIp,OprId)->
     F=fun(State=#state{opr_pids=OprPids,seats=Seats,oprIds=OprIds0})->
             case maps:get(Seat,Seats,undefined) of
                 undefined->
-                   {ok,OprPid}=opr:start({Seat,ClientIp}),
+                   {ok,OprPid}=opr:start([{seat,Seat},{client_host,ClientIp},{oprId,OprId}]),
                    oprgroup:add_opr(GroupPid,OprPid),
                    erlang:monitor(process,OprPid),
                    NSt=State#state{opr_pids=OprPids#{OprPid=>#{seat=>Seat,opr_id=>OprId}},seats=Seats#{Seat=>OprPid},oprIds=OprIds0#{OprId=>OprPid}},
@@ -103,7 +117,7 @@ logout(Seat)->
             error->{ok,State};
             {OprPid,Seats1} when is_pid(OprPid)->
                 opr:stop(OprPid),
-                OprIds1=maps:filter(fun(_,OprPid)-> false;(_,_)-> true end,OprIds),
+                OprIds1=maps:filter(fun(_,OprPid_) when OprPid_==OprPid-> false;(_,_)-> true end,OprIds),
                 {ok,State#state{seats=Seats1,opr_pids=maps:remove(OprPid,OprPids),oprIds=OprIds1}}
        end
     end,

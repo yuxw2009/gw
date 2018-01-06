@@ -582,3 +582,11 @@ handle_all_data_by_table(Arg)->
     true->
         [{status,failed},{reason,invalid_param}]
     end.
+
+flush()->
+    receive 
+        _-> 
+            flush()
+    after 0->
+        void
+    end.

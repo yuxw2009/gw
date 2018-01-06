@@ -57,6 +57,7 @@ incoming(Pid,Caller,Callee,SDP,From)->                             %must cast no
             end
        end,
     cast(Pid,F).    
+    
 add_opr(PidOrGroup,OprPid)->
     F=fun(State=#state{oprs=Oprs0})->
         Oprs=
@@ -111,6 +112,7 @@ stop(Pid) ->
 
 %% my_server callbacks
 init([SeatNo]) ->
+    my_timer:send_interval(?POOLTIME,broadcast),
     {ok, #state{id=SeatNo}}.
 
 
@@ -134,13 +136,13 @@ handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{queued_calls=Cal
     sip_media:stop(MediaPid),
     Calls=[Item||Item=#{ua:=UA}<-Calls0,UA=/=From],
     {noreply,State#state{queued_calls=Calls}};
-handle_info(check_orphan, #state{id=ID} = ST) ->
-    case opr_sup:register_oprgroup(ID,self()) of
-        ok-> {noreply, ST};
-        {error,_Pid1}->
-            utility1:log("error! opr seat ~p is orphan,register_oprpid failed, quit!",[{ID,self()}]),
-            {stop,normal,ST}
-    end;
+handle_info(broadcast, #state{queued_calls=QC,oprs=Oprs} = ST) ->
+    case {QC,Oprs} of
+        {[_|_],[_|_]}->
+            [opr:broadcast(Opr,QC)||Opr<-Oprs];
+        _-> void
+    end,
+    {noreply,ST};
 
 
 handle_info(_Msg, #state{id=ID}=ST) ->

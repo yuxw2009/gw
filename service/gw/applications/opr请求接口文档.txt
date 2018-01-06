@@ -7,16 +7,13 @@ url全部为 post http://127.0.0.1:8082/api
    oprstatus: os,                             //. logined,maStringaining(维护),suspending(挂起)
   activedBoard:ab,                            //  激活的窗口
   boards:[{boardstatus:bs,                    // null空,sidea 前塞,sideb 后赛,monitor监听,inserta强插前塞,insertb强插后塞,third三方,splita分割前塞,splitb，分割后塞,
+           boardIndex:BI,
            detail:{a:{phone:p,                // 如果左边没有呼叫 就没有a，右边没有 就没有b；没有坐席，就没有o；
                      talkstatus:us,           // 前塞状态：ring振铃,busy-忙,hook_off通话，
                      starttime:st},           // 通话开始时间
                    b:{phone:p,
                      talkstatus:us,
                      starttime:st}
-           o:{phone:p,
-                     talkstatus:us,
-                     starttime:st}
-                }
                 }]}
 
 二 各消息参数如下：
@@ -95,19 +92,19 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"push_transfe
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"talk_to_opr","seat2Id":"2","seat1Id":"6"}' 
 11 消息。client=>server
   //发送消息
-  req: {msgType:"message",source:n,target:o,msg:m} //source:发送话务员号  target:私聊为接收话务员号， 群内发送填group,发送给所有人填all
+  req: {msgType:"message",source:n,target:o,msg:m,time:t} //source:发送话务员号  target:私聊为接收话务员号， 群内发送填group,发送给所有人填all
     ack: {status:ok} or {status:failed,reason:r}
  11 查询历史消息
   req: {msgType:"queryhistorymsg",operatorId:n,number:n} //operatorId:查询话务员号  Number:查询条数.   问题 查询的是已发送的？不包含接收的？
-  ack: {status:ok,msgType:"queryhistorymsg",msgs:[{msg:m,type:type}]} or {status:failed,reason:r} //type:私聊为接收话务员号， 群内发送填group,发送给所有人填all
+  ack: {status:ok,msgType:"queryhistorymsg",msgs:[msg]} or {status:failed,reason:r} //type:私聊为接收话务员号， 群内发送填group,发送给所有人填all
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","seat2Id":"2","seat1Id":"6","msg":"hello"}'
 
 11 消息推送。server=>client
-    req: {msgType:"message_arrival",seat1Id:n,seat2Id:o,msg:m,operator1Id:o1,operator2Id:o2,time:time}
+    req: {msgType:"message",source:n,target:o,msg:m,time:time}
     ack: {status:ok} or {status:failed,reason:r}
 
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","seat2Id":"2","seat1Id":"6","msg":"hello"}'
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"message","source":"2","target":"6","msg":"hello",time:"1577889990000"}'
 
 12 重要用户订阅 
     req: {msgType:"user_subscribe",seatId:n,phoneNumber:m,operatorId:o}
@@ -140,7 +137,17 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"addSipUser",
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"handShake","seatId":"6","operatorId":"001","boardIndex":"1"}' http://127.0.0.1:8082/api
 
 17 状态变更通知. server=>client
-    req: {msgType:"boardStateChange",seatId:n,changedBoardIndex:c,boardState:定义如一所述}.  boardIndex为当前客户端的激活窗口号
+    req: {msgType:"boardStateChange",seatId:n,activeBoardIndex:c,boardState:定义如下}.  activeBoardIndex为当前客户端的激活窗口号
+
+boardState:   {boardstatus:bs,                    // null空,sidea 前塞,sideb 后赛,monitor监听,inserta强插前塞,insertb强插后塞,third三方,splita分割前塞,splitb，分割后塞,
+           boardIndex:BI,                     //状态变化的窗口
+           detail:{a:{phone:p,                // 如果左边没有呼叫 就没有a，右边没有 就没有b；
+                     talkstatus:us,           // 前塞状态：ring振铃,busy-忙,hook_off通话，
+                     starttime:st},           // 通话开始时间
+                   b:{phone:p,
+                     talkstatus:us,
+                     starttime:st}
+                }
     ack: {status:ok,activeboardIndex:a} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"handShake","seatId":"6","operatorId":"001","boardIndex":"1"}' http://127.0.0.1:8082/api
@@ -150,6 +157,7 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"handShake","
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"calla","seatId":"6","boardIndex":"1","phone":"8"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"callb ","seatId":"6","boardIndex":"1","phone":"9"}' http://127.0.0.1:8082/api
 19 话务员语音报号query_phone
     req: {msgType:"query_phone",boardIndex:b,seatId:S,phoneNumber:p,isCall:true or false}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}

@@ -30,7 +30,8 @@ third_sample()->
    ?assertEqual(third,board:get_status(Board1)),
    ?assertEqual(3,maps:size(mixer:get_sides(Mixer))),
    ok.
-ab_sample()->
+ab_sample()-> ab_sample(1).
+ab_sample(BoardIndex)->
     oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
@@ -38,14 +39,14 @@ ab_sample()->
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
     OprUA=opr:get_ua(OprPid),
-    Board1=opr:get_board(OprPid,1),
-    opr:focus(OprPid,1),    
+    Board1=opr:get_board(OprPid,BoardIndex),
+    opr:focus(OprPid,BoardIndex),    
     %board:focus(Board1),
     Mixer=board:get_mixer(Board1),
 
     %test callb
     board:callb(Board1,"9"),
-    ?assertEqual(sideb,board:get_status({"6",1})),
+    ?assertEqual(sideb,board:get_status({"6",BoardIndex})),
     #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
     ?assert(is_pid(BUA) andalso is_pid(BMedia)),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
@@ -57,13 +58,13 @@ ab_sample()->
     Board1 ! {callee_status,BUA, hook_off},  
     utility1:delay(50),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
-    ?assertEqual(sideb,board:get_status({"6",1})),
+    ?assertEqual(sideb,board:get_status({"6",BoardIndex})),
     [{OSC,ORC},void,{BSC,BRC}]=board:get_count(Board1),
 
     % test calla
     board:calla(Board1,"8"),    
     #{ua:=AUA,mediaPid:=AMedia}=board:get_sidea(Board1),
-    ?assertEqual(sidea,board:get_status({"6",1})),
+    ?assertEqual(sidea,board:get_status({"6",BoardIndex})),
     ?assertEqual(undefined,sip_media:get_media(BMedia)),
     ?assert(not mixer:has_media(Mixer,BMedia)),
     ?assert(mixer:has_media(Mixer,OprMedia)),
@@ -72,15 +73,15 @@ ab_sample()->
     % test ab
     %board:ab(Board1),
    {ok,#{"status":=<<"ok">>,"boardState":=_}}=
-       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"ab","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"ab","seatId"=>?SeatNo,"boardIndex"=>integer_to_list(BoardIndex)}),
 
-    ?assertEqual(ab,board:get_status({"6",1})),
+    ?assertEqual(ab,board:get_status({"6",BoardIndex})),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
     ?assert( mixer:has_media(Mixer,BMedia)),
     ?assert(not mixer:has_media(Mixer,OprMedia)),
     ?assert(mixer:has_media(Mixer,AMedia)),        
     ?assertEqual(Mixer,sip_media:get_media(AMedia)),
-    ?assertEqual(ab,board:get_status({"6",1})),
+    ?assertEqual(ab,board:get_status({"6",BoardIndex})),
     ok.
 
 
@@ -110,8 +111,9 @@ callb_test()->
     ?assert(is_pid(BUA) andalso is_pid(BMedia)),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
     ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(?GroupPhone,rpc:call(node(BUA),voip_ua,cid,[BUA])),
 
-    % test sidea answer
+    % test sideb answer
     Board1 ! {callee_status,BUA, hook_off},  %模拟应答
     utility1:delay(20),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
@@ -127,7 +129,7 @@ callb_test()->
 calla_test()->
     oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
-    {ok,OprPid}=opr_sup:login(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo,self()),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
     Board1=opr:get_board(OprPid,1),
@@ -142,6 +144,7 @@ calla_test()->
     #{ua:=AUA,mediaPid:=AMedia}=board:get_sidea(Board1),
     ?assert(is_pid(AUA) andalso is_pid(AMedia)),
     ?assertEqual(2, maps:size(mixer:get_sides(Mixer))),
+    ?assertEqual(?GroupPhone,rpc:call(node(AUA),voip_ua,cid,[AUA])),
 
 
     ?assertEqual(Mixer,sip_media:get_media(AMedia)),
@@ -163,11 +166,15 @@ calla_test()->
     ?assert( mixer:has_media(Mixer,OprMedia)),
     ?assertEqual(2, maps:size(mixer:get_sides(Mixer))),
         % test sidea answer
-    Board1 ! {callee_status,AUA, hook_off},  %模拟应答
+    utility1:flush(),
+    Board1 ! {callee_status,AUA, hook_off},  %模拟应答    
     utility1:delay(20),
+    {_,Jsonbin}=?REC_MatchMsg({<<"boardStateChange">>,_Jsonbin}),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
     
     board:unfocus(Board1),
+    ?assert(opr_rbt:has_media(AMedia)),
+
     utility1:delay(50),
     ?assertEqual(sidea,board:get_status({"6",1})),    
     ?assertEqual(Mixer,sip_media:get_media(AMedia)),
@@ -214,6 +221,7 @@ callb_and_calla_test()->
     %模拟B应答
     Board1 ! {callee_status,BUA, hook_off},  
     utility1:delay(20),
+    ?assert(opr_rbt:has_media(BMedia)),
     ?assertEqual(undefined,sip_media:get_media(OprMedia)),    
     ?assertEqual(sidea,board:get_status({"6",1})),
 
@@ -403,6 +411,8 @@ ab_test()->
     ab_sample(),       
     % test release sidea
     AUA=board:get_a_ua({?SeatNo,1}),
+    ?assert(not opr_rbt:has_media(board:get_a_media({?SeatNo,1}))),
+    ?assert(not opr_rbt:has_media(board:get_b_media({?SeatNo,1}))),
     AUA ! stop,
     utility1:delay(50),
     #{ua:=undefined,mediaPid:=undefined}=board:get_sidea({?SeatNo,1}),
@@ -538,12 +548,12 @@ third_test()->
    opr_sup:logout("6"),
    ok.
 splita_test()->
-   ab_sample(),
-   Board1=board:get({?SeatNo,1}),
+   ab_sample(6),
+   Board1=board:get({?SeatNo,6}),
 
    %board:splita(Board1),
    {ok,#{"status":=<<"ok">>}}=
-       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"splita","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"splita","seatId"=>?SeatNo,"boardIndex"=>"6"}),
    Mixer=board:get_mixer(Board1),
    ?assertEqual(splita,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
@@ -714,8 +724,8 @@ incoming_pickup_and_sidea_test()->
     {_,_}=sip_media:get_peer(MediaPid),
     ?assertMatch({ok,GroupPid},R),
 
-    {broadcast,Jsonbin}=?REC_MatchMsg({broadcast,_Jsonbin}),
-    #{"calls":=[{obj,CallPlist}],"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+    {_,Jsonbin}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin}),
+    #{"calls":=[{obj,CallPlist}],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin),
     #{"phoneNumber":=GroupPhoneBin,"userId":=UserId,"callTime":=_}=maps:from_list(CallPlist),
     ?assertEqual(<<"test_op">>,GroupPhoneBin),
     ?assertEqual(UserId,list_to_binary(pid_to_list(MockUA))),
@@ -777,8 +787,8 @@ incoming_ua_quit_test()->
     ?assertMatch({ok,GroupPid},R),
     {p2p_wcg_ack,GroupPid,_}=?REC_MatchMsg({p2p_wcg_ack, _, _}),
 
-    {broadcast,Jsonbin}=?REC_MatchMsg({broadcast,_Jsonbin}),
-    #{"calls":=Calls,"msgType":=<<"broadcast">>}=utility1:jsonbin2map(Jsonbin),
+    {_,Jsonbin}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin}),
+    #{"calls":=Calls,"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin),
 
 
     exit(MockUA,kill),
@@ -800,24 +810,24 @@ get_board_status_test()->
     ?assertMatch(#{boardstatus:=ab,                   
               detail:=#{a:=#{phone:="8",               
                      talkstatus:=_,
-                     starttime:=_st},
+                     starttime:=_Ast},
                    b:=#{phone:="9",
                      talkstatus:=_,
-                     starttime:=_st}
+                     starttime:=_Bst}
                 }},board:get_all_status({?SeatNo,1})),
     ok.
 get_opr_status_test()->
     ab_sample(),
-    ?assertMatch(
-      #{oprstatus:=logined,callstatus:=_,activedBoard:=1,boards:=[
-      #{boardstatus:=ab,                   
-              detail:=#{a:=#{phone:="8",               
-                     talkstatus:=_,
-                     starttime:=_st},
-                   b:=#{phone:="9",
-                     talkstatus:=_,
-                     starttime:=_st}
-                }}|_]},opr:get_all_status(?SeatNo)),
+      #{oprstatus:=logined,callstatus:=_,activedBoard:=1,boards:=Boards}=opr:get_all_status(?SeatNo),
+     ?assertMatch( [#{boardstatus:=ab,                   
+                   detail:=#{a:=#{phone:="8",               
+                          talkstatus:=_,
+                          starttime:=_Ast},
+                        b:=#{phone:="9",
+                          talkstatus:=_,
+                          starttime:=_Bst}
+                     }}],
+    [Board||Board=#{boardIndex:="1"}<-Boards]),
     ok.
 oprstatus_to_jso_test()->
     ?assertMatch({obj,_},utility1:map2jso(opr:get_all_status(?SeatNo))),
@@ -884,7 +894,7 @@ opr_login_test()->
     ?assert(is_pid(OprPid) andalso is_process_alive(OprPid)),
     ?assert(whereis(opr_sup)=/=undefined),
     ?assertEqual(OprPid,opr_sup:get_opr_pid(?SeatNo)),
-    ?assertEqual({127,0,0,1},opr:get_client_host(OprPid)),
+    ?assertEqual("127.0.0.1",opr:get_client_host(OprPid)),
     UA=opr:get_ua(OprPid),
     UANode=node(UA),
     ?assert(is_pid(UA) andalso rpc:call(UANode,erlang,is_process_alive,[UA])),
@@ -1039,7 +1049,7 @@ transfer_opr_test()->
     ?assertEqual(0,maps:size(mixer:get_sides(Mixer))),
 
     UserId=(pid_to_list(BUA)),
-    {push_transfer_to_opr,Jsonbin}=?REC_MatchMsg({push_transfer_to_opr,_Jsonbin}),
+    {_,Jsonbin}=?REC_MatchMsg({<<"push_transfer_to_opr">>,_Jsonbin}),
     #{"phone":=<<"9">>,"msgType":=<<"push_transfer_to_opr">>,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserIdBin,"boardIndex":=BoardIndexBin}=utility1:jsonbin2map(Jsonbin),
     ?assertEqual(?SeatNo,binary_to_list(FromSeatId)),
     ?assertEqual(?SeatNo1,binary_to_list(ToSeatId)),
@@ -1050,6 +1060,7 @@ transfer_opr_test()->
     % client rec_transfer_opr
     % {ok,#{"status":=<<"ok">>}}=
     %    utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"accept_transfer_opr","boardIndex"=>"2","userId"=>UserId,"seatId"=>?SeatNo1}),
+    io:format("push_transfer_to_opr 222:~p~n",[{ToSeatId,BIndex}]),
      ?assertEqual(sidea,board:get_status({?SeatNo1,BIndex})),
     ?assert(is_process_alive(BMedia)),
     #{ua:=BUA,mediaPid:=BMedia}=board:get_sidea({?SeatNo1,BIndex}),
@@ -1073,9 +1084,39 @@ board_if_free_test()->
 message_test()->
     opr_sup:logout(?SeatNo),
     opr_sup:logout(?SeatNo1),
-    {ok,OprPid}=opr_sup:login(?SeatNo),
-    MsgMap=#{"msgType"=> <<"message">>,"seat1Id"=>?SeatNo,"seat2Id"=>?SeatNo1,"msg"=>"Hello","time"=>utility1:timestamp_ms()},
+    {ok,OprPid}=opr_sup:login(?SeatNo,self(),?OPRID),
+    TS=utility1:timestamp_ms(),
+    MsgMap=#{"msgType"=> <<"message">>,"source"=>?OPRID,"target"=>?OPRID1,"msg"=>"Hello","time"=>TS},
     {ok,#{"status":=<<"ok">>}}=
        utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
-    [#opr_t{item=#{msg_rcv:=[MsgMap|_]}}]=mnesia:dirty_read(opr_t,?SeatNo1),
+    [#opr_t{item=#{msg_to_send:=[MsgMap1|_]}}]=mnesia:dirty_read(opr_t,?OPRID1),
+    io:format("message_test:~p~n~p~n",[MsgMap,MsgMap1]),
+    ?assertMatch(#{"msgType":=<<"message">>,"source":=?OPRID,"target":=?OPRID1,"msg":="Hello","time":=TS},MsgMap1),
+    {ok,OprPid1}=opr_sup:login(?SeatNo1,self(),?OPRID1),
+    {_,Jsonbin}=?REC_MatchMsg({<<"message">>,_Jsonbin}),
+    #{"source":=SrcOprIdBin,"target":=TgtOprIdBin,"msgType":=<<"message">>,"time":=TSBin,"msg":=<<"Hello">>}=utility1:jsonbin2map(Jsonbin),
+    ?assertEqual(list_to_binary(?OPRID),SrcOprIdBin),
+    ?assertEqual(list_to_binary(?OPRID1),TgtOprIdBin),
+    ?assertEqual(list_to_binary(TS),TSBin),
+    [#opr_t{item=#{msg_history:=[MsgMap1|_],msg_to_send:=[]}}]=mnesia:dirty_read(opr_t,?OPRID1),
+    QueryHis=#{"msgType"=> <<"queryhistorymsg">>,"operatorId"=>?OPRID1,"number"=>"1"},
+    {ok,#{"status":=<<"ok">>,"msgs":=MsgsJsos}}=
+       utility1:json_http("http://127.0.0.1:8082/api",QueryHis),
+    ok.
+talk_to_opr_test()->
+    opr_sup:logout(?SeatNo),
+    opr_sup:logout(?SeatNo1),
+    {ok,OprPid}=opr_sup:login(?SeatNo,self(),?OPRID),
+    {ok,OprPid}=opr_sup:login(?SeatNo,self(),?OPRID1),
+    TS=utility1:timestamp_ms(),
+    MsgMap=#{"msgType"=> <<"talk_to_opr">>,"operator1Id"=>?OPRID,"operator2Id"=>?OPRID1,"time"=>TS},
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
+    {_,Jsonbin}=?REC_MatchMsg({<<"talk_to_opr">>,_Jsonbin}),
+    io:format("talk_to_opr_test:~p~n",[Jsonbin]),
+    #{"operator1Id":=SrcOprIdBin,"operator2Id":=TgtOprIdBin,"msgType":=<<"talk_to_opr">>,"time":=TSBin}=utility1:jsonbin2map(Jsonbin),
+    ?assertEqual(list_to_binary(?OPRID),SrcOprIdBin),
+    ?assertEqual(list_to_binary(?OPRID1),TgtOprIdBin),
+    ?assertEqual(list_to_binary(TS),TSBin),
+
     ok.

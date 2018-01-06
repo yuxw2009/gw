@@ -62,13 +62,22 @@ handle_api(Arg,'POST',_) ->
                      ("boardIndex",V)-> list_to_integer(binary_to_list(V));
                      (_,V) when is_binary(V)-> binary_to_list(V);  
                      (_,V)-> V end, Map0),
-    Ip=utility1:client_ip(Arg),
+    Ip=utility1:make_ip_str(utility1:client_ip(Arg)),
     Map=Map1#{"ip"=>Ip},
     Res0 = handle_map(Map),
+    utility1:log("log/http_api.log","req:~p",[Clidata]),
+    Ack=
     case proplists:get_value(seatId,Res0) of
         undefined-> Res0;
-        SeatId-> [{boardState,utility1:map2jso(opr:get_all_status(SeatId))}|Res0]
-    end.
+        SeatId-> 
+            AllBoardStatus=opr:get_all_status(SeatId),
+            if is_map(AllBoardStatus)->
+                [{boardState,utility1:map2jso(AllBoardStatus)}|Res0];
+            true-> Res0
+            end
+    end,
+    utility1:log("log/http_api.log","ack:~p",[Ack]),
+    Ack.
 
 
 
@@ -140,12 +149,13 @@ handle_map(#{"msgType":= <<"board_switch">>,"seatId":=SeatId,"curBoardIndex":=_C
  handle_map(#{"msgType":= <<"transfer_opr">>,"seatId":=SeatId,"boardIndex":=BI,"targetSeat":=TargetSeat})-> 
      board:transfer_opr({SeatId,BI},TargetSeat),
     [{status,ok},{seatId,SeatId}];
-% handle_map(#{"msgType":= <<"talk_to_opr">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id})-> 
-%     board:inserta({SeatId,BI}),
-%     [{status,ok}];
- handle_map(Message=#{"msgType":= <<"message">>,"seat1Id":=Seat1Id,"seat2Id":=Seat2Id,"msg":=_Msg})-> 
-     Res=opr:message(Seat1Id,{Seat2Id,Message}),
-     [{status,ok},{seatId,Seat1Id}];
+ handle_map(MsgMap=#{"msgType":= <<"talk_to_opr">>,"operator1Id":=OprId1,"operator2Id":=OprId2})-> 
+     opr:talk_to_opr(OprId1,OprId2,MsgMap),
+     [{status,ok}];
+ handle_map(Message=#{"msgType":= <<"message">>,"source":=OprId1,"target":=OprId2,"msg":=_Msg})-> 
+     opr:message(OprId1,{OprId2,Message});
+ handle_map(Message=#{"msgType":= <<"queryhistorymsg">>,"operatorId":=OprId1,"number":=Number})-> 
+     opr:queryhistorymsg(OprId1,list_to_integer(Number));
 % handle_map(#{"msgType":= <<"user_subscribe">>,"seatId":=SeatId,"operatorId":=OperatorId,"phoneNumber":=Phone})-> 
 %     board:inserta({SeatId,BI}),
 %     [{status,ok}];

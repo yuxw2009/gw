@@ -4,6 +4,7 @@
 -include("db_op.hrl").
 -define(POOLTIME, 3000).
 -define(BOARDNUM,14).
+-define(XILian_BOARDNUM,101).
 -define(CientPort,"8082").
 -record(state, {id,
                 phone,
@@ -41,27 +42,69 @@
 % incomingSipWebcall(CallID, SipSDP, PhoneNo, WMGNode, SipPid) ->
 %     {ok, Pid} = my_server:start(?MODULE, [CallID], []),
 %     my_server:call(Pid, {incomingSipWebcall, SipSDP, PhoneNo, WMGNode, SipPid}).
+get_groupphone_by_seatno(SeatNo)->
+    case mnesia:dirty_read(seat_t,SeatNo) of
+        [#seat_t{item=#{group_no:=GroupNo}}]->
+            case mnesia:dirty_read(oprgroup_t,GroupNo) of
+                [#oprgroup_t{item=#{phone:=GroupPhone}}]-> GroupPhone;
+            _-> ""
+            end;
+        _-> ""
+    end.
+do_get_all_status(State=#state{oprstatus=OprStatus,activedBoard=ActiveBoard,boards=Boards,sipstatus=CallStatus})->
+    AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>[board:get_all_status(Board)||Board<-maps:keys(Boards)]},
+    {AllStatus,State}.
 get_all_status(SeatId)->
-    F=fun(State=#state{oprstatus=OprStatus,activedBoard=ActiveBoard,boards=Boards,sipstatus=CallStatus})->
-                AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>[board:get_all_status(Board)||Board<-maps:keys(Boards)]},
-                {AllStatus,State}
+    F=fun(State)->
+        do_get_all_status(State)
        end,
     act(SeatId,F).    
 
 handshake(SeatId,ClientActiveBI)->
     focus(SeatId,ClientActiveBI).
-message(Seat1Id,{Seat2Id,Message})->
-    case opr_sup:get_opr_pid(Seat2Id) of
-        undefined->
-            case mnesia:dirty_read(opr_t,Seat2Id) of
-                []-> {failed, opr_not_exist};
-                [OprItem=#opr_t{item=Item=#{msg_rcv:=Msgs}}]-> 
-                    ?DB_WRITE(OprItem#opr_t{item=Item#{msg_rcv:=[Message|Msgs]}}),
-                    ok
-            end;
-        OprPid2 ->
-            send_message(OprPid2,Message)
+message(OprId1,{OprId2,Message})->
+    Seat1Id=opr_sup:get_seatno_by_oprid(OprId1),
+    if Seat1Id =/=undefined->
+        case mnesia:dirty_read(opr_t,OprId2) of
+            []-> 
+                Opr_t0=#opr_t{item=Item}=#opr_t{oprId=OprId2},
+                ?DB_WRITE(Opr_t0#opr_t{item=Item#{msg_to_send:=[Message]}});
+            [OprItem=#opr_t{item=Item=#{msg_to_send:=Msgs}}]-> 
+                ?DB_WRITE(OprItem#opr_t{item=Item#{msg_to_send:=[Message|Msgs]}})
+        end,
+        case opr_sup:get_oprpid_by_oprid(OprId2) of
+            undefined-> void;
+            OprPid2 ->
+                send_msg_to_send(OprPid2)
+        end,
+        [{status,ok},{seatId,Seat1Id}];
+    true->
+        [{status,failed},{reason,not_logined}]
     end.
+talk_to_opr(OprId1,OprId2,MsgMap)->
+    Seat1Id=opr_sup:get_seatno_by_oprid(OprId1),
+    OprPid2=opr_sup:get_oprpid_by_oprid(OprId2),
+    case {is_list(Seat1Id),is_pid(OprPid2)} of
+    {true,true}->
+        send_message(OprPid2,MsgMap),
+        [{status,ok},{seatId,Seat1Id}];
+    {false,_}->
+        [{status,failed},{reason,operate1_not_logined}];
+    {true,false}->
+        [{status,failed},{reason,operate2_not_logined}]
+    end.
+
+queryhistorymsg(OprId2,Number0)->
+    History=
+    case mnesia:dirty_read(opr_t,OprId2) of
+        []-> [];
+        [OprItem=#opr_t{item=#{msg_history:=His}}]-> His
+    end,
+    Number=min(Number0,length(History)),
+    {MsgMaps,_}=lists:split(Number,History),
+    Msgs=utility1:maps2jsos(MsgMaps),
+    [{status,ok},{msgs,Msgs}].
+
 focus(PidOrSeat,BoardIndex)->
     Boards=get_boards(PidOrSeat),
     if BoardIndex>0 andalso BoardIndex=<length(Boards)->
@@ -96,59 +139,73 @@ get_free_board1([Board|T])->
         true-> Board;
         _->get_free_board1(T)
     end.
-get_board(PidOrSeat,Index)->
-    Boards=get_boards(PidOrSeat),
-    lists:nth(Index,Boards).
 incomingCallPushInfo(#{caller:=Caller,ua:=UA,callTime:=CallTime})->
     #{"userId"=>pid_to_list(UA),"phoneNumber"=>Caller,"callTime"=>CallTime}.
+
+send_to_client(Paras,State=#state{client_host=ClientHost})->
+    %io:format("send_to_client ~p~n",[{ClientHost,Paras}]),
+    MsgType= if is_map(Paras)-> maps:get("msgType",Paras); true-> maps:get("msgType",utility1:jsonbin2map(Paras)) end,
+    if is_pid(ClientHost)->  % for test
+        ClientHost ! {MsgType,if is_map(Paras)->utility1:map2jsonbin(Paras); true-> Paras end},
+        {ok,#{"status"=><<"ok">>}};
+    true->
+        case ClientHost of
+            Ip={_A,_B,_C,_D}->
+                utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+            Ip when is_list(Ip)->
+                utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
+            _-> failed
+        end
+    end.
+
+send_boardStateChange(PidOrSeat)->
+    F=fun(State=#state{id=SeatId,activedBoard=AB})->
+        AllBoardStatus=opr:do_get_all_status(State),
+        Res0=[{msgType,"boardStateChange"},{seatId,SeatId},{boardIndex,AB}],
+        Plist=
+        if is_map(AllBoardStatus)->
+            [{boardState,utility1:map2jso(AllBoardStatus)}|Res0];
+        true-> Res0
+        end,
+        % io:format("send_boardStateChange:~p~n",[Plist]),
+        Paras=rfc4627:encode(utility1:pl2jso_br(Plist)),     
+        send_to_client(Paras,State),
+        {ok,State}
+       end,
+    cast(PidOrSeat,F).    
+
+do_send_msg_to_send(State=#state{oprId=OprId})->
+    case mnesia:dirty_read(opr_t,OprId) of
+    [Opr_t=#opr_t{item=Item=#{msg_to_send:=MsgToSends0,msg_history:=History0}}]->
+        MsgToSends=lists:reverse(MsgToSends0),
+        Res0=[{send_to_client(utility1:map2jsonbin(MsgMap),State),MsgMap}||MsgMap<-MsgToSends],
+        Res1=lists:reverse(Res0),
+        MsgsSended=[MsgMap_||{{ok,#{"status":=<<"ok">>}},MsgMap_}<-Res1],
+        ?DB_WRITE(Opr_t#opr_t{item=Item#{msg_to_send:=MsgToSends0--MsgsSended,msg_history:=MsgsSended++History0}});
+    _-> void
+    end,
+    {ok,State}.
+send_msg_to_send(PidOrSeat)->
+    cast(PidOrSeat,fun do_send_msg_to_send/1).    
+
 send_message(PidOrSeat,Paras)->
-    F=fun(State=#state{client_host=ClientHost})->
-            if is_pid(ClientHost)->  % for test
-                ClientHost ! Paras;
-            true->
-                case ClientHost of
-                    Ip={_A,_B,_C,_D}->
-                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-                    Ip when is_list(Ip)->
-                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-                    _-> void
-                end
-            end,
+    F=fun(State)->
+            send_to_client(Paras,State),
             {ok,State}
        end,
     cast(PidOrSeat,F).    
 broadcast(PidOrSeat,QCs)->
     CallsJson=utility1:maps2jsos([incomingCallPushInfo(QC)||QC<-QCs]),
-    Paras=utility1:map2jsonbin(#{msgType=><<"broadcast">>,calls=>CallsJson}),
-    F=fun(State=#state{client_host=ClientHost})->
-            if is_pid(ClientHost)->  % for test
-                ClientHost ! {broadcast,Paras};
-            true->
-                case ClientHost of
-                    Ip={_A,_B,_C,_D}->
-                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-                    Ip when is_list(Ip)->
-                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-                    _-> void
-                end
-            end,
-            {ok,State}
+    Paras=utility1:map2jsonbin(#{msgType=><<"call_broadcast">>,calls=>CallsJson}),
+    F=fun(State)->
+          send_to_client(Paras,State),
+          {ok,State}
        end,
     cast(PidOrSeat,F).    
 send_transfer_to_client(DestOprPid,Side=#{"phone":=Phone,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserId,"boardIndex":=BoardIndex})->
     Paras=utility1:map2jsonbin(#{msgType=><<"push_transfer_to_opr">>,"phone"=>Phone,"FromSeatId"=>FromSeatId,"ToSeatId"=>ToSeatId,"userId"=>UserId,"boardIndex"=>BoardIndex}),
-    F=fun(State=#state{client_host=ClientHost,transfer_sides=TransferSides})->
-            if is_pid(ClientHost)->  % for test
-                ClientHost ! {push_transfer_to_opr,Paras};
-            true->
-                case ClientHost of
-                    Ip={_A,_B,_C,_D}->
-                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-                    Ip when is_list(Ip)->
-                        utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-                    _-> void
-                end
-            end,
+    F=fun(State=#state{transfer_sides=TransferSides})->
+            send_to_client(Paras,State),
             {ok,State#state{transfer_sides=TransferSides#{UserId=>Side}}}
        end,
     cast(DestOprPid,F).   
@@ -207,7 +264,15 @@ get_board_no(Pid,BoardPid)->
     act(Pid,F).
 get_boards(Pid)->
     F=fun(State=#state{boards=Boards})->
-            {maps:keys(Boards),State}
+            Boards1=lists:sort(fun({_,#{no:=I}},{_,#{no:=J}})-> I=<J end,maps:to_list(Boards)),
+            {[BP||{BP,_}<-Boards1],State}
+       end,
+    act(Pid,F).
+get_board(Pid,BoardIndex)->
+    F=fun(State=#state{boards=Boards})->
+            Plist=maps:to_list(Boards),
+            [BoardPid]=[BPid||{BPid,#{no:=Bi}}<-Plist,BoardIndex==Bi],
+            {BoardPid,State}
        end,
     act(Pid,F).
 get_client_host(Pid)->
@@ -233,8 +298,8 @@ set_client_host(Pid,Host)->
 %         make_sip_call(OprPhone, UANode, ToSipSDP),
 %         ok
 %     end.
-start(Paras={_SeatNo,_ClientIp}) ->
-    {ok, Pid} = my_server:start(?MODULE, [Paras], []),
+start(Paras) ->
+    {ok, Pid} = my_server:start(?MODULE, Paras, []),
     my_server:call(Pid, {make_call}),
     {ok,Pid}.
 
@@ -249,21 +314,25 @@ rtp_stat(Pid) ->
     my_server:call(Pid, rtp_stat).
 
 %% my_server callbacks
-init([{SeatNo,ClientIp}]) ->
+init(Paras) ->
+    {SeatNo,ClientIp,OprId}={proplists:get_value(seat,Paras),proplists:get_value(client_host,Paras),proplists:get_value(oprId,Paras)},
     process_flag(trap_exit, true),
     WmgNode=node_conf:get_wmg_node(),
     UANode = node_conf:get_voice_node(),
     [#seat_t{item=#{user:=OprPhone}}]=opr_sup:get_by_seatno(SeatNo),
     OprPid=self(),
     BoardPidF=fun([SeatNo_,BoardId,OprPid_])->
-                 {ok,Pid}=board:start([SeatNo_,SeatNo_++"_"++integer_to_list(BoardId),OprPid_]),
+                 {ok,Pid}=board:start([SeatNo_,integer_to_list(BoardId),OprPid_]),
                  erlang:monitor(process,Pid),
                  {Pid,#{no=>BoardId}}
             end,
     BoardPairs=[BoardPidF([SeatNo,BoardId,OprPid])||BoardId<-lists:seq(1,?BOARDNUM)],
     Boards=maps:from_list(BoardPairs),
     {ok,TR} = my_timer:send_interval(?POOLTIME,check_orphan),
-    {ok, #state{id=SeatNo,client_host=ClientIp, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards,tmr=TR}}.
+    State=#state{id=SeatNo,client_host=ClientIp,oprId=OprId, sipstatus=init,phone=OprPhone,wmg_node=WmgNode,ua_node=UANode,boards=Boards,tmr=TR},
+    % io:format("opr:init paras:~p~n",[Paras]),
+    do_send_msg_to_send(State),
+    {ok, State}.
 
 handle_call(get_status, _From, #state{sipstatus=Status}=ST) ->
     {reply, Status, ST#state{web_hb=given}};
@@ -289,6 +358,10 @@ handle_cast({act,Act}, ST) ->
 handle_cast(stop, #state{tmr=Tmr}=ST) ->
     my_timer:cancel(Tmr),
     {stop, normal, call_terminated(ST)}.
+
+handle_info({act,Act}, ST) ->
+    {_,NST}=Act(ST),
+    {noreply,NST};    
 
 handle_info(check_orphan, #state{id=ID, web_hb=HB} = ST) ->
     case opr_sup:register_oprpid(ID,self()) of
@@ -387,6 +460,7 @@ get_rtp_stat(ID, WmgNode) ->
 act(Seat,Act) when  is_list(Seat) ->    act(opr_sup:get_opr_pid(Seat),Act);
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 cast(Seat,Act) when  is_list(Seat) ->    cast(opr_sup:get_opr_pid(Seat),Act);
+%cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
 cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
 
 make_call(#state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST)->
@@ -399,7 +473,8 @@ make_call(#state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST)->
 make_call(M=#{id:=ID,phone:=PhoneNo})->
     case sip_media:start(ID, self()) of
         {ok, MediaPid, ToSipSDP} ->
-            CallInfo = make_info(PhoneNo),
+            GroupPhone=get_groupphone_by_seatno(ID),
+            CallInfo = make_info(PhoneNo,GroupPhone),
             UANode=maps:get(ua_node,M,node_conf:get_voice_node()),
             UA = rpc:call(UANode,voip_ua, start, [self(), PhoneNo, CallInfo]),
             UARef = erlang:monitor(process, UA),
@@ -416,11 +491,12 @@ make_call(M=#{id:=ID,phone:=PhoneNo})->
 %     rpc:call(UANode, voip_ua, invite, [UA, ToSipSDP]),
 %     {ok, UA}.
 
-make_info(PhNo) ->
+make_info(PhNo) -> make_info(PhNo,"0085268895100").
+make_info(PhNo,Caller) ->
 [{phone,PhNo},
  {uuid,{"1",86}},
  {audit_info,{obj,[{"uuid",86},
                    {"company",<<231,136,177,232,191,133,232,190,190,239,188,136,230,183,177,229,156,179,239,188,137,231,167,145,230,138,128,230,156,137,233,153,144,229,133,172,229,143,184,47,230,150,176,228,184,154,229,138,161,229,188,128,229,143,145,233,131,168>>},
                    {"name",<<233,146,177,230,178,155>>},
                    {"account",<<"0131000019">>},{"orgid",1}]}},
- {cid,"0085268895100"}].
+ {cid,Caller}].

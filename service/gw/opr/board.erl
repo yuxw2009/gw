@@ -30,7 +30,7 @@
  %                }]]    boardstatus:
 
 -define(DEFAULTSIDE,#{id=>"",status=>null,ua=>undefined,ua_ref=>undefined,phone=>"",
-         mediaPid=>undefined,media_ref=>undefined,starttime=>erlang:localtime(),lport=>undefined,rip=>"",rport=>undefined}).
+         mediaPid=>undefined,media_ref=>undefined,starttime=>"0",lport=>undefined,rip=>"",rport=>undefined}).
 -record(state, {id,
                 seat,
                 owner,
@@ -42,12 +42,14 @@
                 alive_tref,
                 alive_count=0                }).
 
+do_get_all_status(State=#state{id=Id,status=BoardStatus,sidea=SideA=#{status:=AStatus,phone:=APhone,starttime:=AST},sideb=#{status:=BStatus,starttime:=BST,phone:=BPhone}})->
+    AllStatus=#{boardstatus=>BoardStatus,boardIndex=>Id,detail=>#{a=>#{phone=>APhone,talkstatus=>AStatus,starttime=>AST},
+                                                   b=>#{phone=>BPhone,talkstatus=>BStatus,starttime=>BST}
+                                                   }},
+    {AllStatus,State}.
 get_all_status(PidOrSeatBoardTuple)->
-    F=fun(State=#state{seat=SeatNo,status=BoardStatus,sidea=SideA=#{status:=AStatus,phone:=APhone,starttime:=AStartTime},sideb=SideB=#{status:=BStatus,phone:=BPhone,starttime:=BStartTime}})->
-            AllStatus=#{boardstatus=>BoardStatus,detail=>#{a=>#{phone=>APhone,talkstatus=>AStatus,starttime=>utility1:d2s(AStartTime)},
-                                                           b=>#{phone=>BPhone,talkstatus=>BStatus,starttime=>utility1:d2s(BStartTime)}
-                                                           }},
-            {AllStatus,State}
+    F=fun(State)->
+        do_get_all_status(State)
        end,
     act(PidOrSeatBoardTuple,F).     
 
@@ -59,11 +61,11 @@ do_pickup_call(State=#state{seat=SeatNo,sidea=SideA=#{status:=null}})->
             UARef = erlang:monitor(process, UA),
             MRef=erlang:monitor(process, MediaPid),
             CallInfoMap=opr:incomingCallPushInfo(Call),
-            {{ok,CallInfoMap},State#state{sidea=SideA#{status:=tpring,ua:=UA,ua_ref:=UARef,
-                   mediaPid:=MediaPid,media_ref:=MRef}}};
+            {{ok,CallInfoMap},do_focus(State#state{sidea=SideA#{phone:=Phone,status:=tpring,ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef}})};
         undefined->
             {{failed,no_call},State}
     end.
+
 
 pickup_call(PidOrSeatBoardTuple)->
     act(PidOrSeatBoardTuple,fun do_pickup_call/1).     
@@ -131,7 +133,7 @@ handle_cast(_Msg, State) ->
 handle_info({act,Act}, State) ->
     State1 = Act(State),
     {noreply,State1};
-handle_info({callee_status,From, Status},State=#state{sideb=SideB=#{ua:=From}}) ->
+handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,sideb=SideB=#{ua:=From}}) ->
     State1=State#state{sideb=SideB#{status:=Status}},
     State2=
     if 
@@ -139,12 +141,14 @@ handle_info({callee_status,From, Status},State=#state{sideb=SideB=#{ua:=From}}) 
             what_to_do,
             State1;%my_timer:send_after(?TALKTIMEOUT,{timeover,From});
         Status == hook_off -> 
-            sideb_hookoff(State1);
+            State1_=sideb_hookoff(State1),
+            opr:send_boardStateChange(Owner),
+            State1_;
         true -> 
             State1
     end,
     {noreply,State2};
-handle_info({callee_status,From, Status},State=#state{sidea=SideA=#{ua:=From}}) ->
+handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,sidea=SideA=#{ua:=From}}) ->
     State1=State#state{sidea=SideA#{status:=Status}},
     State2=
     if 
@@ -152,7 +156,9 @@ handle_info({callee_status,From, Status},State=#state{sidea=SideA=#{ua:=From}}) 
             what_to_do,
             State1;%my_timer:send_after(?TALKTIMEOUT,{timeover,From});
         Status == hook_off -> 
-            sidea_hookoff(State1);
+            State2_=sidea_hookoff(State1),
+            opr:send_boardStateChange(Owner),
+            State2_;
         true -> 
             State1
     end,
@@ -297,9 +303,9 @@ release_side(#{ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef},State=#s
     true-> void
     end.
 
-calla(Phone,St=#state{owner=Owner,sidea=SideA,focused=Focused,sideb=SideB,mixer=Mixer})->
+calla(Phone,St=#state{owner=Owner,seat=SeatNo,sidea=SideA,focused=Focused,sideb=SideB,mixer=Mixer})->
     NSide=SideA#{phone:=Phone,status:=calling},
-    {ok,Res}=opr:make_call(NSide),
+    {ok,Res}=opr:make_call(NSide#{id:=SeatNo}),
     #{mediaPid:=Media}=NSide1=maps:merge(NSide,Res),
     OprMedia=opr:get_mediaPid(Owner),
     mixer:add(Mixer,Media),
@@ -311,6 +317,7 @@ calla(Phone,St=#state{owner=Owner,sidea=SideA,focused=Focused,sideb=SideB,mixer=
     case maps:get(mediaPid,SideB,undefined) of
         BMedia when is_pid(BMedia)->    
             mixer:sub(Mixer,BMedia),
+            opr_rbt:add(BMedia),
             sip_media:unset_peer(BMedia,Mixer);
         _-> void
     end,
@@ -320,9 +327,9 @@ calla(BPid,Phone)->
             {ok,calla(Phone,State)}
        end,
     act(BPid,F).
-callb(Phone,St=#state{owner=Owner,sidea=SideA,focused=Focused,sideb=SideB,mixer=Mixer})->
+callb(Phone,St=#state{owner=Owner,seat=SeatNo,sidea=SideA,focused=Focused,sideb=SideB,mixer=Mixer})->
     NSide=SideB#{phone:=Phone,status:=calling},
-    {ok,Res}=opr:make_call(NSide),
+    {ok,Res}=opr:make_call(NSide#{id:=SeatNo}),
     #{mediaPid:=Media}=NSide1=maps:merge(NSide,Res),
     OprMedia=opr:get_mediaPid(Owner),
     mixer:add(Mixer,Media),
@@ -334,6 +341,7 @@ callb(Phone,St=#state{owner=Owner,sidea=SideA,focused=Focused,sideb=SideB,mixer=
     case maps:get(mediaPid,SideA,undefined) of
         AMedia when is_pid(AMedia)->    
             mixer:sub(Mixer,AMedia),
+            opr_rbt:add(AMedia),
             sip_media:unset_peer(AMedia,Mixer);        
         _-> void
     end,
@@ -346,8 +354,13 @@ callb(BPid,Phone)->
 do_sideb(State=#state{owner=Owner,sidea=SideA=#{mediaPid:=AMedia},focused=Focused,sideb=SideB=#{mediaPid:=BMedia,status:=BStatus},mixer=Mixer})->
     OprMedia=opr:get_mediaPid(Owner),
     if is_pid(BMedia)->
-        mixer:sub(Mixer,AMedia),
+        if is_pid(AMedia)-> 
+            mixer:sub(Mixer,AMedia),
+            opr_rbt:add(AMedia); 
+        true-> void 
+        end,
         sip_media:unset_peer(AMedia,Mixer),
+        opr_rbt:sub(BMedia),
         mixer:add(Mixer,BMedia),
         sip_media:set_peer(BMedia,Mixer),
         case {Focused,BStatus} of
@@ -368,11 +381,17 @@ sideb(BPid)->
 do_sidea(State=#state{owner=Owner,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus,ua:=AUA},focused=Focused,sideb=SideB=#{mediaPid:=BMedia,status:=BStatus},mixer=Mixer})->
     OprMedia=opr:get_mediaPid(Owner),
     if is_pid(AMedia)->
-        mixer:sub(Mixer,BMedia),
+        if is_pid(BMedia)-> 
+            mixer:sub(Mixer,BMedia),
+            opr_rbt:add(BMedia); 
+        true-> void 
+        end,
         sip_media:unset_peer(BMedia,Mixer),
+        opr_rbt:sub(AMedia),
         mixer:add(Mixer,AMedia),
         sip_media:set_peer(AMedia,Mixer),
         State1=State#state{status=sidea},
+                io:format("do_sidea 222:~p~n",[{Focused,AStatus}]),
         State2=
         case {Focused,AStatus} of
         {true,hook_off}-> 
@@ -435,11 +454,12 @@ can_cross_in(BPid)->
     act(BPid,F).        
 cross_in(BPid,Side=#{ua:=UA,mediaPid:=MediaPid})->
     focus(BPid),
-    F=fun(State=#state{sidea=SideA=#{ua:=AUA},sideb=SideB=#{ua:=BUA}})->
+    F=fun(State=#state{id=Id,seat=SeatNo,sidea=SideA=#{ua:=AUA},sideb=SideB=#{ua:=BUA}})->
         if AUA==undefined->
                 UARef = erlang:monitor(process, UA),
                 MRef=erlang:monitor(process, MediaPid),
                 %timer:apply_after(0,?MODULE,sidea,[BPid]),
+                io:format("cross_in 222:~p~n",[{SeatNo,Id}]),
                 do_sidea(State#state{sidea=Side#{ua:=UA,mediaPid:=MediaPid,ua_ref:=UARef,media_ref:=MRef}});
            BUA==undefined->
                 UARef = erlang:monitor(process, UA),
@@ -471,9 +491,17 @@ do_focus(State=#state{owner=Owner,mixer=Mixer,status=BoardStatus,sidea=#{status:
     OprMedia=opr:get_mediaPid(Owner),
     sip_media:set_peer(OprMedia,undefined),
     if ?OprSpeak2A_Status(BoardStatus)-> 
-            case mixer:has_media(Mixer,AMedia) of true-> void; _-> mixer:add(Mixer,AMedia) end;
+            case mixer:has_media(Mixer,AMedia) of true-> void; 
+                _-> 
+                    opr_rbt:sub(AMedia),
+                    mixer:add(Mixer,AMedia) 
+            end;
        ?OprSpeak2B_Status(BoardStatus)->
-            case mixer:has_media(Mixer,BMedia) of true-> void; _-> mixer:add(Mixer,BMedia) end;
+            case mixer:has_media(Mixer,BMedia) of true-> void; 
+                _-> 
+                    opr_rbt:sub(BMedia),
+                    mixer:add(Mixer,BMedia) 
+            end;
        true-> void
     end,
     case {BoardStatus, AStatus,BStatus} of
@@ -500,10 +528,17 @@ focus(Pid)->
        end,
     act(Pid,F).     
 unfocus(Pid)->
-    F=fun(State=#state{owner=Owner,mixer=Mixer,sidea=#{},sideb=#{}})->
+    F=fun(State=#state{status=BoardStatus,owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
             OprMedia=opr:get_mediaPid(Owner),
             sip_media:unset_peer(OprMedia,Mixer),
             mixer:sub(Mixer,OprMedia),
+            if 
+            AStatus==hook_off andalso (BoardStatus==sidea orelse BoardStatus==splita)->
+                opr_rbt:add(AMedia);
+            BStatus==hook_off andalso (BoardStatus==sideb orelse BoardStatus==splitb) ->
+                opr_rbt:add(BMedia);
+            true-> void
+            end,
             {ok,State#state{focused=false}}
        end,
     act(Pid,F). 
@@ -649,22 +684,22 @@ splitb(Pid)->
             end
        end,
     act(Pid,F). 
-sidea_hookoff(State1=#state{focused=Focused,mixer=Mixer,owner=Owner,status=Status,sidea=#{}}) ->
+sidea_hookoff(State1=#state{focused=Focused,mixer=Mixer,owner=Owner,status=Status,sidea=SideA=#{}}) ->
     case {Focused,Status} of
         {true,_} when ?OprSpeak2A_Status(Status)->
             OprMedia=opr:get_mediaPid(Owner),
             sip_media:set_peer(OprMedia,Mixer);
         _-> void
     end,
-    State1.
-sideb_hookoff(State1=#state{focused=Focused,mixer=Mixer,owner=Owner,status=Status,sideb=#{}})->
+    State1#state{sidea=SideA#{starttime:=utility1:timestamp_ms()}}.
+sideb_hookoff(State1=#state{focused=Focused,mixer=Mixer,owner=Owner,status=Status,sideb=SideB=#{}})->
     case {Focused,Status} of
         {true,_} when ?OprSpeak2B_Status(Status)->
             OprMedia=opr:get_mediaPid(Owner),
             sip_media:set_peer(OprMedia,Mixer);
         _-> void
     end,
-    State1.
+    State1#state{sideb=SideB#{starttime:=utility1:timestamp_ms()}}.
 cross_board(FromBoard,TpBoard)->
     case can_cross_in(TpBoard) of
         true->
