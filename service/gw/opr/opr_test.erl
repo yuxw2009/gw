@@ -5,7 +5,9 @@
 -include("db_op.hrl").
 -include("opr.hrl").
 -define(GroupNo,"912").
+-define(GroupNo1,"916").
 -define(GroupPhone,"52300112").
+-define(GroupPhone1,"52300118").
 -define(SeatPhone,"52300001").
 -define(OPRID,"001").
 -define(SeatNo,"6").
@@ -15,6 +17,10 @@
 -define(SeatNo1,"8").
 -define(User1,"888").
 -define(Pwd1, "888").
+-define(SeatNo2,"88").
+-define(User2,"888").
+-define(Pwd2, "888").
+-define(OPRID2,"003").
 
 %  sample
 third_sample()->
@@ -98,15 +104,15 @@ callb_test()->
     oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
     opr_sup:logout(?SeatNo),
-    {ok,OprPid}=opr_sup:login(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo,self()),
     board:release({?SeatNo,1}),
     OprMedia=opr:get_mediaPid(OprPid),
     Board1=opr:get_board(OprPid,1),
-    board:focus(Board1),    
+    opr:focus(?SeatNo,1),    
     Mixer=board:get_mixer(Board1),
     %test callb
     board:callb(Board1,"8"),
-    ?assertEqual(sideb,board:get_status({"6",1})),
+    ?assertEqual(sideb,board:get_status({?SeatNo,1})),
     #{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
     ?assert(is_pid(BUA) andalso is_pid(BMedia)),
     ?assertEqual(Mixer,sip_media:get_media(BMedia)),
@@ -114,9 +120,13 @@ callb_test()->
     ?assertEqual(?GroupPhone,rpc:call(node(BUA),voip_ua,cid,[BUA])),
 
     % test sideb answer
+    utility1:flush(),
     Board1 ! {callee_status,BUA, hook_off},  %模拟应答
     utility1:delay(20),
-    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),    
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),   
+    {_,Jsonbin,_}=?REC_MatchMsg({<<"boardStateChange">>,_Jsonbin,_}),
+    Map=#{"boardState":=_BoardState_}=utility1:jsonbin2map(Jsonbin),
+    ?assertEqual("sideb", utility1:get_value( hd(utility1:get_value(maps:get("boardState",Map),"boards")),"boardstatus")),
    
     % test release sidea
     BUA ! stop,
@@ -124,6 +134,8 @@ callb_test()->
     #{ua:=undefined,mediaPid:=undefined}=board:get_sideb(Board1),
     ?assertEqual(null,board:get_status({"6",1})),   
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),  
+    {_,Jsonbin1,_}=?REC_MatchMsg({<<"boardStateChange">>,_,_}),
+    ?assertEqual("null", utility1:get_value( hd(utility1:get_value(maps:get("boardState",utility1:jsonbin2map(Jsonbin1)),"boards")),"boardstatus")),
     opr_sup:logout(?SeatNo),
          ok.
 calla_test()->
@@ -169,7 +181,7 @@ calla_test()->
     utility1:flush(),
     Board1 ! {callee_status,AUA, hook_off},  %模拟应答    
     utility1:delay(20),
-    {_,Jsonbin}=?REC_MatchMsg({<<"boardStateChange">>,_Jsonbin}),
+    {_,Jsonbin,_}=?REC_MatchMsg({<<"boardStateChange">>,_Jsonbin,_}),
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
     
     board:unfocus(Board1),
@@ -724,7 +736,7 @@ incoming_pickup_and_sidea_test()->
     {_,_}=sip_media:get_peer(MediaPid),
     ?assertMatch({ok,GroupPid},R),
 
-    {_,Jsonbin}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin}),
+    {_,Jsonbin,_From}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin,_}),
     #{"calls":=[{obj,CallPlist}],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin),
     #{"phoneNumber":=GroupPhoneBin,"userId":=UserId,"callTime":=_}=maps:from_list(CallPlist),
     ?assertEqual(<<"test_op">>,GroupPhoneBin),
@@ -787,7 +799,7 @@ incoming_ua_quit_test()->
     ?assertMatch({ok,GroupPid},R),
     {p2p_wcg_ack,GroupPid,_}=?REC_MatchMsg({p2p_wcg_ack, _, _}),
 
-    {_,Jsonbin}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin}),
+    {_,Jsonbin,_}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin,_}),
     #{"calls":=Calls,"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin),
 
 
@@ -804,6 +816,14 @@ add_oprgroup_test()->
     GroupPid=oprgroup_sup:get_group_pid(?GroupNo),
     GroupPid=oprgroup:get_group_pid_by_phone(?GroupPhone),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    exit(whereis(oprgroup_sup),kill),
+    utility1:delay(30),
+    oprgroup_sup:start(),
+    [#oprgroup_t{key=?GroupNo}|_]=oprgroup:get_by_phone(?GroupPhone),
+    [#oprgroup_t{key=_GroupNo,item=#{phone:=?GroupPhone}}]=oprgroup_sup:get_oprgroup(?GroupNo),
+    GroupPid1=oprgroup_sup:get_group_pid(?GroupNo),
+    GroupPid1=oprgroup:get_group_pid_by_phone(?GroupPhone),
+    ?assert(is_pid(GroupPid1) andalso is_process_alive(GroupPid1)),
     ok.
 get_board_status_test()->
     ab_sample(),
@@ -858,7 +878,7 @@ a=rtpmap:101 telephone-event/8000
 a=ptime:30".
 
 fprof_()->
-    fprof:apply(?MODULE, transfer_opr_test, []),
+    fprof:apply(?MODULE, calla_http_test, []),
     fprof:profile(),
     fprof:analyse({dest, "bar.analysis"}),
     file:consult("bar.analysis").
@@ -1049,7 +1069,9 @@ transfer_opr_test()->
     ?assertEqual(0,maps:size(mixer:get_sides(Mixer))),
 
     UserId=(pid_to_list(BUA)),
-    {_,Jsonbin}=?REC_MatchMsg({<<"push_transfer_to_opr">>,_Jsonbin}),
+    io:format("push_transfer_to_opr 111:~n",[]),
+    {_,Jsonbin,_}=?REC_MatchMsg({<<"push_transfer_to_opr">>,_Jsonbin,_}),
+    io:format("push_transfer_to_opr 222:~n",[]),
     #{"phone":=<<"9">>,"msgType":=<<"push_transfer_to_opr">>,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserIdBin,"boardIndex":=BoardIndexBin}=utility1:jsonbin2map(Jsonbin),
     ?assertEqual(?SeatNo,binary_to_list(FromSeatId)),
     ?assertEqual(?SeatNo1,binary_to_list(ToSeatId)),
@@ -1060,7 +1082,7 @@ transfer_opr_test()->
     % client rec_transfer_opr
     % {ok,#{"status":=<<"ok">>}}=
     %    utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"accept_transfer_opr","boardIndex"=>"2","userId"=>UserId,"seatId"=>?SeatNo1}),
-    io:format("push_transfer_to_opr 222:~p~n",[{ToSeatId,BIndex}]),
+    io:format("push_transfer_to_opr 333:~p~n",[{ToSeatId,BIndex,board:get({OprPid1,BIndex}),board:get_status({OprPid1,BIndex})}]),
      ?assertEqual(sidea,board:get_status({?SeatNo1,BIndex})),
     ?assert(is_process_alive(BMedia)),
     #{ua:=BUA,mediaPid:=BMedia}=board:get_sidea({?SeatNo1,BIndex}),
@@ -1086,37 +1108,121 @@ message_test()->
     opr_sup:logout(?SeatNo1),
     {ok,OprPid}=opr_sup:login(?SeatNo,self(),?OPRID),
     TS=utility1:timestamp_ms(),
+
+    % message to single opr http req
     MsgMap=#{"msgType"=> <<"message">>,"source"=>?OPRID,"target"=>?OPRID1,"msg"=>"Hello","time"=>TS},
     {ok,#{"status":=<<"ok">>}}=
        utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
+
     [#opr_t{item=#{msg_to_send:=[MsgMap1|_]}}]=mnesia:dirty_read(opr_t,?OPRID1),
     io:format("message_test:~p~n~p~n",[MsgMap,MsgMap1]),
     ?assertMatch(#{"msgType":=<<"message">>,"source":=?OPRID,"target":=?OPRID1,"msg":="Hello","time":=TS},MsgMap1),
     {ok,OprPid1}=opr_sup:login(?SeatNo1,self(),?OPRID1),
-    {_,Jsonbin}=?REC_MatchMsg({<<"message">>,_Jsonbin}),
+    {_,Jsonbin,From}=?REC_MatchMsg({<<"message">>,_Jsonbin,_}),
     #{"source":=SrcOprIdBin,"target":=TgtOprIdBin,"msgType":=<<"message">>,"time":=TSBin,"msg":=<<"Hello">>}=utility1:jsonbin2map(Jsonbin),
     ?assertEqual(list_to_binary(?OPRID),SrcOprIdBin),
     ?assertEqual(list_to_binary(?OPRID1),TgtOprIdBin),
     ?assertEqual(list_to_binary(TS),TSBin),
     [#opr_t{item=#{msg_history:=[MsgMap1|_],msg_to_send:=[]}}]=mnesia:dirty_read(opr_t,?OPRID1),
     QueryHis=#{"msgType"=> <<"queryhistorymsg">>,"operatorId"=>?OPRID1,"number"=>"1"},
-    {ok,#{"status":=<<"ok">>,"msgs":=MsgsJsos}}=
-       utility1:json_http("http://127.0.0.1:8082/api",QueryHis),
+    {ok,#{"status":=<<"ok">>,"msgs":=MsgsJsos}}=utility1:json_http("http://127.0.0.1:8082/api",QueryHis),
     ok.
+group_all_message_test()->
+    TS=utility1:timestamp_ms(),
+    % message to group http req
+    oprgroup_sup:add_oprgroup(?GroupNo1,?GroupPhone1),
+    opr_sup:add_opr(?GroupNo,?SeatNo1,?User1,?Pwd1),
+    opr_sup:add_opr(?GroupNo1,?SeatNo2,?User2,?Pwd2),
+    opr_sup:login(?SeatNo,self(),?OPRID),
+    % opr_sup:login(?SeatNo1,self(),?OPRID1),
+    % opr_sup:login(?SeatNo2,self(),?OPRID2),
+    MsgGroupMap=#{"msgType"=> <<"message">>,"source"=>?OPRID,"target"=><<"group">>,"msg"=>"Hello_group","time"=>TS},
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",MsgGroupMap),
+
+    {ok,OprPid1}=opr_sup:login(?SeatNo1,self(),?OPRID1),
+    {ok,#{"status":=<<"ok">>}}=       utility1:json_http("http://127.0.0.1:8082/api",MsgGroupMap),
+    {_,Jsonbin1,From}=?REC_MatchMsg({<<"message">>,_,_}),
+    #{"source":=SrcOprIdBin,"target":=TgtOprIdBin,"msgType":=<<"message">>,"time":=TSBin,"msg":=<<"Hello_group">>}=utility1:jsonbin2map(Jsonbin1),
+    ?assertEqual(list_to_binary(?OPRID),SrcOprIdBin),
+    ?assertEqual(<<"group">>,TgtOprIdBin),
+    ?assertEqual(list_to_binary(TS),TSBin),
+    [#opr_t{item=#{msg_history:=[MsgMap1|_],msg_to_send:=[]}}]=mnesia:dirty_read(opr_t,?OPRID1),
+
+    % message to all http req
+    opr_sup:logout(?SeatNo1),
+    utility1:flush(),
+    {ok,_OprPid2}=opr_sup:login(?SeatNo2,self(),?OPRID2),
+    MsgAllMap=#{"msgType"=> <<"message">>,"source"=>?OPRID,"target"=><<"all">>,"msg"=>"Hello_all","time"=>TS},
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",MsgAllMap),
+
+    {_,Jsonbin2,From2}=?REC_MatchMsg({<<"message">>,_,_}),
+    #{"source":=SrcOprIdBin2,"target":=TgtOprIdBin2,"msgType":=<<"message">>,"time":=TSBin,"msg":=<<"Hello_all">>}=utility1:jsonbin2map(Jsonbin2),
+    ?assertEqual(list_to_binary(?OPRID),SrcOprIdBin2),
+    ?assertEqual(<<"all">>,TgtOprIdBin2),
+    ?assertEqual(list_to_binary(TS),TSBin),
+    [#opr_t{item=#{msg_history:=[_MsgAllMap1=#{"msg":="Hello_all"}|_],msg_to_send:=[]}}]=mnesia:dirty_read(opr_t,?OPRID2),
+    ok.
+
 talk_to_opr_test()->
     opr_sup:logout(?SeatNo),
     opr_sup:logout(?SeatNo1),
     {ok,OprPid}=opr_sup:login(?SeatNo,self(),?OPRID),
-    {ok,OprPid}=opr_sup:login(?SeatNo,self(),?OPRID1),
+    {ok,OprPid1}=opr_sup:login(?SeatNo1,self(),?OPRID1),
+    OprMedia=opr:get_mediaPid(OprPid),
+    OprMedia1=opr:get_mediaPid(OprPid1),
+    io:format("~p~n",[{OprMedia,OprPid,OprMedia1,OprPid1}]),
     TS=utility1:timestamp_ms(),
     MsgMap=#{"msgType"=> <<"talk_to_opr">>,"operator1Id"=>?OPRID,"operator2Id"=>?OPRID1,"time"=>TS},
+
+    %send talk_to_opr http request
     {ok,#{"status":=<<"ok">>}}=
        utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
-    {_,Jsonbin}=?REC_MatchMsg({<<"talk_to_opr">>,_Jsonbin}),
+    {_,Jsonbin,_From}=?REC_MatchMsg({<<"talk_to_opr">>,_Jsonbin,_}),
     io:format("talk_to_opr_test:~p~n",[Jsonbin]),
     #{"operator1Id":=SrcOprIdBin,"operator2Id":=TgtOprIdBin,"msgType":=<<"talk_to_opr">>,"time":=TSBin}=utility1:jsonbin2map(Jsonbin),
     ?assertEqual(list_to_binary(?OPRID),SrcOprIdBin),
     ?assertEqual(list_to_binary(?OPRID1),TgtOprIdBin),
     ?assertEqual(list_to_binary(TS),TSBin),
-
+    ?assertEqual(OprMedia1,sip_media:get_media(OprMedia)),
+    ?assertEqual(OprMedia,sip_media:get_media(OprMedia1)),
+    todo_test_unfocus,
     ok.
+calla_http_test()->
+    BoardNo=6,
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    {ok,OprPid}=opr_sup:login(?SeatNo,self()),
+    board:release({?SeatNo,BoardNo}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,BoardNo),
+    opr:focus(?SeatNo,BoardNo),
+    %send calla http request
+    MsgMap=#{"msgType"=> <<"calla">>,"boardIndex"=>integer_to_list(BoardNo),"seatId"=>?SeatNo,"phone"=>"9"},
+    {ok,#{"status":=<<"ok">>,"boardState":=BS}}=
+       utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
+    ok.
+
+vip_subscribe_test()->
+    todo.
+conf_test()->
+    todo.
+query_114_test()->
+    todo.    
+% problem1_test()->
+%     BoardNo=6,
+%     {ok,OprPid}=opr_sup:login(?SeatNo,self()),
+%     board:release({?SeatNo,BoardNo}),
+%     opr:focus(?SeatNo,BoardNo),
+%     opr:callb("8"),
+
+%     OprMedia=opr:get_mediaPid(OprPid),
+%     Board1=opr:get_board(OprPid,BoardNo),
+%     opr:focus(?SeatNo,BoardNo),
+%     %send calla http request
+%     MsgMap=#{"msgType"=> <<"calla">>,"boardIndex"=>integer_to_list(BoardNo),"seatId"=>?SeatNo,"phone"=>"9"},
+%     {ok,#{"status":=<<"ok">>,"boardState":=BS}}=
+%        utility1:json_http("http://127.0.0.1:8082/api",MsgMap),
+%     ok.
+

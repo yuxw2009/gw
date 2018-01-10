@@ -54,6 +54,7 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"pickup_call"
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"sidea","boardIndex":"1","seatId":"6"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"ab","boardIndex":"1","seatId":"6"}' http://127.0.0.1:8082/api
 7 切换窗口：  json格式
     req: {msgType:"board_switch",seatId:n,curBoardIndex:G,nextBoardIndex:o}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
@@ -157,7 +158,7 @@ curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"handShake","
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}
 
 curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"calla","seatId":"6","boardIndex":"1","phone":"8"}' http://127.0.0.1:8082/api
-curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"callb ","seatId":"6","boardIndex":"1","phone":"9"}' http://127.0.0.1:8082/api
+curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"callb","seatId":"6","boardIndex":"1","phone":"9"}' http://127.0.0.1:8082/api
 19 话务员语音报号query_phone
     req: {msgType:"query_phone",boardIndex:b,seatId:S,phoneNumber:p,isCall:true or false}
     ack: {status:ok,boardState:定义如一所述} or {status:failed,reason:r}

@@ -18,6 +18,18 @@
 	fp
 }).
 
+-record(st1,{
+	tones=#{}, % #{"rbt"=>#{tone=>ToneBin,nums=>1000}}
+	tonenums=0,
+	tick,		% [0...5]
+	usrs
+}).
+
+-record(us1,{
+	pid,
+	fps=[] % #{tone_type=>"rbt",fp,type=>"interval" or 1,2,3,4,5}. will play rbt.pcmu intervally or once,twice...
+}).
+
 show()->
     F=fun(State)->
             {State,State}
@@ -35,11 +47,12 @@ add(MediaPid)->
 			end
        end,
     act(F).
-sub(MediaPid)->
+sub(MediaPid)-> sub(whereis(?MODULE),MediaPid).
+sub(RBT,MediaPid)->
     F=fun(ST)->
 		  {ok,ST#st{usrs=lists:keydelete(MediaPid,#us.pid,ST#st.usrs)}}
        end,
-    act(F).
+    act(RBT,F).
 has_media(MediaPid)->
     F=fun(ST)->
 		case lists:keysearch(MediaPid,#us.pid,ST#st.usrs) of

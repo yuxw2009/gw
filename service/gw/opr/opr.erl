@@ -62,6 +62,20 @@ get_all_status(SeatId)->
 
 handshake(SeatId,ClientActiveBI)->
     focus(SeatId,ClientActiveBI).
+message(OprId1,{"group",Message})->
+    Seat1Id=opr_sup:get_seatno_by_oprid(OprId1),
+    GroupNo=opr:get_groupno(Seat1Id),
+    {atomic,Seats}=?DB_QUERY(seat_t,{item=#{group_no:=GroupNo_}},GroupNo==GroupNo_),
+    SeatNos=[SeatNo_||#seat_t{seat_no=SeatNo_}<-Seats,SeatNo_=/=Seat1Id],
+    [send_instant_msg(SeatNo,Message)||SeatNo<-SeatNos],
+    [{status,ok},{seatId,Seat1Id}];
+message(OprId1,{"all",Message})-> 
+    Seat1Id=opr_sup:get_seatno_by_oprid(OprId1),
+    OprPid1=opr_sup:get_opr_pid(Seat1Id),
+    OprPids=opr_sup:get_all_oprpid(),
+    io:format("message:~p~n",[{Seat1Id,OprPid1,OprPids}]),
+    [send_instant_msg(OprPid,Message)||OprPid<-OprPids,OprPid1=/=OprPid],
+    [{status,ok},{seatId,Seat1Id}];
 message(OprId1,{OprId2,Message})->
     Seat1Id=opr_sup:get_seatno_by_oprid(OprId1),
     if Seat1Id =/=undefined->
@@ -86,12 +100,28 @@ talk_to_opr(OprId1,OprId2,MsgMap)->
     OprPid2=opr_sup:get_oprpid_by_oprid(OprId2),
     case {is_list(Seat1Id),is_pid(OprPid2)} of
     {true,true}->
-        send_message(OprPid2,MsgMap),
-        [{status,ok},{seatId,Seat1Id}];
+        OprMedia1=opr:get_mediaPid(Seat1Id),
+        OprMedia2=opr:get_mediaPid(OprPid2),
+        opr_rbt:add(OprMedia1),
+        Res=send_message(OprPid2,MsgMap),
+        case Res of
+            {ok,#{"status":=<<"ok">>,"response":=<<"accept">>}}->
+                opr_rbt:sub(OprMedia1),
+                sip_media:set_peer(OprMedia1,OprMedia2),
+                sip_media:set_peer(OprMedia2,OprMedia1),
+                todo,% unfocus
+                [{status,ok},{seatId,Seat1Id}];
+            {ok,#{"status":=<<"ok">>,"response":=<<"reject">>}}->
+                opr_rbt:sub(OprMedia1),
+                [{status,failed},{reason,reject}];
+            _-> 
+                opr_rbt:sub(OprMedia1),
+                [{status,failed},{reason,operator2_not_response}]
+        end;
     {false,_}->
-        [{status,failed},{reason,operate1_not_logined}];
+        [{status,failed},{reason,operator1_not_logined}];
     {true,false}->
-        [{status,failed},{reason,operate2_not_logined}]
+        [{status,failed},{reason,operator2_not_logined}]
     end.
 
 queryhistorymsg(OprId2,Number0)->
@@ -143,24 +173,31 @@ incomingCallPushInfo(#{caller:=Caller,ua:=UA,callTime:=CallTime})->
     #{"userId"=>pid_to_list(UA),"phoneNumber"=>Caller,"callTime"=>CallTime}.
 
 send_to_client(Paras,State=#state{client_host=ClientHost})->
-    %io:format("send_to_client ~p~n",[{ClientHost,Paras}]),
     MsgType= if is_map(Paras)-> maps:get("msgType",Paras); true-> maps:get("msgType",utility1:jsonbin2map(Paras)) end,
+    Res=
     if is_pid(ClientHost)->  % for test
-        ClientHost ! {MsgType,if is_map(Paras)->utility1:map2jsonbin(Paras); true-> Paras end},
-        {ok,#{"status"=><<"ok">>}};
+        ClientHost ! {MsgType,if is_map(Paras)->utility1:map2jsonbin(Paras); true-> Paras end,self()},
+        Res_=
+         % receive
+         %     {ClientHost,R}-> R
+         % after 30->
+             {ok,#{"status"=><<"ok">>,"response"=><<"accept">>}},
+         % end,
+         Res_;
     true->
         case ClientHost of
             Ip={_A,_B,_C,_D}->
                 utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
             Ip when is_list(Ip)->
-                utility1:json_http("http://"++utility1:make_ip_str(Ip)++":"++?CientPort,Paras);
-            _-> failed
+                utility1:json_http("http://"++Ip++":"++?CientPort,Paras);
+            _-> {error,no_clienthost}
         end
-    end.
+    end,
+    Res.
 
 send_boardStateChange(PidOrSeat)->
     F=fun(State=#state{id=SeatId,activedBoard=AB})->
-        AllBoardStatus=opr:do_get_all_status(State),
+        {AllBoardStatus,_}=opr:do_get_all_status(State),
         Res0=[{msgType,"boardStateChange"},{seatId,SeatId},{boardIndex,AB}],
         Plist=
         if is_map(AllBoardStatus)->
@@ -187,13 +224,27 @@ do_send_msg_to_send(State=#state{oprId=OprId})->
     {ok,State}.
 send_msg_to_send(PidOrSeat)->
     cast(PidOrSeat,fun do_send_msg_to_send/1).    
-
-send_message(PidOrSeat,Paras)->
-    F=fun(State)->
-            send_to_client(Paras,State),
-            {ok,State}
+send_instant_msg(PidOrSeat,MsgMap)->
+    F=fun(State=#state{oprId=OprId})->
+        io:format("send_instant_msg ~p~n",[{PidOrSeat,OprId}]),
+        case mnesia:dirty_read(opr_t,OprId) of
+        [Opr_t=#opr_t{item=Item=#{msg_history:=History0}}]->
+            send_to_client(utility1:map2jsonbin(MsgMap),State),
+            ?DB_WRITE(Opr_t#opr_t{item=Item#{msg_history:=[MsgMap|History0]}}),
+            {ok,State};
+        _-> 
+            send_to_client(utility1:map2jsonbin(MsgMap),State),
+            Opr_t=#opr_t{item=Item}=#opr_t{oprId=OprId},
+            ?DB_WRITE(Opr_t#opr_t{item=Item#{msg_history:=[MsgMap]}}),
+            {ok,State}        
+        end
        end,
     cast(PidOrSeat,F).    
+send_message(PidOrSeat,Paras)->
+    F=fun(State)->
+            {send_to_client(Paras,State),State}
+       end,
+    act(PidOrSeat,F).    
 broadcast(PidOrSeat,QCs)->
     CallsJson=utility1:maps2jsos([incomingCallPushInfo(QC)||QC<-QCs]),
     Paras=utility1:map2jsonbin(#{msgType=><<"call_broadcast">>,calls=>CallsJson}),
@@ -205,8 +256,8 @@ broadcast(PidOrSeat,QCs)->
 send_transfer_to_client(DestOprPid,Side=#{"phone":=Phone,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserId,"boardIndex":=BoardIndex})->
     Paras=utility1:map2jsonbin(#{msgType=><<"push_transfer_to_opr">>,"phone"=>Phone,"FromSeatId"=>FromSeatId,"ToSeatId"=>ToSeatId,"userId"=>UserId,"boardIndex"=>BoardIndex}),
     F=fun(State=#state{transfer_sides=TransferSides})->
-            send_to_client(Paras,State),
-            {ok,State#state{transfer_sides=TransferSides#{UserId=>Side}}}
+            R=send_to_client(Paras,State),
+            {R,State#state{transfer_sides=TransferSides#{UserId=>Side}}}
        end,
     cast(DestOprPid,F).   
 fetch_transfer_call(SeatIdOrPid,UserId)->
@@ -280,9 +331,11 @@ get_client_host(Pid)->
             {Host,State}
        end,
     act(Pid,F).
-set_client_host(Pid,Host)->
+relogin(Pid,Host,OprId)->
     F=fun(State=#state{})->
-            {ok,State#state{client_host=Host}}
+            State1=State#state{client_host=Host,oprId=OprId},
+            do_send_msg_to_send(State1),
+            {ok,State1}
        end,
     act(Pid,F).
 % call_opr(ConfID,SeatNo)->

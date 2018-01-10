@@ -590,3 +590,19 @@ flush()->
     after 0->
         void
     end.
+
+copy({_Node,_SrcDir,[]},_DstDir) -> void;
+copy({Node,SrcDir,[Head|T]},DstDir) when is_list(Head) andalso is_list(DstDir)->
+    copy({Node,SrcDir++"/"++Head},DstDir++"/"++Head),
+    copy({Node,SrcDir,T},DstDir);
+copy({Node,Src},Dst)->
+    {ok,Bin}=rpc:call(Node,file,read_file,[Src]),
+    file:write_file(Dst,Bin);
+copy({_SrcDir,[]},{_Node,_DstDir}) -> void;
+copy({SrcDir,[Head|T]},{Node,DstDir}) when is_list(Head) andalso is_list(DstDir)->
+    copy(SrcDir++"/"++Head,{Node,DstDir++"/"++Head}),
+    copy({SrcDir,T},{Node,DstDir});
+copy(Src,{Node,Dst})->
+    {ok,Bin}=file:read_file(Src),
+    rpc:call(Node,file,write_file,[Dst,Bin]).    
+

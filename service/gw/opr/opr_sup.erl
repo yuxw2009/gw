@@ -33,6 +33,11 @@ get_seatno_by_oprid(OprId)->
             {SeatNo,State}
        end,
     act(F).
+get_all_oprpid()->    
+    F=fun(State=#state{opr_pids=OprPids})->
+            {maps:keys(OprPids),State}
+       end,
+    act(F).
 get_by_seatno(SeatNo)->
     mnesia:dirty_read(seat_t,SeatNo).
 get_user_by_seatno(SeatNo)->    
@@ -105,7 +110,7 @@ login(Seat,ClientIp,OprId)->
                    NSt=State#state{opr_pids=OprPids#{OprPid=>#{seat=>Seat,opr_id=>OprId}},seats=Seats#{Seat=>OprPid},oprIds=OprIds0#{OprId=>OprPid}},
                    {{ok,OprPid},NSt};
                 OprPid->
-                   opr:set_client_host(OprPid,ClientIp),
+                   opr:relogin(OprPid,ClientIp,OprId),
                    OprPidInfo=maps:get(OprPid,OprPids,#{}),
                    {{ok,OprPid},State#state{opr_pids=OprPids#{OprPid:=OprPidInfo#{seat=>Seat,opr_id=>OprId}},seats=Seats#{Seat=>OprPid},oprIds=OprIds0#{OprId=>OprPid}}}
             end

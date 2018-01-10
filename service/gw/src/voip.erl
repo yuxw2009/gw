@@ -26,10 +26,10 @@ start() ->
     
     mnesia:start(),
     opr_sup:start(),
-    oprgroup_sup:start(),
 
     spawn(fun pinging/0),
     new_rbt:start(),
+    oprgroup_sup:start(),
     ok.
     
 pinging()->

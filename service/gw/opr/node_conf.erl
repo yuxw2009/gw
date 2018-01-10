@@ -6,7 +6,7 @@ register_self()->
     rpc:call(config_node(),node_reg,reg_wmg_node,[node()]).
 
 config_node()->
-    Str="node_manage@interface.x9water.com",
+    Str="node_manage@182.254.140.79", % interface.x9water.com",
     list_to_atom(Str).
 get_voice_node()->'incomingproxy@127.0.0.1';
 get_voice_node()->

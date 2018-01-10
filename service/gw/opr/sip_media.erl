@@ -997,6 +997,7 @@ set_peer(Pid,Peer) when is_pid(Pid)->
     case is_process_alive(Pid) of true-> Pid ! {play,Peer}; _-> void end;
 set_peer(_,_)-> void.
 
+sub(Pid,Peer)->unset_peer(Pid,Peer).
 unset_peer(Pid,Peer)when is_pid(Pid)-> Pid ! {deplay,Peer};
 unset_peer(_,_)-> void.
 

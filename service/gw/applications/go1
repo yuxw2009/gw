@@ -1,2 +1,2 @@
 #ulimit -n 20480
-yaws --name gw1@127.0.0.1 --conf yaws.conf  --erlarg "-setcookie yxwabc -pa ../ebin ebin -mnesia dir  '\"mnesia_dir1\"' -s voip " 
+yaws --name gw@127.0.0.1 --conf yaws.conf  --erlarg "-setcookie yxwabc -pa ../ebin ebin -s mnesia -mnesia dir  '\"mnesia_dir1\"' -s voip" 

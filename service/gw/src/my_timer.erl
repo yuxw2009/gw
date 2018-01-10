@@ -20,7 +20,6 @@
 }).
 
 init([]) ->
-	register(my_timer,self()),
 	timer:send_interval(?INTERVAL,time_out),
 	{ok,#st{start_time=now(),ticks=0,users=[]}}.
 
@@ -95,8 +94,13 @@ cancel(TRef) ->
 	my_server:call(my_timer,{cancel_timer,TRef}).
 
 start() ->
-	{ok,Pid} = my_server:start(?MODULE,[],[]),
-	Pid.
+    case whereis(my_timer) of
+    	undefined->
+			{ok,Pid} = my_server:start(?MODULE,[],[]),
+			register(my_timer,Pid),
+			Pid;
+		Pid-> Pid
+	end.
 
 stop() ->
 	my_server:cast(my_timer,stop).

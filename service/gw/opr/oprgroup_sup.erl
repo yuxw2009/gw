@@ -14,22 +14,25 @@ del_oprgroup(GroupNo)->
     ?DB_DELETE(oprgroup_t,GroupNo),
     ok.
 
+create_oprgroup_pid(GroupNo,State=#state{groups=Groups,pids=Pids})->
+    GroupPid0=maps:get(GroupNo,Groups,undefined),
+    case is_pid(GroupPid0) andalso is_process_alive(GroupPid0) of
+        true -> 
+            {GroupPid0,State};
+        _->
+            {ok,GroupPid}=oprgroup:start(GroupNo),
+            erlang:monitor(process,GroupPid),
+            {GroupPid,State#state{groups=Groups#{GroupNo=>GroupPid},pids=maps:remove(GroupPid0,Pids#{GroupPid=>#{groupno=>GroupNo}})}}
+    end.
+       
 add_oprgroup(GroupNo,GroupPhone) when is_binary(GroupNo)-> add_oprgroup(binary_to_list(GroupNo),GroupPhone);
 add_oprgroup(GroupNo,GroupPhone) when is_binary(GroupPhone)-> add_oprgroup((GroupNo),binary_to_list(GroupPhone));
 add_oprgroup(GroupNo,GroupPhone)->
     Group0=#oprgroup_t{item=Item0}=#oprgroup_t{},
     Group=Group0#oprgroup_t{key=GroupNo,item=Item0#{phone=>GroupPhone}},
     ?DB_WRITE(Group),
-    F=fun(State=#state{groups=Groups,pids=Pids})->
-            GroupPid0=maps:get(GroupNo,Groups,undefined),
-            case is_pid(GroupPid0) andalso is_process_alive(GroupPid0) of
-                true -> 
-                    {GroupPid0,State};
-                _->
-                    {ok,GroupPid}=oprgroup:start(GroupNo),
-                    erlang:monitor(process,GroupPid),
-                    {GroupPid,State#state{groups=Groups#{GroupNo=>GroupPid},pids=maps:remove(GroupPid0,Pids#{GroupPid=>#{groupno=>GroupNo}})}}
-                end
+    F=fun(State)->
+            create_oprgroup_pid(GroupNo,State)
        end,
     act(F).
 
@@ -68,7 +71,12 @@ start() ->
 %% callbacks
 init([]) ->
     erlang:group_leader(erlang:whereis(user),self()),
-    {ok,#state{}}.
+    {atomic,OprGroups}=?DB_QUERY(oprgroup_t),
+    State1=lists:foldl(fun(#oprgroup_t{key=GroupNo}, State0)-> 
+                        {_,State}=create_oprgroup_pid(GroupNo,State0),
+                        State
+                    end, #state{}, OprGroups),
+    {ok,State1}.
         
 
 handle_call({act,Act},_From, ST=#state{}) ->

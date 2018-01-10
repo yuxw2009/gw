@@ -133,7 +133,7 @@ handle_cast(_Msg, State) ->
 handle_info({act,Act}, State) ->
     State1 = Act(State),
     {noreply,State1};
-handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,sideb=SideB=#{ua:=From}}) ->
+handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,sideb=SideB=#{ua:=From,status:=Status1}}) ->
     State1=State#state{sideb=SideB#{status:=Status}},
     State2=
     if 
@@ -142,13 +142,13 @@ handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,si
             State1;%my_timer:send_after(?TALKTIMEOUT,{timeover,From});
         Status == hook_off -> 
             State1_=sideb_hookoff(State1),
-            opr:send_boardStateChange(Owner),
             State1_;
         true -> 
             State1
     end,
+    if Status=/=Status1-> opr:send_boardStateChange(Owner); true-> void end,
     {noreply,State2};
-handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,sidea=SideA=#{ua:=From}}) ->
+handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,sidea=SideA=#{ua:=From,status:=Status1}}) ->
     State1=State#state{sidea=SideA#{status:=Status}},
     State2=
     if 
@@ -157,11 +157,11 @@ handle_info({callee_status,From, Status},State=#state{owner=Owner,seat=SeatNo,si
             State1;%my_timer:send_after(?TALKTIMEOUT,{timeover,From});
         Status == hook_off -> 
             State2_=sidea_hookoff(State1),
-            opr:send_boardStateChange(Owner),
             State2_;
         true -> 
             State1
     end,
+    if Status=/=Status1-> opr:send_boardStateChange(Owner); true-> void end,
     {noreply,State2};
 handle_info({callee_sdp,From,SDP_FROM_SS},State=#state{id=Aid,seat=Seat,sidea=#{},sideb=#{}}) ->
     #{mediaPid:=MediaPid,phone:=Phno}=get_side(From,State),
@@ -204,6 +204,7 @@ handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner
            true-> 
                 State#state{sidea=?DEFAULTSIDE} 
        end,
+    opr:send_boardStateChange(Owner),
     {noreply,NST};   
 handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner=Owner,status=BoardStatus,seat=Seat,id=Id,sidea=SideA,sideb=Side=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno}}) when From==UA; From==MediaPid->
     llog("board sideb:~p sip hangup",[{Seat,Id,Phno}]),
@@ -221,6 +222,7 @@ handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner
            true-> 
                 State#state{sideb=?DEFAULTSIDE} 
        end,
+    opr:send_boardStateChange(Owner),
     {noreply,NST};       
 handle_info(alive_timer,State=#state{id=Aid,seat=Seat, alive_count=AC}) ->
     if
@@ -243,7 +245,11 @@ terminate(_Reason, State=#state{sidea=SideA,sideb=SideB,mixer=Mixer}) ->
 
 act(Act)->    act(whereis(?MODULE),Act).
 act({Seat,BIndex},Act) ->    act(opr:get_board(Seat,BIndex),Act);
-act(Pid,Act)->    my_server:call(Pid,{act,Act}).
+act(Pid,Act)->    
+    case is_pid(Pid) andalso is_process_alive(Pid) of
+        true-> my_server:call(Pid,{act,Act});
+        _-> void
+    end.
 cast({Seat,BIndex},Act)  ->    cast(opr:get_board(Seat,BIndex),Act);
 cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
     
@@ -391,7 +397,6 @@ do_sidea(State=#state{owner=Owner,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus
         mixer:add(Mixer,AMedia),
         sip_media:set_peer(AMedia,Mixer),
         State1=State#state{status=sidea},
-                io:format("do_sidea 222:~p~n",[{Focused,AStatus}]),
         State2=
         case {Focused,AStatus} of
         {true,hook_off}-> 
@@ -459,7 +464,6 @@ cross_in(BPid,Side=#{ua:=UA,mediaPid:=MediaPid})->
                 UARef = erlang:monitor(process, UA),
                 MRef=erlang:monitor(process, MediaPid),
                 %timer:apply_after(0,?MODULE,sidea,[BPid]),
-                io:format("cross_in 222:~p~n",[{SeatNo,Id}]),
                 do_sidea(State#state{sidea=Side#{ua:=UA,mediaPid:=MediaPid,ua_ref:=UARef,media_ref:=MRef}});
            BUA==undefined->
                 UARef = erlang:monitor(process, UA),
