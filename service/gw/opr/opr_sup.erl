@@ -75,7 +75,7 @@ stop()->
     P-> exit(P,kill)
     end.
 
-register_oprpid(Seat,OprPid)->
+register_oprpid(Seat,OprPid,OprId)->
    case whereis(opr_sup) of
     undefined-> opr_sup:start();
     _-> void
@@ -84,7 +84,7 @@ register_oprpid(Seat,OprPid)->
             case maps:get(Seat,Seats,undefined) of
                 undefined->
                    utility1:log("notice! opr ~p register_oprpid!",[Seat]),
-                   {ok,State#state{seats=Seats#{Seat=>OprPid},opr_pids=OprPids#{OprPid=>#{seat=>Seat}}}};
+                   {ok,State#state{seats=Seats#{Seat=>OprPid},opr_pids=OprPids#{OprPid=>#{seat=>Seat,opr_id=>OprId}}}};
                 OprPid->
                    {ok,State};
                 OprPid0->
@@ -152,8 +152,8 @@ handle_call({act,Act},_From, ST=#state{}) ->
     {Res,NST}-> 
         {reply,Res,NST}
     catch 
-    	error:Err ->
-            %io:format("opr_sup act error ~p~n",[Err]),
+        Err:Reason ->
+            utility1:log("opr_sup: act error:~p~n",[{Err,Reason}]),
             {reply,{err,Err},ST}
     end;
 handle_call(_Call, _From, State) ->

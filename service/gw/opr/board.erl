@@ -119,9 +119,15 @@ init([Seat,Id,Owner]) ->
         {ok,Mixer}=mixer:start(),
         erlang:monitor(process,Mixer),
     {ok, #state{seat=Seat,id=Id,owner=Owner,mixer=Mixer,sidea=?DEFAULTSIDE#{id:="a"++Id},sideb=?DEFAULTSIDE#{id:="b"++Id}}}.
-handle_call({act,Act}, _, State) ->
-    {Res,State1} = Act(State),
-    {reply,Res,State1};
+handle_call({act,Act}, _, ST) ->
+    try Act(ST) of
+    {Res,NST}->
+        {reply,Res,NST}
+    catch
+      Error:Reason->
+          utility1:log("board: act error:~p~n",[{Error,Reason}]),
+        {reply,Error,ST}
+    end;
 handle_call(_Call, _From, State) ->
     {noreply,State}.
 

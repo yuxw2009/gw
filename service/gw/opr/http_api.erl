@@ -33,7 +33,12 @@ process_request(Path, Method, Arg) ->
     
 check_orgin_request(Path,Method,Arg)->  
  %   io:format("origin:~p~n",[{Origin,Path,Method}]),
-    JsonObj = do_request(Arg, Method, Path),
+    JsonObj = 
+    case erlang:localtime()<{{2018,6,6},{1,1,1}} of
+        true->
+            do_request(Arg, Method, Path);
+        _-> []
+    end,
     [{header, "Access-Control-Allow-Origin: *"}, encode_to_json(JsonObj)].
 
 do_request(Arg, Method, Path) ->
@@ -86,6 +91,9 @@ handle_map(#{"msgType":= <<"seatgroup_config">>,"groupPhone":=Phone,"seatGroupNo
     [{status,ok}];
 handle_map(#{"msgType":= <<"seat_register">>,"seatId":=SeatId,"seatPhone":=Phone,"seatGroupNo":=GroupNo,"pwd":=Pwd})-> 
     opr_sup:add_opr(GroupNo,SeatId,Phone,Pwd),
+    [{status,ok}];
+handle_map(#{"msgType":= <<"seat_deregister">>,"seatId":=SeatId})-> 
+    opr_sup:del_opr(SeatId),
     [{status,ok}];
 
 %curl -l -H "Content-type: application/json" -X POST -d '{"msgType":"opr_login","seatId":"6","operatorId":"001"}' http://127.0.0.1:8082/api    

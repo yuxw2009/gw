@@ -55,7 +55,7 @@ handle_call({act,Act}, _, State) ->
       {Res,State1}-> {reply,Res,State1}
     catch
       Error:Reason->
-          io:format("mixer: act error:~p~n",[{Error,Reason}]),
+          utility1:log("mixer: act error:~p~n",[{Error,Reason}]),
           {reply,Error,State}
     end;
 handle_call(_Call, _From, State) ->

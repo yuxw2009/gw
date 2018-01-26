@@ -120,8 +120,14 @@ handle_call(stop, _From, ST) ->
     {stop,normal, ok, (ST)};
 
 handle_call({act,Act},_From, ST=#state{}) ->
-    {Res,NST}=Act(ST),
-    {reply,Res,NST}.
+    try Act(ST) of
+    {Res,NST}-> 
+        {reply,Res,NST}
+    catch 
+        Err:Reason ->
+            utility1:log("oprgroup: act error:~p~n",[{Err,Reason}]),
+            {reply,{Err,Reason},ST}
+    end.
 
 handle_cast({act,Act}, ST) ->
     {_,NST}=Act(ST),

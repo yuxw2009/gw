@@ -84,8 +84,8 @@ handle_call({act,Act},_From, ST=#state{}) ->
     {Res,NST}-> 
         {reply,Res,NST}
     catch 
-    	error:Err ->
-            %io:format("opr_sup act error ~p~n",[Err]),
+    	Err:Reason ->
+            utility1:log("oprgroup_sup: act error:~p~n",[{Err,Reason}]),
             {reply,{err,Err},ST}
     end;
 handle_call(_Call, _From, State) ->
@@ -111,7 +111,13 @@ terminate(_Reason, _State) ->
     ok. 
 
 % my utility function
-act(Act)->    act(whereis(?MODULE),Act).
+act(Act)->    
+   Pid=
+   case whereis(?MODULE) of
+    undefined-> start();
+    P_-> P_
+    end,
+    act(Pid,Act).
 act(Pid,Act)->    my_server:call(Pid,{act,Act}).
 
 

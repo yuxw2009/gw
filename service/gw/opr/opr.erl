@@ -52,7 +52,9 @@ get_groupphone_by_seatno(SeatNo)->
         _-> ""
     end.
 do_get_all_status(State=#state{oprstatus=OprStatus,activedBoard=ActiveBoard,boards=Boards,sipstatus=CallStatus})->
-    AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>[board:get_all_status(Board)||Board<-maps:keys(Boards)]},
+    AllBoardStatus0=[board:get_all_status(Board)||Board<-maps:keys(Boards)],
+    AllBoardStatus=[I_||I_<-AllBoardStatus0,is_map(I_)],
+    AllStatus=#{oprstatus=>OprStatus,callstatus=>CallStatus,activedBoard=>ActiveBoard,boards=>AllBoardStatus},
     {AllStatus,State}.
 get_all_status(SeatId)->
     F=fun(State)->
@@ -397,16 +399,28 @@ handle_call(rtp_stat, _From, #state{id=ID, wmg_node=WmgNode}=ST) ->
     {reply, get_rtp_stat(ID, WmgNode), ST};
 
 handle_call({act,Act},_From, ST=#state{}) ->
-    {Res,NST}=Act(ST),
-    {reply,Res,NST};
+    try Act(ST) of
+    {Res,NST}->
+        {reply,Res,NST}
+    catch 
+      Error:Reason->
+          utility1:log("opr: act error:~p~n",[{erlang:get_stacktrace(),Error,Reason}]),
+          {reply,Error,ST}
+    end;
 
 handle_call({make_call}, _From, #state{id=ID,wmg_node=WMGNode,ua_node=UANode,phone=PhoneNo}=ST) ->
     {Res,NST}=make_call(ST),
     {reply,Res,NST}.
 
 handle_cast({act,Act}, ST) ->
-    {_,NST}=Act(ST),
-    {noreply,NST};    
+    try Act(ST) of
+    {_,NST}->
+        {noreply,NST}
+    catch
+      Error:Reason->
+          utility1:log("opr: cast act error:~p~n",[{erlang:get_stacktrace(),Error,Reason}]),
+          {noreply,ST}
+    end;
 
 handle_cast(stop, #state{tmr=Tmr}=ST) ->
     my_timer:cancel(Tmr),
@@ -416,8 +430,8 @@ handle_info({act,Act}, ST) ->
     {_,NST}=Act(ST),
     {noreply,NST};    
 
-handle_info(check_orphan, #state{id=ID, web_hb=HB} = ST) ->
-    case opr_sup:register_oprpid(ID,self()) of
+handle_info(check_orphan, #state{id=ID, web_hb=HB,oprId=OprId} = ST) ->
+    case opr_sup:register_oprpid(ID,self(),OprId) of
         ok-> {noreply, ST};
         {error,_Pid1}->
             utility1:log("error! opr seat ~p is orphan,register_oprpid failed, quit!",[{ID,self()}]),

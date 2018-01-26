@@ -126,7 +126,10 @@ callb_test()->
     ?assertEqual(Mixer,sip_media:get_media(OprMedia)),   
     {_,Jsonbin,_}=?REC_MatchMsg({<<"boardStateChange">>,_Jsonbin,_}),
     Map=#{"boardState":=_BoardState_}=utility1:jsonbin2map(Jsonbin),
-    ?assertEqual("sideb", utility1:get_value( hd(utility1:get_value(maps:get("boardState",Map),"boards")),"boardstatus")),
+    BoardStatuss0=utility1:get_value(maps:get("boardState",Map),"boards"),
+    io:format("~p~n",[BoardStatuss0]),
+    BoardStatuss=[BdStatus||BdStatus<-BoardStatuss0,utility1:get_value(BdStatus,"boardIndex")=="1"],
+    ?assertEqual("sideb", utility1:get_value( hd(BoardStatuss),"boardstatus")),
    
     % test release sidea
     BUA ! stop,
@@ -702,13 +705,137 @@ cross_board_test()->
     %board2 calla
     Board2=opr:get_board(OprPid,2),
     board:focus(Board2),    
-    board:calla(Board2,"8"),
-    #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
-    ?assertEqual(ok, board:cross_board(Board2,Board1)),
+    board:calla(Board2,"9"),
+    SideA2=#{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    {ok,#{"status":=<<"ok">>,"boardState":=BoardState}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"cross_board","curBoardIndex"=>"2","nextBoardIndex"=>"1","seatId"=>?SeatNo}),
+%    ?assertEqual(ok, board:cross_board(Board2,Board1)),
+    %?assertEqual(#{boardstatus=>"sidea",boardIndex=>1,detail=>#{a=>SideA2,b=>SideB1}}, board:get_all_status(Board1)),
     #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board1),
     SideB1=board:get_sideb(Board1),
    ?assertEqual(sidea,board:get_status(Board1)),
     ok.             
+cross_board_2a_to_1b_api_test()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    Board2=opr:get_board(OprPid,2),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    %test board1 callb
+    board:callb(Board1,"9"),
+    ?assertEqual(sideb,board:get_status({?SeatNo,1})),
+    SideB2=#{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+
+    %board_switch to 2
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"board_switch","curBoardIndex"=>1,"nextBoardIndex"=>"2","seatId"=>?SeatNo}),
+    % board2 calla
+    board:calla(Board2,"8"),
+    #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    % cross_board    
+    BoardStatus1=#{boardstatus=>null,boardIndex=>1,detail=>#{a=>#{phone=>"",talkstatus=>null,starttime=>"0"},
+                                                   b=>#{phone=>"",talkstatus=>null,starttime=>"0"}
+                                                   }},
+    BoardStatus2=#{boardstatus=>sideb,boardIndex=>2,detail=>#{a=>#{phone=>"8",talkstatus=>ring,starttime=>"0"},
+                                                   b=>#{phone=>"9",talkstatus=>hook_off,starttime=>"0"}
+                                                   }},
+    {ok,#{"status":=<<"ok">>,"boardState":=BoardState}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"cross_board","curBoardIndex"=>"2","nextBoardIndex"=>"1","seatId"=>?SeatNo}),
+    %#{oprstatus=>sideb,callstatus=>hook_off,activedBoard=>"2",boards=>AllBoardStatus}=utility1:jsonbin2map(rfc4627:encode(BoardState)),
+    utility1:delay(20),
+    ?assertEqual(null,board:get_status({?SeatNo,2})),
+    ?assertEqual( SideB2,board:get_sideb(Board1)),
+    ?assert(not board:focused({"6",2})),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+
+    ?assertEqual(sidea,board:get_status({?SeatNo,1})),
+    ?assert(is_process_alive(BMedia)),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea({?SeatNo,2}),
+    Mixer2=board:get_mixer({?SeatNo,2}),
+    ?assertEqual(0,maps:size(mixer:get_sides(Mixer2))),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+    ?assert(mixer:has_media(Mixer,AMedia2)),
+    % % test sidea
+    % board:calla(Board2,"8"),    
+    % Mixer2=board:get_mixer(Board2),
+    % #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    % ?assertEqual(sidea,board:get_status({"6",2})),
+    % ?assertEqual(Mixer2,sip_media:get_media(AMedia2)),
+    % ?assert(mixer:has_media(Mixer2,OprMedia)),
+    % ?assert(mixer:has_media(Mixer2,AMedia2)),    
+    % opr_sup:logout("6"),
+    ok.
+cross_board_2b_to_1b_api_test()->
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    {ok,OprPid}=opr_sup:login(?SeatNo),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    Board2=opr:get_board(OprPid,2),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    %test board1 callb
+    board:callb(Board1,"9"),
+    ?assertEqual(sideb,board:get_status({?SeatNo,1})),
+    SideB2=#{ua:=BUA,mediaPid:=BMedia}=board:get_sideb(Board1),
+    ?assert(is_pid(BUA) andalso is_pid(BMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(BMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+    ?assert(mixer:has_media(Mixer,BMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+
+    % board2 calla
+    board:callb(Board2,"8"),
+    #{ua:=BUA2,mediaPid:=BMedia2}=board:get_sideb(Board2),
+    % cross_board    
+    BoardStatus1=#{boardstatus=>null,boardIndex=>1,detail=>#{a=>#{phone=>"",talkstatus=>null,starttime=>"0"},
+                                                   b=>#{phone=>"",talkstatus=>null,starttime=>"0"}
+                                                   }},
+    BoardStatus2=#{boardstatus=>sideb,boardIndex=>2,detail=>#{a=>#{phone=>"8",talkstatus=>ring,starttime=>"0"},
+                                                   b=>#{phone=>"9",talkstatus=>hook_off,starttime=>"0"}
+                                                   }},
+    {ok,#{"status":=<<"ok">>,"boardState":=BoardState}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"cross_board","curBoardIndex"=>"2","nextBoardIndex"=>"1","seatId"=>?SeatNo}),
+    %#{oprstatus=>sideb,callstatus=>hook_off,activedBoard=>"2",boards=>AllBoardStatus}=utility1:jsonbin2map(rfc4627:encode(BoardState)),
+    utility1:delay(20),
+    ?assertEqual(null,board:get_status({?SeatNo,2})),
+    ?assertEqual( SideB2,board:get_sideb(Board1)),
+    ?assert(not board:focused({"6",2})),
+    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
+
+    ?assertEqual(sidea,board:get_status({?SeatNo,1})),
+    ?assert(is_process_alive(BMedia)),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea({?SeatNo,2}),
+    Mixer2=board:get_mixer({?SeatNo,2}),
+    ?assertEqual(0,maps:size(mixer:get_sides(Mixer2))),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+    ?assert(mixer:has_media(Mixer,BMedia2)),
+    % % test sidea
+    % board:calla(Board2,"8"),    
+    % Mixer2=board:get_mixer(Board2),
+    % #{ua:=AUA2,mediaPid:=AMedia2}=board:get_sidea(Board2),
+    % ?assertEqual(sidea,board:get_status({"6",2})),
+    % ?assertEqual(Mixer2,sip_media:get_media(AMedia2)),
+    % ?assert(mixer:has_media(Mixer2,OprMedia)),
+    % ?assert(mixer:has_media(Mixer2,AMedia2)),    
+    % opr_sup:logout("6"),
+    ok.
 incoming_pickup_and_sidea_test()->
     oprgroup:stop(?GroupNo),
     oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),

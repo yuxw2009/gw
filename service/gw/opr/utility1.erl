@@ -166,17 +166,17 @@ a()-> a.
 
 reload()-> reload(?MODULE).
 reload(MODS)->
-	make:all(),
-	F= fun(I)-> 
-		code:purge(I),
-		code:load_file(I)
-	end,
-	MODS1 = case MODS of
-			_ when is_list(MODS)->	MODS;
-			_ when is_atom(MODS)-> [MODS]
-		end,
-	[F(I) || I<-MODS1].    
-	
+    make:all(),
+    F= fun(I)-> 
+        code:purge(I),
+        code:load_file(I)
+    end,
+    MODS1 = case MODS of
+            _ when is_list(MODS)->  MODS;
+            _ when is_atom(MODS)-> [MODS]
+        end,
+    [F(I) || I<-MODS1].    
+    
 pls_f2b(Pls)->pls_f2b(Pls,1).
 pls_f2b(Pls,N)->
     [{K, if is_float(V)-> f2b(V,N); true-> V end}||{K,V}<-Pls].   
@@ -187,13 +187,13 @@ pl2jso(PList) ->
 
 pl2jso(Trans, PList) ->
     {obj, lists:foldl(fun({Tag, Value}, Acc) ->
-    	                  NewValue = case proplists:get_value(Tag, Trans) of
-    	                                 undefined -> Value;
-    	                                 TF        -> TF(Value)
-    	                             end,
+                          NewValue = case proplists:get_value(Tag, Trans) of
+                                         undefined -> Value;
+                                         TF        -> TF(Value)
+                                     end,
                           Acc ++ [{Tag, NewValue}]
-    	              end,
-    	              [], PList)}.
+                      end,
+                      [], PList)}.
 
 %% [a, b], [1,2] => {obj, [{a,1}, {b,2}]}
 a2jso(Tags, Values) when is_tuple(Values) ->
@@ -201,9 +201,9 @@ a2jso(Tags, Values) when is_tuple(Values) ->
 a2jso(Tags, Values) ->
     PList = lists:zip(Tags, Values),
     {obj, lists:foldl(fun({{Tag, TF}, Value}, Acc) -> Acc ++ [{Tag, TF(Value)}];
-    	                 ({Tag, Value}, Acc)       -> Acc ++ [{Tag, Value}]
-     	              end,    
-    	              [], PList)}.
+                         ({Tag, Value}, Acc)       -> Acc ++ [{Tag, Value}]
+                      end,    
+                      [], PList)}.
 
 %% [[{a,1},{b,2}],[{a,3},{b,4}]] => [{obj, [{a, 1}, {b, 2}]}, {obj, [{a, 3}, {b, 4}]}]
 pl2jsos_br(PLists) ->
@@ -245,6 +245,16 @@ o2pl([{Tag, {obj, PL}}|T], Acc) ->
 o2pl([{Tag, Value}|T], Acc) -> 
    o2pl(T, [tag_trans(atom(Tag),Value)|Acc]).
 
+o2map({obj,PL}) ->
+    o2map(PL, []).
+
+o2map([], Acc) -> maps:from_list(Acc); 
+o2map([{Tag, {obj, PL}}|T], Acc) -> 
+    o2map(T, [{Tag, o2map(PL, [])}| Acc]);
+
+o2map([{Tag, Value}|T], Acc) -> 
+   o2map(T, [{Tag,Value}|Acc]).
+
 json2pl(Clidata)->
     {ok, Json, _} = rfc4627:decode(Clidata),
     ?MODULE:o2pl(Json).
@@ -269,7 +279,7 @@ term_to_list(T)->
 make_ip_bin(Ip) ->
     list_to_binary(make_ip_str(Ip)).
 make_ip_str({A,B,C,D}) ->
-	integer_to_list(A)++"."++integer_to_list(B)++"."++integer_to_list(C)++"."++integer_to_list(D);
+    integer_to_list(A)++"."++integer_to_list(B)++"."++integer_to_list(C)++"."++integer_to_list(D);
 make_ip_str(_)-> "unknown".
 
 merge_proplists(Pls0, Pls) when is_list(Pls0),is_list(Pls)->
@@ -304,15 +314,15 @@ log(Filename, Str, CmdList) ->
     {ok, IODev} = file:open(Filename, [append]),
     io:format(IODev,logstr(Str, CmdList),[]),
     file:close(IODev).
-	
+    
      
 log(Str, CmdList) ->log("log/debug.log",Str,CmdList).
-	
+    
 ts() ->
-	{Y, Mo, D} = date(),
-	{H, Mi, S} = time(),
-	{_,_,MS}=os:timestamp(),
-	xt:int2(Y) ++ "-" ++ xt:int2(Mo) ++ "-" ++ xt:int2(D) ++ " " ++ xt:int2(H) ++ ":" ++ xt:int2(Mi) ++ ":" ++ xt:int2(S)++":"++xt:int2(MS).
+    {Y, Mo, D} = date(),
+    {H, Mi, S} = time(),
+    {_,_,MS}=os:timestamp(),
+    xt:int2(Y) ++ "-" ++ xt:int2(Mo) ++ "-" ++ xt:int2(D) ++ " " ++ xt:int2(H) ++ ":" ++ xt:int2(Mi) ++ ":" ++ xt:int2(S)++":"++xt:int2(MS).
 d2b()->list_to_binary(d2s()).
 d2b(I)->list_to_binary(d2s(I)).
 d2s()->d2s(erlang:localtime()).     

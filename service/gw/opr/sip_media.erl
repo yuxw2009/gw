@@ -120,8 +120,14 @@ init([Session,Socket,_Vcr,Port,Owner]) ->
 
 
 handle_call({act,Act},_From, ST=#st{}) ->
-    {Res,NST}=Act(ST),
-    {reply,Res,NST};
+    try Act(ST) of
+    {Res,NST}->
+        {reply,Res,NST}
+    catch
+      Error:Reason->
+          utility1:log("sip_media: act error:~p~n",[{Error,Reason}]),
+        {reply,Error,ST}
+    end;
 handle_call({set_peer_addr,{IP,Port}},_From,ST) ->
     IPRecord=
         case string:tokens(IP, ".") of
