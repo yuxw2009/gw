@@ -664,6 +664,8 @@ releasea_test()->
    {ok,#{"status":=<<"ok">>}}=
        utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"releasea","seatId"=>?SeatNo,"boardIndex"=>"1"}),
 
+    ?assertMatch(#{detail:=#{a:=#{phone:="",talkstatus:=null},b:=#{phone:="9",talkstatus:=prering}}},board:get_all_status(Board1)),
+
    ?assertEqual(sideb,board:get_status(Board1)),
    ?assertEqual(2,maps:size(mixer:get_sides(Mixer))),
    ?assert(not mixer:has_media(Mixer,AMedia)),

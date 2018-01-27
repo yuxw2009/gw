@@ -642,7 +642,7 @@ releasea(Pid)->
     F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus},sideb=#{mediaPid:=BMedia,status:=BStatus}})->
             if is_pid(AMedia) andalso is_pid(BMedia)->
                 release_side(SideA,State),
-                {ok,State#state{status=sideb}};
+                {ok,State#state{status=sideb,sidea=?DEFAULTSIDE}};
             true->
                 {failed,State}
             end
@@ -652,7 +652,7 @@ releaseb(Pid)->
     F=fun(State=#state{focused=Focused, owner=Owner,mixer=Mixer,sidea=#{mediaPid:=AMedia,status:=AStatus},sideb=SideB=#{mediaPid:=BMedia,status:=BStatus}})->
             if is_pid(AMedia) andalso is_pid(BMedia)->
                 release_side(SideB,State),
-                {ok,State#state{status=sidea}};
+                {ok,State#state{status=sidea,sideb=?DEFAULTSIDE}};
             true->
                 {failed,State}
             end
