@@ -196,7 +196,6 @@ handle_info({'DOWN', _Ref, process, Mixer, _Reason},State=#state{focused=Focused
     {noreply,State2};   
 handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner=Owner,status=BoardStatus,seat=Seat,id=Id,sidea=SideA=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno},sideb=SideB}) when From==UA; From==MediaPid->
     llog("board sidea:~p sip hangup",[{Seat,Id,Phno}]),
-    if Reason=/=cross_away-> release_side(SideA,State); true-> void end,  % cross_away is simulated down
     mixer:sub(Mixer,MediaPid),
     OprMedia=opr:get_mediaPid(Owner),
     NST=if BoardStatus==sidea; BoardStatus==inserta; BoardStatus==splita-> 
@@ -210,11 +209,14 @@ handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner
            true-> 
                 State#state{sidea=?DEFAULTSIDE} 
        end,
-    opr:send_boardStateChange(Owner),
+    if Reason=/=cross_away-> 
+        release_side(SideA,State),
+        opr:send_boardStateChange(Owner); 
+    true-> void   % cross_away is simulated down
+    end,
     {noreply,NST};   
 handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner=Owner,status=BoardStatus,seat=Seat,id=Id,sidea=SideA,sideb=Side=#{ua:=UA,mediaPid:=MediaPid, phone:=Phno}}) when From==UA; From==MediaPid->
     llog("board sideb:~p sip hangup",[{Seat,Id,Phno}]),
-    if Reason=/=cross_away-> release_side(Side,State); true-> void end,  % cross_away is simulated down
     mixer:sub(Mixer,MediaPid),
     OprMedia=opr:get_mediaPid(Owner),
     NST=if BoardStatus==sideb; BoardStatus==insertb; BoardStatus==splitb-> 
@@ -228,7 +230,11 @@ handle_info({'DOWN', _Ref, process, From, Reason},State=#state{mixer=Mixer,owner
            true-> 
                 State#state{sideb=?DEFAULTSIDE} 
        end,
-    opr:send_boardStateChange(Owner),
+    if Reason=/=cross_away-> 
+        release_side(Side,State),
+        opr:send_boardStateChange(Owner); 
+    true-> void   % cross_away is simulated down
+    end,
     {noreply,NST};       
 handle_info(alive_timer,State=#state{id=Aid,seat=Seat, alive_count=AC}) ->
     if
@@ -474,7 +480,7 @@ cross_in(BPid,Side=#{ua:=UA,mediaPid:=MediaPid})->
            BUA==undefined->
                 UARef = erlang:monitor(process, UA),
                 MRef=erlang:monitor(process, MediaPid),
-                do_sideb(State#state{sidea=SideB#{ua:=UA,mediaPid:=MediaPid,ua_ref:=UARef,media_ref:=MRef}});
+                do_sideb(State#state{sideb=Side#{ua:=UA,mediaPid:=MediaPid,ua_ref:=UARef,media_ref:=MRef}});
             true->
                 {{failed,no_empty_side},State}
             end

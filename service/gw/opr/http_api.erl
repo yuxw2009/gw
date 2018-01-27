@@ -152,7 +152,7 @@ handle_map(#{"msgType":= <<"board_switch">>,"seatId":=SeatId,"curBoardIndex":=_C
  handle_map(#{"msgType":= <<"cross_board">>,"seatId":=SeatId,"curBoardIndex":=CBI_str,"nextBoardIndex":=NBI_str,"seatId":=SeatId})-> 
      CBI=list_to_integer(CBI_str),
      NBI=list_to_integer(NBI_str),
-     board:cross_board({SeatId,CBI},{SeatId,NBI}),  
+     opr:cross_board(SeatId,CBI,NBI),  
     [{status,ok},{seatId,SeatId}];
  handle_map(#{"msgType":= <<"transfer_opr">>,"seatId":=SeatId,"boardIndex":=BI,"targetSeat":=TargetSeat})-> 
      board:transfer_opr({SeatId,BI},TargetSeat),

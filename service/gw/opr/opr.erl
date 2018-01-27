@@ -137,6 +137,13 @@ queryhistorymsg(OprId2,Number0)->
     Msgs=utility1:maps2jsos(MsgMaps),
     [{status,ok},{msgs,Msgs}].
 
+cross_board(SeatId,CBI,NBI)->
+    case board:cross_board({SeatId,CBI},{SeatId,NBI}) of
+        ok-> 
+            focus(SeatId,NBI),
+            ok;
+        R-> R
+    end.
 focus(PidOrSeat,BoardIndex)->
     Boards=get_boards(PidOrSeat),
     if BoardIndex>0 andalso BoardIndex=<length(Boards)->
