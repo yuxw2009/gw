@@ -262,6 +262,11 @@ broadcast(PidOrSeat,QCs)->
           {ok,State}
        end,
     cast(PidOrSeat,F).    
+get_callbroadcast(SeatId)->
+    GroupNo=get_groupno(SeatId),
+    QCs=oprgroup:get_queues(GroupNo),
+    CallsJson=utility1:maps2jsos([incomingCallPushInfo(QC)||QC<-QCs]),
+    CallsJson.
 send_transfer_to_client(DestOprPid,Side=#{"phone":=Phone,"FromSeatId":=FromSeatId,"ToSeatId":=ToSeatId,"userId":=UserId,"boardIndex":=BoardIndex})->
     Paras=utility1:map2jsonbin(#{msgType=><<"push_transfer_to_opr">>,"phone"=>Phone,"FromSeatId"=>FromSeatId,"ToSeatId"=>ToSeatId,"userId"=>UserId,"boardIndex"=>BoardIndex}),
     F=fun(State=#state{transfer_sides=TransferSides})->

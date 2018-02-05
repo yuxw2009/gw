@@ -955,6 +955,10 @@ incoming_pickup_and_sidea_test()->
     {ok,#{"status":=<<"ok">>}}=
        utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"pickup_call","seatId"=>?SeatNo,"boardIndex"=>"1"}),
 
+    {_,Jsonbin2,_}=?REC_MatchMsg({<<"call_broadcast">>,_,_}),
+    #{"calls":=[],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin2),
+
+
     ?assertMatch({failed,board_seized},board:pickup_call({?SeatNo,1})),
     ?assertMatch({failed,no_call},board:pickup_call({?SeatNo,2})),
     T=oprgroup:get_queues(GroupPid),

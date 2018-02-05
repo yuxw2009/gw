@@ -20,11 +20,12 @@ get_group_pid_by_phone(GroupPhone)->
     oprgroup_sup:get_group_pid(GroupNo).
 
 pickup_call(Pid)->                             
-    F=fun(State=#state{queued_calls=QC})->
+    F=fun(State=#state{queued_calls=QC,oprs=Oprs})->
             %todo if(length(Oprs)==0)-> transfer
             case QC of
                 [H=#{ua_ref:=UARef}|T]-> 
                     erlang:demonitor(UARef),
+                    [opr:broadcast(Opr,T)||Opr<-Oprs],
                     {{ok,H},State#state{queued_calls=T}};
                 []->
                     {undefined,State}
@@ -136,11 +137,12 @@ handle_cast({act,Act}, ST) ->
 handle_cast(stop, ST) ->
     {stop, normal, (ST)}.
 
-handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{queued_calls=Calls0})->
+handle_info({'DOWN', _Ref, process, From, _Reason},State=#state{queued_calls=Calls0,oprs=Oprs})->
     io:format("oprgroup.erl ua down ~p~n",[From]),
     [#{mediaPid:=MediaPid}]=[Item||Item=#{ua:=UA}<-Calls0,UA==From],
     sip_media:stop(MediaPid),
     Calls=[Item||Item=#{ua:=UA}<-Calls0,UA=/=From],
+    [opr:broadcast(Opr,Calls)||Opr<-Oprs],
     {noreply,State#state{queued_calls=Calls}};
 handle_info(broadcast, #state{queued_calls=QC,oprs=Oprs} = ST) ->
     case {QC,Oprs} of
@@ -158,11 +160,11 @@ handle_info(_Msg, #state{id=ID}=ST) ->
 terminate(_,ST=#state{}) ->
     ok.
 
-
 %% inner methods.
 % my utility function
-act(GroupNo,Act) when  is_list(GroupNo) ->    act(oprgroup_sup:get_group_pid(GroupNo),Act);
-act(Pid,Act)->    my_server:call(Pid,{act,Act}).
+act(GroupNo,Act) when  is_list(GroupNo) andalso length(GroupNo)>0 ->    act(oprgroup_sup:get_group_pid(GroupNo),Act);
+act(Pid,Act) when is_pid(Pid)->    my_server:call(Pid,{act,Act});
+act(_,_Act) ->    undefined.
 
 cast(GroupNo,Act) when  is_list(GroupNo) ->    cast(oprgroup_sup:get_group_pid(GroupNo),Act);
 cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
