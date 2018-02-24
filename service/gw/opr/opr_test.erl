@@ -914,6 +914,93 @@ cross_board_2b_to_1b_api_test()->
     % ?assert(mixer:has_media(Mixer2,AMedia2)),    
     % opr_sup:logout("6"),
     ok.
+incoming_pickup_0207_problem_test()->
+    oprgroup:stop(?GroupNo),
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    opr_sup:logout(?SeatNo),
+    TestClientHost=self(), % for test
+    {ok,OprPid}=opr_sup:login(?SeatNo,TestClientHost),
+    board:release({?SeatNo,1}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,1),
+    board:focus(Board1),    
+    Mixer=board:get_mixer(Board1),
+
+    GroupPid=oprgroup_sup:get_group_pid(?GroupNo),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    [OprPid]=oprgroup:get_oprs(GroupPid),
+    SDP0=sdp_sample(),
+
+    % callopr with mockua
+    MockUA=self(),
+    Shell=self(),
+    F=fun(G)-> receive E-> Shell ! E, G(G) end end,
+    MockUA1=spawn(fun()-> F(F) end),
+
+    R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,MockUA]),
+    R1=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op1",?GroupPhone,SDP0,MockUA1]),
+    ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
+    [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid,ua:=From},#{caller:="test_op1",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid1,ua:=From1}|T]=oprgroup:get_queues(GroupPid),
+    io:format("grouppid:~p mediaPid:~p~n",[GroupPid,MediaPid]),
+    {_,_}=sip_media:get_peer(MediaPid),
+    ?assertMatch({ok,GroupPid},R),
+
+    {_,Jsonbin,_From}=?REC_MatchMsg({<<"call_broadcast">>,_Jsonbin,_}),
+    #{"calls":=[{obj,CallPlist}],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin),
+    {_,Jsonbin_2,_}=?REC_MatchMsg({<<"call_broadcast">>,_,_}),
+    #{"calls":=[{obj,CallPlist},{obj,CallPlist1}],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin_2),
+    #{"phoneNumber":=GroupPhoneBin,"userId":=UserId,"callTime":=_}=maps:from_list(CallPlist),
+    ?assertEqual(<<"test_op">>,GroupPhoneBin),
+    ?assertEqual(UserId,list_to_binary(pid_to_list(MockUA))),
+    #{"phoneNumber":=GroupPhoneBin1,"userId":=_UserId,"callTime":=_}=maps:from_list(CallPlist1),
+    ?assertEqual(<<"test_op1">>,GroupPhoneBin1),
+
+    % assert rbt
+    ?assert(opr_rbt:has_media(MediaPid)),
+
+    % simu opr pickup
+%    ?assertMatch({ok,#{"phoneNumber":="test_op"}},board:pickup_call({?SeatNo,1})),
+%   1 first pickup
+    {ok,#{"status":=<<"ok">>,"call":={obj,CallPlist_ret}}} =
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"pickup_call","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
+    ?assertEqual(CallPlist,CallPlist_ret),%phoneNumber:n,userId:G,callTime:c}
+
+    ?assertMatch([#{caller:="test_op1",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid1,ua:=From1}|T],oprgroup:get_queues(GroupPid)),
+    {_,Jsonbin2,_}=?REC_MatchMsg({<<"call_broadcast">>,_,_}),
+    #{"calls":=[{obj,CallPlist1}],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin2),
+
+
+    {ok,#{"status":=<<"failed">>,"reason":=<<"board_seized">>}} =
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"pickup_call","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+%   2 second pickup
+    {ok,#{"status":=<<"ok">>,"call":={obj,CallPlist1}}} =
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"pickup_call","seatId"=>?SeatNo,"boardIndex"=>"2"}),
+    ?assertEqual(T,oprgroup:get_queues(GroupPid)),
+
+    {_,Jsonbin3,_}=?REC_MatchMsg({<<"call_broadcast">>,_,_}),
+    #{"calls":=[],"msgType":=<<"call_broadcast">>}=utility1:jsonbin2map(Jsonbin3),
+
+    ?assertEqual(MediaPid, board:get_a_media({?SeatNo,1})),
+    ?assertEqual(From,board:get_a_ua({?SeatNo,1})),
+    ?assertMatch(#{status:=tpring},board:get_sidea({?SeatNo,1})),
+
+%   3  sidea 1st pickup
+    {ok,#{"status":=<<"ok">>}}=
+       utility1:json_http("http://127.0.0.1:8082/api",#{"msgType"=>"sidea","seatId"=>?SeatNo,"boardIndex"=>"1"}),
+
+    ?assertMatch(#{status:=hook_off},board:get_sidea({?SeatNo,1})),
+    {p2p_answer,Board1}=?REC_MatchMsg({p2p_answer,_}),
+    ?assertEqual(Mixer,sip_media:get_media(OprMedia)),
+    ?assertEqual(Mixer,sip_media:get_media(MediaPid)),
+  
+    ?assert(not opr_rbt:has_media(MediaPid)),
+
+
+    ?assertMatch({p2p_wcg_ack,GroupPid,_},?REC_MatchMsg({p2p_wcg_ack, _, _})),
+    ?assertMatch({p2p_wcg_ack,GroupPid,_},?REC_MatchMsg({p2p_wcg_ack, _, _})),
+    ok.
 incoming_pickup_and_sidea_test()->
     oprgroup:stop(?GroupNo),
     oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
@@ -934,6 +1021,7 @@ incoming_pickup_and_sidea_test()->
 
     % callopr with mockua
     MockUA=self(),
+
     R=rpc:call(node_conf:get_voice_node(),callopr,invite2opr,["test_op",?GroupPhone,SDP0,MockUA]),
     ?assert(is_pid(GroupPid) andalso is_process_alive(GroupPid)),
     [#{caller:="test_op",callee:=?GroupPhone,peersdp:=SDP0,mediaPid:=MediaPid,ua:=From}|T]=oprgroup:get_queues(GroupPid),

@@ -107,8 +107,11 @@ handle_map(#{"msgType":= <<"opr_logout">>,"seatId":=SeatId})->
 %服务端到客户端handle_map(#{"msgType":= <<"call_broadcast">>,"groupPhone":=Phone,"seatGroupNo":=GroupNo})-> 
 %    [{status,ok}];
 handle_map(#{"msgType":= <<"pickup_call">>,"seatId":=SeatId,"boardIndex":=BI})-> 
-    board:pickup_call({SeatId,BI}),
-    [{status,ok},{seatId,SeatId}];
+    case board:pickup_call({SeatId,BI}) of
+        {ok,PickupCallMap}->
+            [{status,ok},{seatId,SeatId},{call,utility1:map2jso(PickupCallMap)}];
+        {failed,Reason}-> [{status,failed},{reason,Reason}]
+    end;
 handle_map(#{"msgType":= <<"sidea">>,"seatId":=SeatId,"boardIndex":=BI})-> 
     board:sidea({SeatId,BI}),
     [{status,ok},{seatId,SeatId}];

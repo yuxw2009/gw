@@ -52,7 +52,7 @@ incoming(Pid,Caller,Callee,SDP,From)->                             %must cast no
                     From ! {p2p_wcg_ack, self(), ToSipSDP},
                     opr_rbt:add(MediaPid),
                     UARef=erlang:monitor(process,From),
-                    QC1=[#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>MediaPid,ua=>From,callTime=>utility1:timestamp_ms(),toSipSdp=>ToSipSDP,ua_ref=>UARef}|QC],
+                    QC1=QC++[#{caller=>Caller,callee=>Callee,peersdp=>SDP,mediaPid=>MediaPid,ua=>From,callTime=>utility1:timestamp_ms(),toSipSdp=>ToSipSDP,ua_ref=>UARef}],
                     [opr:broadcast(Opr,QC1)||Opr<-Oprs],
                     {{ok,ToSipSDP},State#state{queued_calls=QC1}}
             end
