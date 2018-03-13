@@ -61,7 +61,7 @@ do_pickup_call(State=#state{seat=SeatNo,sidea=SideA=#{status:=null}})->
             UARef = erlang:monitor(process, UA),
             MRef=erlang:monitor(process, MediaPid),
             CallInfoMap=opr:incomingCallPushInfo(Call),
-            {{ok,CallInfoMap},do_focus(State#state{sidea=SideA#{phone:=Phone,status:=tpring,ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef}})};
+            {{ok,CallInfoMap},(State#state{sidea=SideA#{phone:=Phone,status:=tpring,ua:=UA,ua_ref:=UARef,mediaPid:=MediaPid,media_ref:=MRef}})};
         undefined->
             {{failed,no_call},State}
     end.
@@ -268,7 +268,7 @@ cast(Pid,Act)->    my_server:cast(Pid,{act,Act}).
 %% helpers  
 get_port_from_sdp(SDP_FROM_SS) when is_list(SDP_FROM_SS)-> get_port_from_sdp(list_to_binary(SDP_FROM_SS));
 get_port_from_sdp(SDP_FROM_SS) when is_binary(SDP_FROM_SS)->
-    {#session_desc{connect={_Inet4,Addr}},[St2]} = sdp:decode(SDP_FROM_SS),
+    {#session_desc{connect={_Inet4,Addr}},[St2|_]} = sdp:decode(SDP_FROM_SS),
     {Addr,St2#media_desc.port}.
 
 duration({M1,S1,_}) ->
@@ -425,6 +425,9 @@ do_sidea(State=#state{owner=Owner,sidea=SideA=#{mediaPid:=AMedia,status:=AStatus
             sip_media:unset_peer(OprMedia,Mixer),
             mixer:add(Mixer,OprMedia),
             State1;
+        {_,tpring}-> 
+            AUA ! {p2p_answer, self()},
+            State1#state{sidea=SideA#{status:=hook_off}};
         _-> State1
         end,
         {ok,State2};

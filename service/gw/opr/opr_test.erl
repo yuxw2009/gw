@@ -204,6 +204,51 @@ calla_test()->
     opr_sup:logout(?SeatNo),
     ok.
 
+calla_for_mail0313_test()->
+    TestBoardIndex=2,
+    oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
+    opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
+    {ok,OprPid}=opr_sup:login(?SeatNo,self()),
+    board:release({?SeatNo,TestBoardIndex}),
+    OprMedia=opr:get_mediaPid(OprPid),
+    Board1=opr:get_board(OprPid,TestBoardIndex),
+    board:focus(Board1),
+    #{ua:=AUA0,mediaPid:=AMedia0}=board:get_sidea(Board1),
+    ?assert((not is_pid(AUA0)) andalso (not is_pid(AMedia0))),
+    Mixer=board:get_mixer(Board1),
+
+    %test calla
+    board:calla(Board1,"8"),
+    ?assertEqual(sidea,board:get_status({"6",TestBoardIndex})),
+    #{ua:=AUA,mediaPid:=AMedia}=board:get_sidea(Board1),
+    ?assert(is_pid(AUA) andalso is_pid(AMedia)),
+    ?assertEqual(2, maps:size(mixer:get_sides(Mixer))),
+    ?assertEqual(?GroupPhone,rpc:call(node(AUA),voip_ua,cid,[AUA])),
+
+    ?assertEqual(Mixer,sip_media:get_media(AMedia)),
+    ?assertEqual(undefined,sip_media:get_media(OprMedia)),
+    ?assert(mixer:has_media(Mixer,AMedia)),
+    ?assert(mixer:has_media(Mixer,OprMedia)),
+
+        % test sidea answer
+    utility1:flush(),
+    Board1 ! {callee_status,AUA, hook_off},  %模拟应答    
+    utility1:delay(20),
+    {_,Jsonbin,_}=?REC_MatchMsg({<<"boardStateChange">>,_Jsonbin,_}),
+    Map=#{"boardState":=_BoardState_}=utility1:jsonbin2map(Jsonbin),
+    BoardStatuss0=utility1:get_value(maps:get("boardState",Map),"boards"),
+    io:format("~p~n",[BoardStatuss0]),
+    BoardStatuss=[BdStatus||BdStatus<-BoardStatuss0,utility1:get_value(BdStatus,"boardIndex")=="2"],
+    ?assertEqual("sidea", utility1:get_value( hd(BoardStatuss),"boardstatus")),
+
+    % test release sidea
+    AUA ! stop,
+    utility1:delay(50),
+    #{ua:=undefined,mediaPid:=undefined}=board:get_sidea(Board1),
+    ?assertEqual(null,board:get_status({"6",1})),
+    opr_sup:logout(?SeatNo),
+    ok.
+
 callb_and_calla_test()->
     oprgroup_sup:add_oprgroup(?GroupNo,?GroupPhone),
     opr_sup:add_opr(?GroupNo,?SeatNo,?User,?Pwd),
